@@ -15,7 +15,6 @@ HVM-Hikari Virtual Engine 是一个面向 Windows PE 的 Rust 虚拟执行引擎
 
 ## 架构主轴
 
-当前代码结构按“职责层”优先
 
 | 路径 | 作用 |
 | --- | --- |
@@ -47,7 +46,7 @@ Hook 相关代码现在遵循两条主线：
 
 更完整的约定见：
 
-- [docs/hook_module_family_conventions.md](docs/hook_module_family_conventions.md)
+- [docs/hook_module_family_conventions.md](HVM/docs/hook_module_family_conventions.md)
 
 ## 仓库结构
 
@@ -68,7 +67,6 @@ Hook 相关代码现在遵循两条主线：
 - `cmake`
 - 可用的 C/C++ 编译工具链
 
-`vendor/unicorn` 会在构建时一并编译并静态链接进主程序，所以首次 `release` 构建会比普通 Rust 项目慢一些，但最终产物不再依赖额外的 `unicorn` 动态库。
 
 ## 快速开始
 
@@ -123,8 +121,7 @@ cargo build -p hvm-hikari-virtual-engine --release --target x86_64-pc-windows-ms
 
 - `x86_64-unknown-linux-musl` 产物会把 Linux libc 一并静态进二进制，适合直接发单文件。
 - `x86_64-pc-windows-msvc` 已通过 [`.cargo/config.toml`](.cargo/config.toml) 启用 `crt-static`，并同步让 `vendor/unicorn` 使用静态 CRT，避免额外依赖 VC 运行库。
-- 仓库内置了 [`.github/workflows/release.yml`](.github/workflows/release.yml)，推送 `v*` tag 后会自动生成 Linux `musl` `tar.gz` 和 Windows `zip` 并挂到 GitHub Release。
-- 如果不想推 tag，也可以在 GitHub Actions 里手动触发 `release` workflow，并显式填写目标 tag。
+
 
 ## CLI
 
@@ -257,7 +254,6 @@ taskset -c 0 python3 tools/run_samples_config_aware.py \
 
 基于 `2026-03-25` 的单核 `release` 批跑结果，当前 `Sample/` 中 `10` 个样本都已经完成配置化启动并产生日志。批跑产物位于 [`run_outputs/hvm_hikari_virtual_engine_20260325_batch/`](run_outputs/hvm_hikari_virtual_engine_20260325_batch/)，索引文件见 [`summary.tsv`](run_outputs/hvm_hikari_virtual_engine_20260325_batch/summary.tsv)，目录说明见 [`run_outputs/hvm_hikari_virtual_engine_20260325_batch/README.md`](run_outputs/hvm_hikari_virtual_engine_20260325_batch/README.md)。
 
-其中 `567dbfa9f7d29702a70feb934ec08e54` 已切换为磁盘遍历版配置，显式暴露 `10` 个 `PhysicalDrive` 和 `D:` 到 `H:` 的卷映射，用来覆盖物理磁盘与卷 GUID 枚举路径。
 
 其中：
 
@@ -286,8 +282,8 @@ taskset -c 0 python3 tools/run_samples_config_aware.py \
 | `58ac2f65e335922be3f60e57099dc8a3` |`APT(DPRK)`| `5.261` | `10,000,000` | `1,980,590.22` | `关键行为 IOC 已出现` |
 | `5ccecdd7a28ebb0401cc98e7fd89ba71` |`U盘病毒`| `0.649` | `214,498` | `328,984.66` | `提前退出，但日志可用，可能仍需补参数` |
 | `6b8c5c0a43610e7a69a88e805eb1f44b` |`微步下的银狐但内核是CS`| `0.363` | `56,401` | `156,235.46` | `内核 CS 内存自动 dump 已产出` |
-| `9b66f94497b13dd05fc6840894374776` |`银狐`| `1.100` | `84,839` | `76,777.38` | `全量日志与 API 轨迹已落盘，可继续追 C2 IP` |
-| `e862d56da1077be740ffaa7b5b699675` |`APT(DPRK)`| `0.607` | `1,062,257` | `1,732,902.12` | `API 与 human 日志已产出，可继续追踪 C2 线索` |
+| `9b66f94497b13dd05fc6840894374776` |`银狐`| `1.100` | `84,839` | `76,777.38` | `C2已产出` |
+| `e862d56da1077be740ffaa7b5b699675` |`APT(DPRK)`| `0.607` | `1,062,257` | `1,732,902.12` | `已产出内包含加密shellcode壳` |
 
 已输出完整 summary 的停止原因分布为：
 
