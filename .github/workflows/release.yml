@@ -18,6 +18,7 @@ env:
   BINARY_NAME: hvm-hikari-virtual-engine
   CARGO_TARGET_DIR: target
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  UNICORN_SOURCE_TAG: 2.1.4
 
 jobs:
   build-linux-musl:
@@ -37,6 +38,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools cmake
+
+      - name: Hydrate vendored Unicorn qemu target sources
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d)"
+          archive_url="https://github.com/unicorn-engine/unicorn/archive/refs/tags/${UNICORN_SOURCE_TAG}.tar.gz"
+          curl -L "${archive_url}" -o "${tmp_dir}/unicorn.tar.gz"
+          tar -xzf "${tmp_dir}/unicorn.tar.gz" -C "${tmp_dir}"
+          rm -rf HVM/vendor/unicorn/qemu/target
+          cp -a "${tmp_dir}/unicorn-${UNICORN_SOURCE_TAG}/qemu/target" HVM/vendor/unicorn/qemu/
 
       - name: Build Linux musl binary
         env:
@@ -73,6 +84,17 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Hydrate vendored Unicorn qemu target sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d)"
+          archive_url="https://github.com/unicorn-engine/unicorn/archive/refs/tags/${UNICORN_SOURCE_TAG}.tar.gz"
+          curl -L "${archive_url}" -o "${tmp_dir}/unicorn.tar.gz"
+          tar -xzf "${tmp_dir}/unicorn.tar.gz" -C "${tmp_dir}"
+          rm -rf HVM/vendor/unicorn/qemu/target
+          cp -a "${tmp_dir}/unicorn-${UNICORN_SOURCE_TAG}/qemu/target" HVM/vendor/unicorn/qemu/
 
       - name: Build Windows static CRT binary
         shell: pwsh
