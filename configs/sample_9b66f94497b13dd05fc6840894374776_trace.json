@@ -1,0 +1,41 @@
+{
+  "main_module": "Sample/9b66f94497b13dd05fc6840894374776",
+  "process_image": "Sample/567dbfa9f7d29702a70feb934ec08e54",
+  "entry_module": "Sample/9b66f94497b13dd05fc6840894374776",
+  "entry_export": "load",
+  "entry_args": [
+    {
+      "type": "wstring",
+      "value": ""
+    }
+  ],
+  "module_search_paths": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "whitelist_modules": [],
+  "preload_modules": [],
+  "allowed_read_dirs": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "blocked_read_dirs": [
+    "C:/Users"
+  ],
+  "sandbox_output_dir": ".hvm_hikari_virtual_engine/output",
+  "trace_api_calls": true,
+  "api_log_to_console": false,
+  "api_log_path": ".hvm_hikari_virtual_engine/output/logs/9b66f94497b13dd05fc6840894374776.api.log",
+  "api_jsonl_path": ".hvm_hikari_virtual_engine/output/logs/9b66f94497b13dd05fc6840894374776.api.jsonl",
+  "api_human_log_path": ".hvm_hikari_virtual_engine/output/logs/9b66f94497b13dd05fc6840894374776.api.human.log",
+  "api_log_include_return": true,
+  "api_log_string_limit": 160,
+  "console_output_to_console": false,
+  "console_output_path": ".hvm_hikari_virtual_engine/output/logs/9b66f94497b13dd05fc6840894374776.console.log",
+  "unknown_api_policy": "log_zero",
+  "trace_native_events": true,
+  "command_line": "9b66f94497b13dd05fc6840894374776",
+  "max_instructions": 50000000
+}

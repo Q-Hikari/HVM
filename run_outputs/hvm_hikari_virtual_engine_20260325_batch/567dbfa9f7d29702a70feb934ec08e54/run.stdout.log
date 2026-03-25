@@ -1,0 +1,6 @@
+
+entrypoint=0x4015E8
+instructions=17247
+stopped=true
+exit_code=0
+stop_reason=all_threads_terminated

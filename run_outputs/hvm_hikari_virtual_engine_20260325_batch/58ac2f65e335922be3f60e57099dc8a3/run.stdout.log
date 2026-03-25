@@ -1,0 +1,6 @@
+
+entrypoint=0x180001280
+instructions=10000000
+stopped=true
+exit_code=None
+stop_reason=instruction_budget_exhausted

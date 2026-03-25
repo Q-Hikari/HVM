@@ -1,0 +1,63 @@
+{
+  "main_module": "Sample/567dbfa9f7d29702a70feb934ec08e54",
+  "module_search_paths": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "whitelist_modules": [],
+  "preload_modules": [],
+  "volumes": [
+    {
+      "host_path": "Sample",
+      "guest_path": "D:\\",
+      "recursive": true
+    },
+    {
+      "host_path": "Sample",
+      "guest_path": "E:\\",
+      "recursive": true
+    },
+    {
+      "host_path": "Sample",
+      "guest_path": "F:\\",
+      "recursive": true
+    },
+    {
+      "host_path": "Sample",
+      "guest_path": "G:\\",
+      "recursive": true
+    },
+    {
+      "host_path": "Sample",
+      "guest_path": "H:\\",
+      "recursive": true
+    }
+  ],
+  "allowed_read_dirs": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "blocked_read_dirs": [
+    "C:/Users"
+  ],
+  "sandbox_output_dir": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/567dbfa9f7d29702a70feb934ec08e54/sandbox",
+  "trace_api_calls": false,
+  "api_log_to_console": false,
+  "api_log_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/567dbfa9f7d29702a70feb934ec08e54/logs/567dbfa9f7d29702a70feb934ec08e54.api.log",
+  "api_log_include_return": true,
+  "api_human_log_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/567dbfa9f7d29702a70feb934ec08e54/logs/567dbfa9f7d29702a70feb934ec08e54.api.human.log",
+  "api_log_string_limit": 160,
+  "console_output_to_console": false,
+  "console_output_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/567dbfa9f7d29702a70feb934ec08e54/logs/567dbfa9f7d29702a70feb934ec08e54.console.log",
+  "unknown_api_policy": "log_zero",
+  "environment_overrides": {
+    "volume": {
+      "physical_drive_count": 10
+    }
+  },
+  "max_instructions": 50000000,
+  "command_line": "567dbfa9f7d29702a70feb934ec08e54",
+  "api_jsonl_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/567dbfa9f7d29702a70feb934ec08e54/logs/567dbfa9f7d29702a70feb934ec08e54.api.jsonl"
+}

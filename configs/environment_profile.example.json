@@ -1,0 +1,107 @@
+{
+  "machine": {
+    "computer_name": "WINLAB-42",
+    "user_name": "analyst",
+    "user_domain": "WORKGROUP",
+    "process_id": 16962,
+    "image_path": "C:\\sample.exe",
+    "parent_process_id": 20817,
+    "parent_image_path": "C:\\Windows\\explorer.exe",
+    "parent_command_line": "C:\\Windows\\explorer.exe",
+    "system_root": "C:\\Windows",
+    "system32": "C:\\Windows\\System32",
+    "temp_dir": "C:\\Lab\\Temp",
+    "current_directory": "C:\\Lab\\Workspace",
+    "command_line": "C:\\sample.exe"
+  },
+  "os_version": {
+    "major": 10,
+    "minor": 0,
+    "build": 22621,
+    "platform_id": 2,
+    "suite_mask": 0,
+    "product_type": 1,
+    "service_pack_major": 0,
+    "service_pack_minor": 0,
+    "csd_version": "",
+    "product_name": "Windows 11 Pro",
+    "build_lab_ex": "22621.1.amd64fre.ni_release.220506-1250"
+  },
+  "locale": {
+    "acp": 936,
+    "oemcp": 437,
+    "console_cp": 65001,
+    "console_output_cp": 65001,
+    "user_default_lcid": 2052,
+    "thread_locale": 1033,
+    "system_default_ui_language": 1033,
+    "user_default_ui_language": 2052
+  },
+  "display": {
+    "desktop_window_handle": 1048576,
+    "active_window_handle": 1048592,
+    "shell_window_handle": 1048608,
+    "default_dc_handle": 1179648,
+    "screen_width": 1600,
+    "screen_height": 900,
+    "cursor_x": 317,
+    "cursor_y": 31,
+    "message_x": 317,
+    "message_y": 31,
+    "message_step_x": 0,
+    "message_step_y": 0,
+    "remote_session": false
+  },
+  "volume": {
+    "root_path": "C:\\",
+    "volume_name": "WorkDisk",
+    "serial": 287454020,
+    "max_component_length": 255,
+    "flags": 459007,
+    "fs_name": "NTFS",
+    "physical_drive_count": 2,
+    "volume_guid": "\\\\?\\Volume{11223344-5566-7788-99aa-bbccddeeff00}\\"
+  },
+  "module_search_paths": [
+    "dlls/System32",
+    "dlls/SysWOW64"
+  ],
+  "environment_variables": [
+    {
+      "name": "APPDATA",
+      "value": "C:\\Users\\analyst\\AppData\\Roaming"
+    },
+    {
+      "name": "COMSPEC",
+      "value": "C:\\Windows\\System32\\cmd.exe"
+    }
+  ],
+  "processes": [
+    {
+      "pid": 2800,
+      "parent_pid": 620,
+      "image_path": "C:\\Windows\\System32\\svchost.exe",
+      "command_line": "C:\\Windows\\System32\\svchost.exe -k netsvcs",
+      "current_directory": "C:\\Windows\\System32"
+    }
+  ],
+  "registry": {
+    "keys": [
+      {
+        "path": "HKEY_LOCAL_MACHINE\\Software\\SnapshotProfile",
+        "values": [
+          {
+            "name": "Marker",
+            "value_type": 1,
+            "string": "present"
+          },
+          {
+            "name": "Enabled",
+            "value_type": 4,
+            "dword": 1
+          }
+        ]
+      }
+    ]
+  }
+}

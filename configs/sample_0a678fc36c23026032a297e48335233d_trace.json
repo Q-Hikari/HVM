@@ -1,0 +1,29 @@
+{
+  "main_module": "Sample/0a678fc36c23026032a297e48335233d",
+  "module_search_paths": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "allowed_read_dirs": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "blocked_read_dirs": [
+    "C:/Users"
+  ],
+  "sandbox_output_dir": ".hvm_hikari_virtual_engine/output",
+  "trace_api_calls": true,
+  "api_log_to_console": false,
+  "api_log_path": ".hvm_hikari_virtual_engine/output/logs/0a678fc36c23026032a297e48335233d.api.log",
+  "api_jsonl_path": ".hvm_hikari_virtual_engine/output/logs/0a678fc36c23026032a297e48335233d.api.jsonl",
+  "api_human_log_path": ".hvm_hikari_virtual_engine/output/logs/0a678fc36c23026032a297e48335233d.api.human.log",
+  "api_log_include_return": true,
+  "api_log_string_limit": 512,
+  "console_output_to_console": false,
+  "console_output_path": ".hvm_hikari_virtual_engine/output/logs/0a678fc36c23026032a297e48335233d.console.log",
+  "unknown_api_policy": "log_zero",
+  "command_line": "0a678fc36c23026032a297e48335233d",
+  "max_instructions": 50000000
+}

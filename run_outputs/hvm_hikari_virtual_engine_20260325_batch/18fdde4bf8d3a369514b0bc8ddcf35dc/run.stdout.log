@@ -1,0 +1,6 @@
+
+entrypoint=0x180007E2C
+instructions=10000000
+stopped=true
+exit_code=1
+stop_reason=instruction_budget_exhausted

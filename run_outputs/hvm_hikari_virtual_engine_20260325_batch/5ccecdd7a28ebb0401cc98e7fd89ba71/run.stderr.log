@@ -1,0 +1,1 @@
+native execution failed during uc_emu_start: uc_emu_start: Invalid memory read (UC_ERR_READ_UNMAPPED); pc=0x5687AE; sp=0x701FEF1C; eax=0x1; ebx=0xFFFFFFFF; ecx=0x42255C; edx=0x0; ebp=0x701FEF2C; esi=0x0; edi=0x0

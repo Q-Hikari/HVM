@@ -1,0 +1,37 @@
+{
+  "main_module": "Sample/e862d56da1077be740ffaa7b5b699675",
+  "module_search_paths": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "whitelist_modules": [],
+  "preload_modules": [],
+  "allowed_read_dirs": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "blocked_read_dirs": [
+    "C:/Users"
+  ],
+  "sandbox_output_dir": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/e862d56da1077be740ffaa7b5b699675/sandbox",
+  "entry_args": [
+    "0x10000000",
+    1,
+    0
+  ],
+  "trace_api_calls": true,
+  "trace_native_events": false,
+  "api_log_to_console": false,
+  "api_log_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/e862d56da1077be740ffaa7b5b699675/logs/e862d56da1077be740ffaa7b5b699675.api.log",
+  "api_jsonl_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/e862d56da1077be740ffaa7b5b699675/logs/e862d56da1077be740ffaa7b5b699675.api.jsonl",
+  "api_human_log_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/e862d56da1077be740ffaa7b5b699675/logs/e862d56da1077be740ffaa7b5b699675.api.human.log",
+  "api_log_include_return": true,
+  "api_log_string_limit": 512,
+  "console_output_to_console": false,
+  "console_output_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/e862d56da1077be740ffaa7b5b699675/logs/e862d56da1077be740ffaa7b5b699675.console.log",
+  "unknown_api_policy": "log_zero",
+  "max_instructions": 10000000,
+  "command_line": "e862d56da1077be740ffaa7b5b699675"
+}

@@ -1,0 +1,6 @@
+[submodule "third_party/qiling"]
+	path = third_party/qiling
+	url = https://github.com/qilingframework/qiling
+[submodule "third_party/speakeasy"]
+	path = third_party/speakeasy
+	url = https://github.com/mandiant/speakeasy

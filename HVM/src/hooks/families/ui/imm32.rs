@@ -1,0 +1,24 @@
+use crate::hooks::base::HookLibrary;
+use crate::hooks::registry::HookRegistry;
+use crate::hooks::stub::stdcall_definitions;
+
+const EXPORTS: &[(&str, usize)] = &[
+    ("ImmGetContext", 1),
+    ("ImmGetOpenStatus", 1),
+    ("ImmReleaseContext", 2),
+];
+
+/// Collects the generated hook definitions for this DLL family.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Imm32HookLibrary;
+
+impl HookLibrary for Imm32HookLibrary {
+    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
+        stdcall_definitions("imm32.dll", EXPORTS)
+    }
+}
+
+/// Registers the generated hook definitions for this DLL family.
+pub fn register_imm32_hooks(registry: &mut HookRegistry) {
+    registry.register_library(&Imm32HookLibrary);
+}

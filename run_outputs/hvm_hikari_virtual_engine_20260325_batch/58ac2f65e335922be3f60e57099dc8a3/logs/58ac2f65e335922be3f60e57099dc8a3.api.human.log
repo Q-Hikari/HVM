@@ -1,0 +1,699 @@
+[THREAD_CREATE] parameter=0 start_address=6442455680 state="ready" thread_handle=32768 thread_tid=4097
+[API_CALL] id=1 tid=0x1001 pc=0x7FF6EC8418F0 return_to=0x18000B3B6 target=kernel32.dll!GetSystemTimeAsFileTime target_base=0x7FF6EC837000 args={arg0=0x7FEFFFFFEFB0}
+[API_RET] id=1 tid=0x1001 pc=0x7FF6EC8418F0 target=kernel32.dll!GetSystemTimeAsFileTime target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=2 tid=0x1001 pc=0x7FF6EC8415B0 return_to=0x18000B3C4 target=kernel32.dll!GetCurrentThreadId target_base=0x7FF6EC837000 args={}
+[API_RET] id=2 tid=0x1001 pc=0x7FF6EC8415B0 target=kernel32.dll!GetCurrentThreadId target_base=0x7FF6EC837000 retval=0x1001 last_error=0x0
+[API_CALL] id=3 tid=0x1001 pc=0x7FF6EC841590 return_to=0x18000B3D0 target=kernel32.dll!GetCurrentProcessId target_base=0x7FF6EC837000 args={}
+[API_RET] id=3 tid=0x1001 pc=0x7FF6EC841590 target=kernel32.dll!GetCurrentProcessId target_base=0x7FF6EC837000 retval=0x1337 last_error=0x0
+[API_CALL] id=4 tid=0x1001 pc=0x7FF6EC841FE0 return_to=0x18000B3E0 target=kernel32.dll!QueryPerformanceCounter target_base=0x7FF6EC837000 args={arg0=0x7FEFFFFFEFB8}
+[API_RET] id=4 tid=0x1001 pc=0x7FF6EC841FE0 target=kernel32.dll!QueryPerformanceCounter target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=5 tid=0x1001 pc=0x7FF6EC841DA0 return_to=0x18000FDE7 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 args={lpLibFileName=0x18002C7F0<58ac2f65e335922be3f60e57099dc8a3+0x2C7F0>:"api-ms-win-core-synch-l1-2-0", hFile=NULL, dwFlags=0x800}
+[API_RET] id=5 tid=0x1001 pc=0x7FF6EC841DA0 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 retval=0x7FF6EC837000 last_error=0x0
+[API_CALL] id=6 tid=0x1001 pc=0x7FF6EC8417F0 return_to=0x18000FE99 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 args={hModule=0x7FF6EC837000<module:kernel32.dll>, lpProcName=0x18002C8B8<58ac2f65e335922be3f60e57099dc8a3+0x2C8B8>:"InitializeCriticalSectionEx"}
+[API_RET] id=6 tid=0x1001 pc=0x7FF6EC8417F0 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 retval=0x7FF6EC841BC0 last_error=0x0
+[API_CALL] id=7 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180010021 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CD58, arg1=0xFA0, arg2=NULL}
+[API_RET] id=7 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=8 tid=0x1001 pc=0x7FF6EC841DA0 return_to=0x18000FDE7 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 args={lpLibFileName=0x18002C7B0<58ac2f65e335922be3f60e57099dc8a3+0x2C7B0>:"api-ms-win-core-fibers-l1-1-1", hFile=NULL, dwFlags=0x800}
+[API_RET] id=8 tid=0x1001 pc=0x7FF6EC841DA0 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 retval=0x7FF6EC837000 last_error=0x0
+[API_CALL] id=9 tid=0x1001 pc=0x7FF6EC8417F0 return_to=0x18000FE99 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 args={hModule=0x7FF6EC837000<module:kernel32.dll>, lpProcName=0x18002C860<58ac2f65e335922be3f60e57099dc8a3+0x2C860>:"FlsAlloc"}
+[API_RET] id=9 tid=0x1001 pc=0x7FF6EC8417F0 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 retval=0x7FF6EC841410 last_error=0x0
+[API_CALL] id=10 tid=0x1001 pc=0x7FF6EC841410 return_to=0x18000CAA0 target=kernel32.dll!FlsAlloc target_base=0x7FF6EC837000 args={arg0=0x18000C8FC<58ac2f65e335922be3f60e57099dc8a3+0xC8FC>:"荈⣬蕈瓉䠑֍τ\u0003㭈瓈䠺"}
+[API_RET] id=10 tid=0x1001 pc=0x7FF6EC841410 target=kernel32.dll!FlsAlloc target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=11 tid=0x1001 pc=0x7FF6EC8417F0 return_to=0x18000FE99 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 args={hModule=0x7FF6EC837000<module:kernel32.dll>, lpProcName=0x18002C8A0<58ac2f65e335922be3f60e57099dc8a3+0x2C8A0>:"FlsSetValue"}
+[API_RET] id=11 tid=0x1001 pc=0x7FF6EC8417F0 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 retval=0x7FF6EC841440 last_error=0x0
+[API_CALL] id=12 tid=0x1001 pc=0x7FF6EC841440 return_to=0x18000FFC2 target=kernel32.dll!FlsSetValue target_base=0x7FF6EC837000 args={arg0=NULL, arg1=0x18003CCD0}
+[API_RET] id=12 tid=0x1001 pc=0x7FF6EC841440 target=kernel32.dll!FlsSetValue target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=13 tid=0x1001 pc=0x7FF6EC841DA0 return_to=0x18001BA46 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 args={lpLibFileName=0x18002C7F0<58ac2f65e335922be3f60e57099dc8a3+0x2C7F0>:"api-ms-win-core-synch-l1-2-0", hFile=NULL, dwFlags=0x800}
+[API_RET] id=13 tid=0x1001 pc=0x7FF6EC841DA0 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 retval=0x7FF6EC837000 last_error=0x0
+[API_CALL] id=14 tid=0x1001 pc=0x7FF6EC8417F0 return_to=0x18001BB2E target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 args={hModule=0x7FF6EC837000<module:kernel32.dll>, lpProcName=0x18002C8B8<58ac2f65e335922be3f60e57099dc8a3+0x2C8B8>:"InitializeCriticalSectionEx"}
+[API_RET] id=14 tid=0x1001 pc=0x7FF6EC8417F0 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 retval=0x7FF6EC841BC0 last_error=0x0
+[API_CALL] id=15 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CE40, arg1=0xFA0, arg2=NULL}
+[API_RET] id=15 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=16 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CE68, arg1=0xFA0, arg2=NULL}
+[API_RET] id=16 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=17 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CE90, arg1=0xFA0, arg2=NULL}
+[API_RET] id=17 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=18 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CEB8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=18 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=19 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CEE0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=19 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=20 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CF08, arg1=0xFA0, arg2=NULL}
+[API_RET] id=20 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=21 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CF30, arg1=0xFA0, arg2=NULL}
+[API_RET] id=21 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=22 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CF58, arg1=0xFA0, arg2=NULL}
+[API_RET] id=22 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=23 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CF80, arg1=0xFA0, arg2=NULL}
+[API_RET] id=23 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=24 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CFA8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=24 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=25 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CFD0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=25 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=26 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003CFF8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=26 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=27 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003D020, arg1=0xFA0, arg2=NULL}
+[API_RET] id=27 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=28 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003D048, arg1=0xFA0, arg2=NULL}
+[API_RET] id=28 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=29 tid=0x1001 pc=0x7FF6EC841800 return_to=0x18001F1C2 target=kernel32.dll!GetProcessHeap target_base=0x7FF6EC837000 args={}
+[API_RET] id=29 tid=0x1001 pc=0x7FF6EC841800 target=kernel32.dll!GetProcessHeap target_base=0x7FF6EC837000 retval=0xC82E1000 last_error=0x0
+[API_CALL] id=30 tid=0x1001 pc=0x7FF6EC841410 return_to=0x1800178A4 target=kernel32.dll!FlsAlloc target_base=0x7FF6EC837000 args={arg0=0x1800173D0<58ac2f65e335922be3f60e57099dc8a3+0x173D0>:"蕈瓉匚荈⃬譈\u000e"}
+[API_RET] id=30 tid=0x1001 pc=0x7FF6EC841410 target=kernel32.dll!FlsAlloc target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=31 tid=0x1001 pc=0x7FF6EC841700 return_to=0x180017721 target=kernel32.dll!GetLastError target_base=0x7FF6EC837000 args={}
+[API_RET] id=31 tid=0x1001 pc=0x7FF6EC841700 target=kernel32.dll!GetLastError target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=32 tid=0x1001 pc=0x7FF6EC841430 return_to=0x180017735 target=kernel32.dll!FlsGetValue target_base=0x7FF6EC837000 args={arg0=0x1}
+[API_RET] id=32 tid=0x1001 pc=0x7FF6EC841430 target=kernel32.dll!FlsGetValue target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=33 tid=0x1001 pc=0x7FF6EC841440 return_to=0x180017756 target=kernel32.dll!FlsSetValue target_base=0x7FF6EC837000 args={arg0=0x1, arg1=0xFFFFFFFFFFFFFFFF}
+[API_RET] id=33 tid=0x1001 pc=0x7FF6EC841440 target=kernel32.dll!FlsSetValue target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=34 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x3C8}
+[API_RET] id=34 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A5E000 last_error=0x0
+[API_CALL] id=35 tid=0x1001 pc=0x7FF6EC841440 return_to=0x180017794 target=kernel32.dll!FlsSetValue target_base=0x7FF6EC837000 args={arg0=0x1, arg1=0x7FF662A5E000}
+[API_RET] id=35 tid=0x1001 pc=0x7FF6EC841440 target=kernel32.dll!FlsSetValue target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=36 tid=0x1001 pc=0x7FF6EC841290 return_to=0x1800171F4 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF08}
+[API_RET] id=36 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=37 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x18001720C target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF08}
+[API_RET] id=37 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=38 tid=0x1001 pc=0x7FF6EC841290 return_to=0x180017274 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CEE0}
+[API_RET] id=38 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=39 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x180017292 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CEE0}
+[API_RET] id=39 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=40 tid=0x1001 pc=0x7FF6EC842210 return_to=0x1800177C1 target=kernel32.dll!SetLastError target_base=0x7FF6EC837000 args={arg0=NULL}
+[API_RET] id=40 tid=0x1001 pc=0x7FF6EC842210 target=kernel32.dll!SetLastError target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=41 tid=0x1001 pc=0x7FF6EC841290 return_to=0x18001A824 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF58}
+[API_RET] id=41 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=42 tid=0x1001 pc=0x7FF6EC841290 return_to=0x1800236AE target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF58}
+[API_RET] id=42 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=43 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x1200}
+[API_RET] id=43 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A5E3D0 last_error=0x0
+[API_CALL] id=44 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E3D0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=44 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=45 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E418, arg1=0xFA0, arg2=NULL}
+[API_RET] id=45 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=46 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E460, arg1=0xFA0, arg2=NULL}
+[API_RET] id=46 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=47 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E4A8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=47 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=48 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E4F0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=48 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=49 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E538, arg1=0xFA0, arg2=NULL}
+[API_RET] id=49 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=50 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E580, arg1=0xFA0, arg2=NULL}
+[API_RET] id=50 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=51 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E5C8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=51 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=52 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E610, arg1=0xFA0, arg2=NULL}
+[API_RET] id=52 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=53 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E658, arg1=0xFA0, arg2=NULL}
+[API_RET] id=53 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=54 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E6A0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=54 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=55 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E6E8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=55 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=56 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E730, arg1=0xFA0, arg2=NULL}
+[API_RET] id=56 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=57 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E778, arg1=0xFA0, arg2=NULL}
+[API_RET] id=57 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=58 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E7C0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=58 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=59 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E808, arg1=0xFA0, arg2=NULL}
+[API_RET] id=59 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=60 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E850, arg1=0xFA0, arg2=NULL}
+[API_RET] id=60 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=61 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E898, arg1=0xFA0, arg2=NULL}
+[API_RET] id=61 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=62 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E8E0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=62 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=63 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E928, arg1=0xFA0, arg2=NULL}
+[API_RET] id=63 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=64 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E970, arg1=0xFA0, arg2=NULL}
+[API_RET] id=64 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=65 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5E9B8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=65 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=66 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EA00, arg1=0xFA0, arg2=NULL}
+[API_RET] id=66 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=67 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EA48, arg1=0xFA0, arg2=NULL}
+[API_RET] id=67 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=68 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EA90, arg1=0xFA0, arg2=NULL}
+[API_RET] id=68 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=69 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EAD8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=69 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=70 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EB20, arg1=0xFA0, arg2=NULL}
+[API_RET] id=70 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=71 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EB68, arg1=0xFA0, arg2=NULL}
+[API_RET] id=71 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=72 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EBB0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=72 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=73 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EBF8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=73 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=74 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EC40, arg1=0xFA0, arg2=NULL}
+[API_RET] id=74 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=75 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EC88, arg1=0xFA0, arg2=NULL}
+[API_RET] id=75 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=76 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5ECD0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=76 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=77 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5ED18, arg1=0xFA0, arg2=NULL}
+[API_RET] id=77 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=78 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5ED60, arg1=0xFA0, arg2=NULL}
+[API_RET] id=78 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=79 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EDA8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=79 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=80 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EDF0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=80 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=81 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EE38, arg1=0xFA0, arg2=NULL}
+[API_RET] id=81 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=82 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EE80, arg1=0xFA0, arg2=NULL}
+[API_RET] id=82 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=83 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EEC8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=83 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=84 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EF10, arg1=0xFA0, arg2=NULL}
+[API_RET] id=84 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=85 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EF58, arg1=0xFA0, arg2=NULL}
+[API_RET] id=85 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=86 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EFA0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=86 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=87 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5EFE8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=87 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=88 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F030, arg1=0xFA0, arg2=NULL}
+[API_RET] id=88 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=89 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F078, arg1=0xFA0, arg2=NULL}
+[API_RET] id=89 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=90 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F0C0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=90 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=91 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F108, arg1=0xFA0, arg2=NULL}
+[API_RET] id=91 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=92 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F150, arg1=0xFA0, arg2=NULL}
+[API_RET] id=92 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=93 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F198, arg1=0xFA0, arg2=NULL}
+[API_RET] id=93 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=94 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F1E0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=94 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=95 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F228, arg1=0xFA0, arg2=NULL}
+[API_RET] id=95 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=96 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F270, arg1=0xFA0, arg2=NULL}
+[API_RET] id=96 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=97 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F2B8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=97 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=98 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F300, arg1=0xFA0, arg2=NULL}
+[API_RET] id=98 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=99 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F348, arg1=0xFA0, arg2=NULL}
+[API_RET] id=99 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=100 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F390, arg1=0xFA0, arg2=NULL}
+[API_RET] id=100 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=101 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F3D8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=101 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=102 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F420, arg1=0xFA0, arg2=NULL}
+[API_RET] id=102 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=103 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F468, arg1=0xFA0, arg2=NULL}
+[API_RET] id=103 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=104 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F4B0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=104 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=105 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F4F8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=105 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=106 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F540, arg1=0xFA0, arg2=NULL}
+[API_RET] id=106 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=107 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x7FF662A5F588, arg1=0xFA0, arg2=NULL}
+[API_RET] id=107 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=108 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x180023700 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF58}
+[API_RET] id=108 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=109 tid=0x1001 pc=0x7FF6EC841860 return_to=0x18001A642 target=kernel32.dll!GetStartupInfoW target_base=0x7FF6EC837000 args={arg0=0x7FEFFFFFEE40<stack+0x3FEE40>:"报翶"}
+[API_RET] id=109 tid=0x1001 pc=0x7FF6EC841860 target=kernel32.dll!GetStartupInfoW target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=110 tid=0x1001 pc=0x7FF6EC841870 return_to=0x18001A78B target=kernel32.dll!GetStdHandle target_base=0x7FF6EC837000 args={arg0=0xFFFFFFF6}
+[API_RET] id=110 tid=0x1001 pc=0x7FF6EC841870 target=kernel32.dll!GetStdHandle target_base=0x7FF6EC837000 retval=0xFFFFFFFFFFFFFFF6 last_error=0x0
+[API_CALL] id=111 tid=0x1001 pc=0x7FF6EC8416D0 return_to=0x18001A7A1 target=kernel32.dll!GetFileType target_base=0x7FF6EC837000 args={arg0=0xFFFFFFFFFFFFFFF6}
+[API_RET] id=111 tid=0x1001 pc=0x7FF6EC8416D0 target=kernel32.dll!GetFileType target_base=0x7FF6EC837000 retval=0x2 last_error=0x0
+[API_CALL] id=112 tid=0x1001 pc=0x7FF6EC841870 return_to=0x18001A78B target=kernel32.dll!GetStdHandle target_base=0x7FF6EC837000 args={arg0=0xFFFFFFF5}
+[API_RET] id=112 tid=0x1001 pc=0x7FF6EC841870 target=kernel32.dll!GetStdHandle target_base=0x7FF6EC837000 retval=0xFFFFFFFFFFFFFFF5 last_error=0x0
+[API_CALL] id=113 tid=0x1001 pc=0x7FF6EC8416D0 return_to=0x18001A7A1 target=kernel32.dll!GetFileType target_base=0x7FF6EC837000 args={arg0=0xFFFFFFFFFFFFFFF5}
+[API_RET] id=113 tid=0x1001 pc=0x7FF6EC8416D0 target=kernel32.dll!GetFileType target_base=0x7FF6EC837000 retval=0x2 last_error=0x0
+[API_CALL] id=114 tid=0x1001 pc=0x7FF6EC841870 return_to=0x18001A78B target=kernel32.dll!GetStdHandle target_base=0x7FF6EC837000 args={arg0=0xFFFFFFF4}
+[API_RET] id=114 tid=0x1001 pc=0x7FF6EC841870 target=kernel32.dll!GetStdHandle target_base=0x7FF6EC837000 retval=0xFFFFFFFFFFFFFFF4 last_error=0x0
+[API_CALL] id=115 tid=0x1001 pc=0x7FF6EC8416D0 return_to=0x18001A7A1 target=kernel32.dll!GetFileType target_base=0x7FF6EC837000 args={arg0=0xFFFFFFFFFFFFFFF4}
+[API_RET] id=115 tid=0x1001 pc=0x7FF6EC8416D0 target=kernel32.dll!GetFileType target_base=0x7FF6EC837000 retval=0x2 last_error=0x0
+[API_CALL] id=116 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x18001A847 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF58}
+[API_RET] id=116 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=117 tid=0x1001 pc=0x7FF6EC841500 return_to=0x18001EFF2 target=kernel32.dll!GetCommandLineA target_base=0x7FF6EC837000 args={}
+[API_RET] id=117 tid=0x1001 pc=0x7FF6EC841500 target=kernel32.dll!GetCommandLineA target_base=0x7FF6EC837000 retval=0x7FF60EEF5000 last_error=0x0
+[API_CALL] id=118 tid=0x1001 pc=0x7FF6EC841510 return_to=0x18001EFFF target=kernel32.dll!GetCommandLineW target_base=0x7FF6EC837000 args={}
+[API_RET] id=118 tid=0x1001 pc=0x7FF6EC841510 target=kernel32.dll!GetCommandLineW target_base=0x7FF6EC837000 retval=0x7FF6A9776000 last_error=0x0
+[API_CALL] id=119 tid=0x1001 pc=0x7FF6EC841430 return_to=0x18001767E target=kernel32.dll!FlsGetValue target_base=0x7FF6EC837000 args={arg0=0x1}
+[API_RET] id=119 tid=0x1001 pc=0x7FF6EC841430 target=kernel32.dll!FlsGetValue target_base=0x7FF6EC837000 retval=0x7FF662A5E000 last_error=0x0
+[API_CALL] id=120 tid=0x1001 pc=0x7FF6EC841290 return_to=0x18001EBAC target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF08}
+[API_RET] id=120 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=121 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x18001EC06 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF08}
+[API_RET] id=121 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=122 tid=0x1001 pc=0x7FF6EC8414E0 return_to=0x18001E643 target=kernel32.dll!GetACP target_base=0x7FF6EC837000 args={}
+[API_RET] id=122 tid=0x1001 pc=0x7FF6EC8414E0 target=kernel32.dll!GetACP target_base=0x7FF6EC837000 retval=0x3A8 last_error=0x0
+[API_CALL] id=123 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x228}
+[API_RET] id=123 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A5F5D0 last_error=0x0
+[API_CALL] id=124 tid=0x1001 pc=0x7FF6EC8414F0 return_to=0x18001E75C target=kernel32.dll!GetCPInfo target_base=0x7FF6EC837000 args={arg0=0x3A8, arg1=0x7FEFFFFFE480}
+[API_RET] id=124 tid=0x1001 pc=0x7FF6EC8414F0 target=kernel32.dll!GetCPInfo target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=125 tid=0x1001 pc=0x7FF6EC841E80 return_to=0x18001CED8 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x1, lpMultiByteStr=0x7FEFFFFFE4A0<stack+0x3FE4A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼", cbMultiByte=256, lpWideCharStr=NULL, cchWideChar=0}
+[API_RET] id=125 tid=0x1001 pc=0x7FF6EC841E80 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 retval=0xBA last_error=0x0
+[API_CALL] id=126 tid=0x1001 pc=0x7FF6EC841E80 return_to=0x18001CF7E target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x1, lpMultiByteStr=0x7FEFFFFFE4A0<stack+0x3FE4A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼", cbMultiByte=256, lpWideCharStr=0x7FEFFFFFE250<stack+0x3FE250>, cchWideChar=186}
+[API_RET] id=126 tid=0x1001 pc=0x7FF6EC841E80 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 retval=0xBA last_error=0x0 decoded={lpWideCharStr=0x7FEFFFFFE250<stack+0x3FE250>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼"}
+[API_CALL] id=127 tid=0x1001 pc=0x7FF6EC841890 return_to=0x18001CF98 target=kernel32.dll!GetStringTypeW target_base=0x7FF6EC837000 args={arg0=0x1, arg1=0x7FEFFFFFE250<stack+0x3FE250>:" ", arg2=0xBA, arg3=0x7FEFFFFFE7A0}
+[API_RET] id=127 tid=0x1001 pc=0x7FF6EC841890 target=kernel32.dll!GetStringTypeW target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=128 tid=0x1001 pc=0x7FF6EC841E80 return_to=0x18001D07B target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x1, lpMultiByteStr=0x7FEFFFFFE4A0<stack+0x3FE4A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼", cbMultiByte=256, lpWideCharStr=NULL, cchWideChar=0}
+[API_RET] id=128 tid=0x1001 pc=0x7FF6EC841E80 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 retval=0xBA last_error=0x0
+[API_CALL] id=129 tid=0x1001 pc=0x7FF6EC841E80 return_to=0x18001D126 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x1, lpMultiByteStr=0x7FEFFFFFE4A0<stack+0x3FE4A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼", cbMultiByte=256, lpWideCharStr=0x7FEFFFFFE1F0<stack+0x3FE1F0>, cchWideChar=186}
+[API_RET] id=129 tid=0x1001 pc=0x7FF6EC841E80 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 retval=0xBA last_error=0x0 decoded={lpWideCharStr=0x7FEFFFFFE1F0<stack+0x3FE1F0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼"}
+[API_CALL] id=130 tid=0x1001 pc=0x7FF6EC841DA0 return_to=0x18001BA46 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 args={lpLibFileName=0x18002ED30<58ac2f65e335922be3f60e57099dc8a3+0x2ED30>:"api-ms-win-core-localization-l1-2-1", hFile=NULL, dwFlags=0x800}
+[API_RET] id=130 tid=0x1001 pc=0x7FF6EC841DA0 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 retval=0x7FF6EC837000 last_error=0x0
+[API_CALL] id=131 tid=0x1001 pc=0x7FF6EC8417F0 return_to=0x18001BB2E target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 args={hModule=0x7FF6EC837000<module:kernel32.dll>, lpProcName=0x18002F218<58ac2f65e335922be3f60e57099dc8a3+0x2F218>:"LCMapStringEx"}
+[API_RET] id=131 tid=0x1001 pc=0x7FF6EC8417F0 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 retval=0x7FF6EC841D50 last_error=0x0
+[API_CALL] id=132 tid=0x1001 pc=0x7FF6EC841D50 return_to=0x18001BFAF target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 args={arg0=0x18002F2E8<58ac2f65e335922be3f60e57099dc8a3+0x2F2E8>:"zh-CN", arg1=0x100, arg2=0x7FEFFFFFE1F0<stack+0x3FE1F0>:" ", arg3=0xBA, arg4=NULL, arg5=NULL, arg6=NULL, arg7=NULL, arg8=NULL}
+[API_RET] id=132 tid=0x1001 pc=0x7FF6EC841D50 target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 retval=0xBA last_error=0x0
+[API_CALL] id=133 tid=0x1001 pc=0x7FF6EC841D50 return_to=0x18001BFAF target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 args={arg0=0x18002F2E8<58ac2f65e335922be3f60e57099dc8a3+0x2F2E8>:"zh-CN", arg1=0x100, arg2=0x7FEFFFFFE1F0<stack+0x3FE1F0>:" ", arg3=0xBA, arg4=0x7FEFFFFFE060, arg5=0xBA, arg6=NULL, arg7=NULL, arg8=NULL}
+[API_RET] id=133 tid=0x1001 pc=0x7FF6EC841D50 target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 retval=0xBA last_error=0x0
+[API_CALL] id=134 tid=0x1001 pc=0x7FF6EC842540 return_to=0x18001D2A8 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x0, lpWideCharStr=0x7FEFFFFFE060<stack+0x3FE060>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼\u0000", cchWideChar=186, lpMultiByteStr=0x7FEFFFFFE5A0<stack+0x3FE5A0>, cbMultiByte=256, lpDefaultChar=NULL, lpUsedDefaultChar=NULL}
+[API_RET] id=134 tid=0x1001 pc=0x7FF6EC842540 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 retval=0xF4 last_error=0x0 decoded={lpMultiByteStr=0x7FEFFFFFE5A0<stack+0x3FE5A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼"}
+[API_CALL] id=135 tid=0x1001 pc=0x7FF6EC841E80 return_to=0x18001D07B target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x1, lpMultiByteStr=0x7FEFFFFFE4A0<stack+0x3FE4A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼", cbMultiByte=256, lpWideCharStr=NULL, cchWideChar=0}
+[API_RET] id=135 tid=0x1001 pc=0x7FF6EC841E80 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 retval=0xBA last_error=0x0
+[API_CALL] id=136 tid=0x1001 pc=0x7FF6EC841E80 return_to=0x18001D126 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x1, lpMultiByteStr=0x7FEFFFFFE4A0<stack+0x3FE4A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼", cbMultiByte=256, lpWideCharStr=0x7FEFFFFFE1F0<stack+0x3FE1F0>, cchWideChar=186}
+[API_RET] id=136 tid=0x1001 pc=0x7FF6EC841E80 target=kernel32.dll!MultiByteToWideChar target_base=0x7FF6EC837000 retval=0xBA last_error=0x0 decoded={lpWideCharStr=0x7FEFFFFFE1F0<stack+0x3FE1F0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼"}
+[API_CALL] id=137 tid=0x1001 pc=0x7FF6EC841D50 return_to=0x18001BFAF target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 args={arg0=0x18002F2E8<58ac2f65e335922be3f60e57099dc8a3+0x2F2E8>:"zh-CN", arg1=0x200, arg2=0x7FEFFFFFE1F0<stack+0x3FE1F0>:" ", arg3=0xBA, arg4=NULL, arg5=0x7F007E00000000, arg6=NULL, arg7=NULL, arg8=NULL}
+[API_RET] id=137 tid=0x1001 pc=0x7FF6EC841D50 target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 retval=0xBA last_error=0x0
+[API_CALL] id=138 tid=0x1001 pc=0x7FF6EC841D50 return_to=0x18001BFAF target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 args={arg0=0x18002F2E8<58ac2f65e335922be3f60e57099dc8a3+0x2F2E8>:"zh-CN", arg1=0x200, arg2=0x7FEFFFFFE1F0<stack+0x3FE1F0>:" ", arg3=0xBA, arg4=0x7FEFFFFFE060<stack+0x3FE060>:" ", arg5=0xBA, arg6=NULL, arg7=NULL, arg8=NULL}
+[API_RET] id=138 tid=0x1001 pc=0x7FF6EC841D50 target=kernel32.dll!LCMapStringEx target_base=0x7FF6EC837000 retval=0xBA last_error=0x0
+[API_CALL] id=139 tid=0x1001 pc=0x7FF6EC842540 return_to=0x18001D2A8 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 args={CodePage=936, dwFlags=0x0, lpWideCharStr=0x7FEFFFFFE060<stack+0x3FE060>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼\u0000", cchWideChar=186, lpMultiByteStr=0x7FEFFFFFE6A0<stack+0x3FE6A0>, cbMultiByte=256, lpDefaultChar=NULL, lpUsedDefaultChar=NULL}
+[API_RET] id=139 tid=0x1001 pc=0x7FF6EC842540 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 retval=0xF4 last_error=0x0 decoded={lpMultiByteStr=0x7FEFFFFFE6A0<stack+0x3FE6A0>:" \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~亗儎厗噲墛媽崕彁憭摂晼棙櫄洔潪煚、￥ウЖ┆氨渤吹斗腹夯冀究懒旅呐魄壬仕掏蜗醒矣哉肿刭谯茌捱噌忏溴骁栝觌祉铒瘃蝮趱鲼"}
+[API_CALL] id=140 tid=0x1001 pc=0x7FF6EC841290 return_to=0x18001E448 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF08}
+[API_RET] id=140 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=141 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x18001E5EF target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CF08}
+[API_RET] id=141 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=142 tid=0x1001 pc=0x7FF6EC841BE0 return_to=0x18000A9CA target=kernel32.dll!InitializeSListHead target_base=0x7FF6EC837000 args={arg0=0x18003CCB0}
+[API_RET] id=142 tid=0x1001 pc=0x7FF6EC841BE0 target=kernel32.dll!InitializeSListHead target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=143 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x1000}
+[API_RET] id=143 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A5F800 last_error=0x0
+[API_CALL] id=144 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003B350, arg1=0xFA0, arg2=NULL}
+[API_RET] id=144 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=145 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003B3A8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=145 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=146 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x18001BE07 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003B400, arg1=0xFA0, arg2=NULL}
+[API_RET] id=146 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=147 tid=0x1001 pc=0x7FF6EC841770 return_to=0x18001E349 target=kernel32.dll!GetModuleFileNameW target_base=0x7FF6EC837000 args={arg0=NULL, arg1=0x7FEFFFFFEC90, arg2=0x105}
+[API_RET] id=147 tid=0x1001 pc=0x7FF6EC841770 target=kernel32.dll!GetModuleFileNameW target_base=0x7FF6EC837000 retval=0x3D last_error=0x0
+[API_CALL] id=148 tid=0x1001 pc=0x7FF6EC841DA0 return_to=0x18001BA46 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 args={lpLibFileName=0x18002C830<58ac2f65e335922be3f60e57099dc8a3+0x2C830>:"kernel32", hFile=NULL, dwFlags=0x800}
+[API_RET] id=148 tid=0x1001 pc=0x7FF6EC841DA0 target=kernel32.dll!LoadLibraryExW target_base=0x7FF6EC837000 retval=0x7FF6EC837000 last_error=0x0
+[API_CALL] id=149 tid=0x1001 pc=0x7FF6EC8417F0 return_to=0x18001BB2E target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 args={hModule=0x7FF6EC837000<module:kernel32.dll>, lpProcName=0x18002F130<58ac2f65e335922be3f60e57099dc8a3+0x2F130>:"AreFileApisANSI"}
+[API_RET] id=149 tid=0x1001 pc=0x7FF6EC8417F0 target=kernel32.dll!GetProcAddress target_base=0x7FF6EC837000 retval=0x7FF6EC841040 last_error=0x0
+[API_CALL] id=150 tid=0x1001 pc=0x7FF6EC841040 return_to=0x18001E3BA target=kernel32.dll!AreFileApisANSI target_base=0x7FF6EC837000 args={}
+[API_RET] id=150 tid=0x1001 pc=0x7FF6EC841040 target=kernel32.dll!AreFileApisANSI target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=151 tid=0x1001 pc=0x7FF6EC842540 return_to=0x180015663 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 args={CodePage=0, dwFlags=0x0, lpWideCharStr=0x7FEFFFFFEC90<stack+0x3FEC90>:"/home/dev/Vm_Eng_Scan/Sample/58ac2f65e335922be3f60e57099dc8a3", cchWideChar=-1, lpMultiByteStr=NULL, cbMultiByte=0, lpDefaultChar=NULL, lpUsedDefaultChar=NULL}
+[API_RET] id=151 tid=0x1001 pc=0x7FF6EC842540 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 retval=0x3E last_error=0x0
+[API_CALL] id=152 tid=0x1001 pc=0x7FF6EC842540 return_to=0x1800156BC target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 args={CodePage=0, dwFlags=0x0, lpWideCharStr=0x7FEFFFFFEC90<stack+0x3FEC90>:"/home/dev/Vm_Eng_Scan/Sample/58ac2f65e335922be3f60e57099dc8a3", cchWideChar=-1, lpMultiByteStr=0x18003D0A0<58ac2f65e335922be3f60e57099dc8a3+0x3D0A0>, cbMultiByte=260, lpDefaultChar=NULL, lpUsedDefaultChar=NULL}
+[API_RET] id=152 tid=0x1001 pc=0x7FF6EC842540 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 retval=0x3E last_error=0x0 decoded={lpMultiByteStr=0x18003D0A0<58ac2f65e335922be3f60e57099dc8a3+0x3D0A0>:"/home/dev/Vm_Eng_Scan/Sample/58ac2f65e335922be3f60e57099dc8a3"}
+[API_CALL] id=153 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x31}
+[API_RET] id=153 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60800 last_error=0x0
+[API_CALL] id=154 tid=0x1001 pc=0x7FF6EC841600 return_to=0x18001F02F target=kernel32.dll!GetEnvironmentStringsW target_base=0x7FF6EC837000 args={}
+[API_RET] id=154 tid=0x1001 pc=0x7FF6EC841600 target=kernel32.dll!GetEnvironmentStringsW target_base=0x7FF6EC837000 retval=0x7FF6E3A75000 last_error=0x0
+[API_CALL] id=155 tid=0x1001 pc=0x7FF6EC842540 return_to=0x18001F091 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 args={CodePage=0, dwFlags=0x0, lpWideCharStr=0x7FF6E3A75000<params_environment_w+0x0>:"PATH=C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\Sample;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\SysWOW64\u0000TMP=C:\\Users\\Admin\\AppData\\Local\\Temp\u0000TEMP=C:\\Users\\Admin\\AppData\\Local\\Temp\u0000SystemRoot=C:\\Windows\u0000windir=C:\\Windows\u0000ALLUSERSPROFILE=C:\\ProgramData\u0000APPDATA=C:\\Users\\Admin\\AppData\\Roaming\u0000CommonProgramFiles=C:\\Program Files\\Common Files\u0000CommonProgramFiles(x86)=C:\\Program Files (x86)\\Common Files\u0000COMPUTERNAME=DESKTOP-9F4A8D2\u0000COMSPEC=C:\\Windows\\System32\\cmd.exe\u0000HOMEDRIVE=C:\u0000...", cchWideChar=823, lpMultiByteStr=NULL, cbMultiByte=0, lpDefaultChar=NULL, lpUsedDefaultChar=NULL}
+[API_RET] id=155 tid=0x1001 pc=0x7FF6EC842540 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 retval=0x338 last_error=0x0
+[API_CALL] id=156 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x338}
+[API_RET] id=156 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60840 last_error=0x0
+[API_CALL] id=157 tid=0x1001 pc=0x7FF6EC842540 return_to=0x18001F0DF target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 args={CodePage=0, dwFlags=0x0, lpWideCharStr=0x7FF6E3A75000<params_environment_w+0x0>:"PATH=C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\Sample;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\SysWOW64\u0000TMP=C:\\Users\\Admin\\AppData\\Local\\Temp\u0000TEMP=C:\\Users\\Admin\\AppData\\Local\\Temp\u0000SystemRoot=C:\\Windows\u0000windir=C:\\Windows\u0000ALLUSERSPROFILE=C:\\ProgramData\u0000APPDATA=C:\\Users\\Admin\\AppData\\Roaming\u0000CommonProgramFiles=C:\\Program Files\\Common Files\u0000CommonProgramFiles(x86)=C:\\Program Files (x86)\\Common Files\u0000COMPUTERNAME=DESKTOP-9F4A8D2\u0000COMSPEC=C:\\Windows\\System32\\cmd.exe\u0000HOMEDRIVE=C:\u0000...", cchWideChar=823, lpMultiByteStr=0x7FF662A60840<heap:0xc82e1000:segment+0x2840>, cbMultiByte=824, lpDefaultChar=NULL, lpUsedDefaultChar=NULL}
+[API_RET] id=157 tid=0x1001 pc=0x7FF6EC842540 target=kernel32.dll!WideCharToMultiByte target_base=0x7FF6EC837000 retval=0x338 last_error=0x0 decoded={lpMultiByteStr=0x7FF662A60840<heap:0xc82e1000:segment+0x2840>:"PATH=C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\Sample;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\SysWOW64\u0000TMP=C:\\Users\\Admin\\AppData\\Local\\Temp\u0000TEMP=C:\\Users\\Admin\\AppData\\Local\\Temp\u0000SystemRoot=C:\\Windows\u0000windir=C:\\Windows\u0000ALLUSERSPROFILE=C:\\ProgramData\u0000APPDATA=C:\\Users\\Admin\\AppData\\Roaming\u0000CommonProgramFiles=C:\\Program Files\\Common Files\u0000CommonProgramFiles(x86)=C:\\Program Files (x86)\\Common Files\u0000COMPUTERNAME=DESKTOP-9F4A8D2\u0000COMSPEC=C:\\Windows\\System32\\cmd.exe\u0000HOMEDRIVE=C:\u0000..."}
+[API_CALL] id=158 tid=0x1001 pc=0x7FF6EC8414B0 return_to=0x18001F100 target=kernel32.dll!FreeEnvironmentStringsW target_base=0x7FF6EC837000 args={arg0=0x7FF6E3A75000<params_environment_w+0x0>:"PATH=C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\Sample;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\SysWOW64"}
+[API_RET] id=158 tid=0x1001 pc=0x7FF6EC8414B0 target=kernel32.dll!FreeEnvironmentStringsW target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=159 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0xB8}
+[API_RET] id=159 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60B80 last_error=0x0
+[API_CALL] id=160 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x8A}
+[API_RET] id=160 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60C40 last_error=0x0
+[API_CALL] id=161 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x26}
+[API_RET] id=161 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60CD0 last_error=0x0
+[API_CALL] id=162 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x27}
+[API_RET] id=162 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60D00 last_error=0x0
+[API_CALL] id=163 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x16}
+[API_RET] id=163 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60D30 last_error=0x0
+[API_CALL] id=164 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x12}
+[API_RET] id=164 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60D50 last_error=0x0
+[API_CALL] id=165 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x1F}
+[API_RET] id=165 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60D70 last_error=0x0
+[API_CALL] id=166 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x27}
+[API_RET] id=166 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60D90 last_error=0x0
+[API_CALL] id=167 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x31}
+[API_RET] id=167 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60DC0 last_error=0x0
+[API_CALL] id=168 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x3C}
+[API_RET] id=168 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60E00 last_error=0x0
+[API_CALL] id=169 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x1D}
+[API_RET] id=169 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60E40 last_error=0x0
+[API_CALL] id=170 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x24}
+[API_RET] id=170 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60E60 last_error=0x0
+[API_CALL] id=171 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0xD}
+[API_RET] id=171 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60E90 last_error=0x0
+[API_CALL] id=172 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x16}
+[API_RET] id=172 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60EA0 last_error=0x0
+[API_CALL] id=173 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x2A}
+[API_RET] id=173 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60EC0 last_error=0x0
+[API_CALL] id=174 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x3E}
+[API_RET] id=174 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60EF0 last_error=0x0
+[API_CALL] id=175 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x1B}
+[API_RET] id=175 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60F30 last_error=0x0
+[API_CALL] id=176 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x1E}
+[API_RET] id=176 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60F50 last_error=0x0
+[API_CALL] id=177 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x29}
+[API_RET] id=177 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60F70 last_error=0x0
+[API_CALL] id=178 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x17}
+[API_RET] id=178 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60FA0 last_error=0x0
+[API_CALL] id=179 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x15}
+[API_RET] id=179 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60FC0 last_error=0x0
+[API_CALL] id=180 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0xF}
+[API_RET] id=180 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60FE0 last_error=0x0
+[API_CALL] id=181 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x1800191CF target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=0x8, arg2=0x1B}
+[API_RET] id=181 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60FF0 last_error=0x0
+[API_CALL] id=182 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60840<heap:0xc82e1000:segment+0x2840>:"PATH=C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\Sample;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\System32;\\home\\dev\\Vm_Eng_Scan\\C:\\Windows\\SysWOW64"}
+[API_RET] id=182 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=183 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C310, arg1=0xFA0, arg2=NULL}
+[API_RET] id=183 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=184 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C338, arg1=0xFA0, arg2=NULL}
+[API_RET] id=184 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=185 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C360, arg1=0xFA0, arg2=NULL}
+[API_RET] id=185 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=186 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C388, arg1=0xFA0, arg2=NULL}
+[API_RET] id=186 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=187 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C3B0, arg1=0xFA0, arg2=NULL}
+[API_RET] id=187 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=188 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C3D8, arg1=0xFA0, arg2=NULL}
+[API_RET] id=188 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=189 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C400, arg1=0xFA0, arg2=NULL}
+[API_RET] id=189 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=190 tid=0x1001 pc=0x7FF6EC841BC0 return_to=0x180009A7D target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 args={arg0=0x18003C428, arg1=0xFA0, arg2=NULL}
+[API_RET] id=190 tid=0x1001 pc=0x7FF6EC841BC0 target=kernel32.dll!InitializeCriticalSectionEx target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=191 tid=0x1001 pc=0x7FF6EC841290 return_to=0x1800161D4 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=191 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=192 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x100}
+[API_RET] id=192 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60840 last_error=0x0
+[API_CALL] id=193 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x1800161E6 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=193 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=194 tid=0x1001 pc=0x7FF6EC841290 return_to=0x1800161D4 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=194 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=195 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x1800161E6 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=195 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=196 tid=0x1001 pc=0x7FF6EC841290 return_to=0x1800161D4 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=196 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=197 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x1800161E6 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=197 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=198 tid=0x1001 pc=0x7FF6EC841290 return_to=0x1800161D4 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=198 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=199 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x1800161E6 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=199 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=200 tid=0x1001 pc=0x7FF6EC841290 return_to=0x1800161D4 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=200 tid=0x1001 pc=0x7FF6EC841290 target=kernel32.dll!EnterCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=201 tid=0x1001 pc=0x7FF6EC841D70 return_to=0x1800161E6 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 args={arg0=0x18003CE90}
+[API_RET] id=201 tid=0x1001 pc=0x7FF6EC841D70 target=kernel32.dll!LeaveCriticalSection target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=202 tid=0x1001 pc=0x7FF6EC842270 return_to=0x180001256 target=kernel32.dll!SetUnhandledExceptionFilter target_base=0x7FF6EC837000 args={arg0=0x180001230<58ac2f65e335922be3f60e57099dc8a3+0x1230>:"쀳쳃쳌쳌쳌쳌쳌쳌區荈⃬譈䣙ඍ￠￿ᗿ蹲\u0002ι＀缕ʎ렀\u0001"}
+[API_RET] id=202 tid=0x1001 pc=0x7FF6EC842270 target=kernel32.dll!SetUnhandledExceptionFilter target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=203 tid=0x1001 pc=0x7FF6EC8421A0 return_to=0x180001261 target=kernel32.dll!SetErrorMode target_base=0x7FF6EC837000 args={arg0=0x8003}
+[API_RET] id=203 tid=0x1001 pc=0x7FF6EC8421A0 target=kernel32.dll!SetErrorMode target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=204 tid=0x1001 pc=0x7FF6DEAC9030 return_to=0x0 target=ntdll.dll!NtContinue target_base=0x7FF6DEABF000 args={arg0=0x7FEFFFFFED30, arg1=NULL}
+[API_CALL] id=205 tid=0x1001 pc=0x7FF6DEAC9030 return_to=0x0 target=ntdll.dll!NtContinue target_base=0x7FF6DEABF000 args={arg0=0x7FEFFFFFED30, arg1=NULL}
+[ENTRY_INVOKE] address=6442455680 address_module="58ac2f65e335922be3f60e57099dc8a3" address_module_base=6442450944 address_module_path="/home/dev/Vm_Eng_Scan/Sample/58ac2f65e335922be3f60e57099dc8a3" address_owner="58ac2f65e335922be3f60e57099dc8a3+0x1280" address_rva=4736 argc=0 args=[] base=6442450944 export="DllRegisterServer" invocation="export" module="58ac2f65e335922be3f60e57099dc8a3" path="/home/dev/Vm_Eng_Scan/Sample/58ac2f65e335922be3f60e57099dc8a3"
+[API_CALL] id=206 tid=0x1001 pc=0x7FF6EC841580 return_to=0x1800026D2 target=kernel32.dll!GetCurrentProcess target_base=0x7FF6EC837000 args={}
+[API_RET] id=206 tid=0x1001 pc=0x7FF6EC841580 target=kernel32.dll!GetCurrentProcess target_base=0x7FF6EC837000 retval=0xFFFFFFFFFFFFFFFF last_error=0x0
+[API_CALL] id=207 tid=0x1001 pc=0x7FF656245210 return_to=0x1800026E3 target=advapi32.dll!OpenProcessToken target_base=0x7FF65623B000 args={arg0=0xFFFFFFFFFFFFFFFF, arg1=0x8, arg2=0x7FEFFFFFEF28}
+[API_RET] id=207 tid=0x1001 pc=0x7FF656245210 target=advapi32.dll!OpenProcessToken target_base=0x7FF65623B000 retval=0x1 last_error=0x0
+[API_CALL] id=208 tid=0x1001 pc=0x7FF656245170 return_to=0x180002710 target=advapi32.dll!GetTokenInformation target_base=0x7FF65623B000 args={arg0=0x8004, arg1=0x14, arg2=0x7FEFFFFFEF34, arg3=0x4, arg4=0x7FEFFFFFEF30}
+[API_RET] id=208 tid=0x1001 pc=0x7FF656245170 target=advapi32.dll!GetTokenInformation target_base=0x7FF65623B000 retval=0x1 last_error=0x0
+[API_CALL] id=209 tid=0x1001 pc=0x7FF6EC841060 return_to=0x180002722 target=kernel32.dll!CloseHandle target_base=0x7FF6EC837000 args={arg0=0x8004}
+[API_RET] id=209 tid=0x1001 pc=0x7FF6EC841060 target=kernel32.dll!CloseHandle target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=210 tid=0x1001 pc=0x7FF6EC841120 return_to=0x1800012D6 target=kernel32.dll!CreateFileW target_base=0x7FF6EC837000 args={lpFileName=0x1800357E0<58ac2f65e335922be3f60e57099dc8a3+0x357E0>:"\\\\.\\VBoxMiniRdrDN", dwDesiredAccess=0x80000000, dwShareMode=0x1, lpSecurityAttributes=NULL, dwCreationDisposition=3, dwFlagsAndAttributes=0x80, hTemplateFile=NULL}
+[ARTIFACT_HIDE] artifact_type="device_path" operation="CreateFile" requested="\\\\.\\VBoxMiniRdrDN" rule="\\\\.\\VBoxMiniRdrDN"
+[API_RET] id=210 tid=0x1001 pc=0x7FF6EC841120 target=kernel32.dll!CreateFileW target_base=0x7FF6EC837000 retval=0xFFFFFFFFFFFFFFFF last_error=0x2
+[API_CALL] id=211 tid=0x1001 pc=0x7FF6562453A0 return_to=0x180001316 target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 args={hKey=0xFFFFFFFF80000002, lpSubKey=0x180035810<58ac2f65e335922be3f60e57099dc8a3+0x35810>:"SOFTWARE\\VMware, Inc.\\VMware Tools", ulOptions=0x0, samDesired=0x1, phkResult=0x7FEFFFFFEF98<stack+0x3FEF98>}
+[ARTIFACT_HIDE] artifact_type="registry_key" operation="RegOpenKey" requested="HKEY_LOCAL_MACHINE\\SOFTWARE\\VMware, Inc.\\VMware Tools" rule="SOFTWARE\\VMware, Inc.\\VMware Tools"
+[API_RET] id=211 tid=0x1001 pc=0x7FF6562453A0 target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 retval=0x2 last_error=0x2
+[API_CALL] id=212 tid=0x1001 pc=0x7FF6562453A0 return_to=0x180008C9B target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 args={hKey=0xFFFFFFFF80000002, lpSubKey=0x1800356C0<58ac2f65e335922be3f60e57099dc8a3+0x356C0>:"SYSTEM\\HardwareConfig\\Current\\", ulOptions=0x0, samDesired=0x1, phkResult=0x7FEFFFFFED28<stack+0x3FED28>}
+[REG_OPEN_KEY] handle=20480 path="HKEY_LOCAL_MACHINE\\SYSTEM\\HardwareConfig\\Current\\"
+[API_RET] id=212 tid=0x1001 pc=0x7FF6562453A0 target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=213 tid=0x1001 pc=0x7FF656245370 return_to=0x180008CD3 target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 args={arg0=0x5000, arg1=NULL, arg2=0x180035700<58ac2f65e335922be3f60e57099dc8a3+0x35700>:"SystemManufacturer", arg3=0x2, arg4=NULL, arg5=0x7FEFFFFFEE38, arg6=0x7FEFFFFFED30<stack+0x3FED30>:"ÿ"}
+[REG_QUERY_VALUE] data_len=60 path="hkey_local_machine\\system\\hardwareconfig\\current" value_name="SystemManufacturer" value_type=1 value_type_name="REG_SZ"
+[API_RET] id=213 tid=0x1001 pc=0x7FF656245370 target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=214 tid=0x1001 pc=0x7FF6562453A0 return_to=0x180008DBA target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 args={hKey=0xFFFFFFFF80000002, lpSubKey=0x1800356C0<58ac2f65e335922be3f60e57099dc8a3+0x356C0>:"SYSTEM\\HardwareConfig\\Current\\", ulOptions=0x0, samDesired=0x1, phkResult=0x7FEFFFFFED28<stack+0x3FED28>}
+[REG_OPEN_KEY] handle=20488 path="HKEY_LOCAL_MACHINE\\SYSTEM\\HardwareConfig\\Current\\"
+[API_RET] id=214 tid=0x1001 pc=0x7FF6562453A0 target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=215 tid=0x1001 pc=0x7FF656245370 return_to=0x180008DF1 target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 args={arg0=0x5008, arg1=NULL, arg2=0x180035770<58ac2f65e335922be3f60e57099dc8a3+0x35770>:"BIOSVendor", arg3=0x2, arg4=NULL, arg5=0x7FEFFFFFED38, arg6=0x7FEFFFFFED30<stack+0x3FED30>:"ÿ"}
+[REG_QUERY_VALUE] data_len=80 path="hkey_local_machine\\system\\hardwareconfig\\current" value_name="BIOSVendor" value_type=1 value_type_name="REG_SZ"
+[API_RET] id=215 tid=0x1001 pc=0x7FF656245370 target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=216 tid=0x1001 pc=0x7FF6562453A0 return_to=0x180008E54 target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 args={hKey=0xFFFFFFFF80000002, lpSubKey=0x1800356C0<58ac2f65e335922be3f60e57099dc8a3+0x356C0>:"SYSTEM\\HardwareConfig\\Current\\", ulOptions=0x0, samDesired=0x1, phkResult=0x7FEFFFFFED28<stack+0x3FED28>}
+[REG_OPEN_KEY] handle=20496 path="HKEY_LOCAL_MACHINE\\SYSTEM\\HardwareConfig\\Current\\"
+[API_RET] id=216 tid=0x1001 pc=0x7FF6562453A0 target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=217 tid=0x1001 pc=0x7FF656245370 return_to=0x180008E8B target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 args={arg0=0x5010, arg1=NULL, arg2=0x180035788<58ac2f65e335922be3f60e57099dc8a3+0x35788>:"SystemFamily", arg3=0x2, arg4=NULL, arg5=0x7FEFFFFFED38, arg6=0x7FEFFFFFED30<stack+0x3FED30>:"ÿ"}
+[REG_QUERY_VALUE] data_len=16 path="hkey_local_machine\\system\\hardwareconfig\\current" value_name="SystemFamily" value_type=1 value_type_name="REG_SZ"
+[API_RET] id=217 tid=0x1001 pc=0x7FF656245370 target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=218 tid=0x1001 pc=0x7FF6562453A0 return_to=0x180008EEE target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 args={hKey=0xFFFFFFFF80000002, lpSubKey=0x1800356C0<58ac2f65e335922be3f60e57099dc8a3+0x356C0>:"SYSTEM\\HardwareConfig\\Current\\", ulOptions=0x0, samDesired=0x1, phkResult=0x7FEFFFFFED28<stack+0x3FED28>}
+[REG_OPEN_KEY] handle=20504 path="HKEY_LOCAL_MACHINE\\SYSTEM\\HardwareConfig\\Current\\"
+[API_RET] id=218 tid=0x1001 pc=0x7FF6562453A0 target=advapi32.dll!RegOpenKeyExW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=219 tid=0x1001 pc=0x7FF656245370 return_to=0x180008F25 target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 args={arg0=0x5018, arg1=NULL, arg2=0x1800357B8<58ac2f65e335922be3f60e57099dc8a3+0x357B8>:"SystemProductName", arg3=0x2, arg4=NULL, arg5=0x7FEFFFFFED38, arg6=0x7FEFFFFFED30<stack+0x3FED30>:"ÿ"}
+[REG_QUERY_VALUE] data_len=32 path="hkey_local_machine\\system\\hardwareconfig\\current" value_name="SystemProductName" value_type=1 value_type_name="REG_SZ"
+[API_RET] id=219 tid=0x1001 pc=0x7FF656245370 target=advapi32.dll!RegGetValueW target_base=0x7FF65623B000 retval=0x0 last_error=0x2
+[API_CALL] id=220 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180008FB6 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=NULL, arg2=NULL}
+[API_RET] id=220 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=221 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x8}
+[API_RET] id=221 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60940 last_error=0x2
+[API_CALL] id=222 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180009041 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x7FF662A60940, arg2=0x8}
+[API_RET] id=222 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=223 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=NULL, arg3=NULL}
+[API_RET] id=223 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=224 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=224 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=225 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=225 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=226 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=226 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=227 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"DSDT3"}
+[API_RET] id=227 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=228 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"DSDT3"}
+[API_RET] id=228 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=229 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=NULL, arg3=NULL}
+[API_RET] id=229 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=230 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=230 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=231 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=231 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=232 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=232 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=233 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"FACP3"}
+[API_RET] id=233 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=234 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"FACP3"}
+[API_RET] id=234 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=235 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60940<heap:0xc82e1000:segment+0x2940>:"TDSDPCAFROFILE=CFACP3"}
+[API_RET] id=235 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=236 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180008FB6 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=NULL, arg2=NULL}
+[API_RET] id=236 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=237 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x8}
+[API_RET] id=237 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60940 last_error=0x2
+[API_CALL] id=238 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180009041 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x7FF662A60940, arg2=0x8}
+[API_RET] id=238 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=239 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=NULL, arg3=NULL}
+[API_RET] id=239 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=240 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=240 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=241 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=241 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=242 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=242 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=243 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"DSDT3"}
+[API_RET] id=243 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=244 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"DSDT3"}
+[API_RET] id=244 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=245 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=NULL, arg3=NULL}
+[API_RET] id=245 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=246 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=246 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=247 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=247 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=248 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=248 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=249 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"FACP3"}
+[API_RET] id=249 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=250 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"FACP3"}
+[API_RET] id=250 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=251 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60940<heap:0xc82e1000:segment+0x2940>:"TDSDPCAFROFILE=CFACP3"}
+[API_RET] id=251 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=252 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180008FB6 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=NULL, arg2=NULL}
+[API_RET] id=252 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=253 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x8}
+[API_RET] id=253 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60940 last_error=0x2
+[API_CALL] id=254 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180009041 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x7FF662A60940, arg2=0x8}
+[API_RET] id=254 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=255 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=NULL, arg3=NULL}
+[API_RET] id=255 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=256 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=256 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=257 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=257 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=258 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=258 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=259 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"DSDT3"}
+[API_RET] id=259 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=260 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"DSDT3"}
+[API_RET] id=260 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=261 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=NULL, arg3=NULL}
+[API_RET] id=261 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=262 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=262 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=263 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=263 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=264 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=264 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=265 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"FACP3"}
+[API_RET] id=265 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=266 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"FACP3"}
+[API_RET] id=266 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=267 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60940<heap:0xc82e1000:segment+0x2940>:"TDSDPCAFROFILE=CFACP3"}
+[API_RET] id=267 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=268 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180008FB6 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=NULL, arg2=NULL}
+[API_RET] id=268 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=269 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x8}
+[API_RET] id=269 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60940 last_error=0x2
+[API_CALL] id=270 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180009041 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x7FF662A60940, arg2=0x8}
+[API_RET] id=270 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=271 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=NULL, arg3=NULL}
+[API_RET] id=271 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=272 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=272 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=273 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=273 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=274 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=274 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=275 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"DSDT3"}
+[API_RET] id=275 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=276 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"DSDT3"}
+[API_RET] id=276 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=277 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=NULL, arg3=NULL}
+[API_RET] id=277 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=278 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=278 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=279 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=279 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=280 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=280 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=281 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"FACP3"}
+[API_RET] id=281 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=282 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"FACP3"}
+[API_RET] id=282 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=283 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60940<heap:0xc82e1000:segment+0x2940>:"TDSDPCAFROFILE=CFACP3"}
+[API_RET] id=283 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=284 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180008FB6 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=NULL, arg2=NULL}
+[API_RET] id=284 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=285 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x8}
+[API_RET] id=285 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60940 last_error=0x2
+[API_CALL] id=286 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180009041 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x7FF662A60940, arg2=0x8}
+[API_RET] id=286 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=287 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=NULL, arg3=NULL}
+[API_RET] id=287 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=288 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=288 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=289 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=289 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=290 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=290 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=291 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"DSDT3"}
+[API_RET] id=291 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=292 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"DSDT3"}
+[API_RET] id=292 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=293 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=NULL, arg3=NULL}
+[API_RET] id=293 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=294 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=294 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=295 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=295 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=296 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=296 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=297 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"FACP3"}
+[API_RET] id=297 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=298 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"FACP3"}
+[API_RET] id=298 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=299 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60940<heap:0xc82e1000:segment+0x2940>:"TDSDPCAFROFILE=CFACP3"}
+[API_RET] id=299 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=300 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180008FB6 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=NULL, arg2=NULL}
+[API_RET] id=300 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=301 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x8}
+[API_RET] id=301 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60940 last_error=0x2
+[API_CALL] id=302 tid=0x1001 pc=0x7FF6EC8412A0 return_to=0x180009041 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x7FF662A60940, arg2=0x8}
+[API_RET] id=302 tid=0x1001 pc=0x7FF6EC8412A0 target=kernel32.dll!EnumSystemFirmwareTables target_base=0x7FF6EC837000 retval=0x8 last_error=0x2
+[API_CALL] id=303 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=NULL, arg3=NULL}
+[API_RET] id=303 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=304 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=304 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=305 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x44534454, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=305 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=306 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=306 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=307 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"DSDT3"}
+[API_RET] id=307 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=308 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"DSDT3"}
+[API_RET] id=308 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=309 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x180009068 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=NULL, arg3=NULL}
+[API_RET] id=309 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=310 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x33}
+[API_RET] id=310 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60950 last_error=0x2
+[API_CALL] id=311 tid=0x1001 pc=0x7FF6EC8418D0 return_to=0x1800090EF target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 args={arg0=0x41435049, arg1=0x46414350, arg2=0x7FF662A60950, arg3=0x33}
+[API_RET] id=311 tid=0x1001 pc=0x7FF6EC8418D0 target=kernel32.dll!GetSystemFirmwareTable target_base=0x7FF6EC837000 retval=0x33 last_error=0x2
+[API_CALL] id=312 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x40}
+[API_RET] id=312 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF662A60990 last_error=0x2
+[API_CALL] id=313 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60990<heap:0xc82e1000:segment+0x2990>:"FACP3"}
+[API_RET] id=313 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=314 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60950<heap:0xc82e1000:segment+0x2950>:"FACP3"}
+[API_RET] id=314 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=315 tid=0x1001 pc=0x7FF6EC841B10 return_to=0x1800171B8 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0x7FF662A60940<heap:0xc82e1000:segment+0x2940>:"TDSDPCAFROFILE=CFACP3"}
+[API_RET] id=315 tid=0x1001 pc=0x7FF6EC841B10 target=kernel32.dll!HeapFree target_base=0x7FF6EC837000 retval=0x1 last_error=0x2
+[API_CALL] id=316 tid=0x1001 pc=0x7FF6EC841580 return_to=0x1800026D2 target=kernel32.dll!GetCurrentProcess target_base=0x7FF6EC837000 args={}
+[API_RET] id=316 tid=0x1001 pc=0x7FF6EC841580 target=kernel32.dll!GetCurrentProcess target_base=0x7FF6EC837000 retval=0xFFFFFFFFFFFFFFFF last_error=0x2
+[API_CALL] id=317 tid=0x1001 pc=0x7FF656245210 return_to=0x1800026E3 target=advapi32.dll!OpenProcessToken target_base=0x7FF65623B000 args={arg0=0xFFFFFFFFFFFFFFFF, arg1=0x8, arg2=0x7FEFFFFFEF28}
+[API_RET] id=317 tid=0x1001 pc=0x7FF656245210 target=advapi32.dll!OpenProcessToken target_base=0x7FF65623B000 retval=0x1 last_error=0x2
+[API_CALL] id=318 tid=0x1001 pc=0x7FF656245170 return_to=0x180002710 target=advapi32.dll!GetTokenInformation target_base=0x7FF65623B000 args={arg0=0x8008, arg1=0x14, arg2=0x7FEFFFFFEF34, arg3=0x4, arg4=0x7FEFFFFFEF30}
+[API_RET] id=318 tid=0x1001 pc=0x7FF656245170 target=advapi32.dll!GetTokenInformation target_base=0x7FF65623B000 retval=0x1 last_error=0x2
+[API_CALL] id=319 tid=0x1001 pc=0x7FF6EC841060 return_to=0x180002722 target=kernel32.dll!CloseHandle target_base=0x7FF6EC837000 args={arg0=0x8008}
+[API_RET] id=319 tid=0x1001 pc=0x7FF6EC841060 target=kernel32.dll!CloseHandle target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=320 tid=0x1001 pc=0x7FF6EC841130 return_to=0x180001352 target=kernel32.dll!CreateMutexA target_base=0x7FF6EC837000 args={lpMutexAttributes=NULL, bInitialOwner=FALSE, lpName=0x1800352F8<58ac2f65e335922be3f60e57099dc8a3+0x352F8>:"u:fnjiuyxxxxxgredfgsbbgfcvhutrv"}
+[API_RET] id=320 tid=0x1001 pc=0x7FF6EC841130 target=kernel32.dll!CreateMutexA target_base=0x7FF6EC837000 retval=0x800C last_error=0x0
+[API_CALL] id=321 tid=0x1001 pc=0x7FF6EC841700 return_to=0x180001360 target=kernel32.dll!GetLastError target_base=0x7FF6EC837000 args={}
+[API_RET] id=321 tid=0x1001 pc=0x7FF6EC841700 target=kernel32.dll!GetLastError target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=322 tid=0x1001 pc=0x7FF6EC841580 return_to=0x1800026D2 target=kernel32.dll!GetCurrentProcess target_base=0x7FF6EC837000 args={}
+[API_RET] id=322 tid=0x1001 pc=0x7FF6EC841580 target=kernel32.dll!GetCurrentProcess target_base=0x7FF6EC837000 retval=0xFFFFFFFFFFFFFFFF last_error=0x0
+[API_CALL] id=323 tid=0x1001 pc=0x7FF656245210 return_to=0x1800026E3 target=advapi32.dll!OpenProcessToken target_base=0x7FF65623B000 args={arg0=0xFFFFFFFFFFFFFFFF, arg1=0x8, arg2=0x7FEFFFFFE238}
+[API_RET] id=323 tid=0x1001 pc=0x7FF656245210 target=advapi32.dll!OpenProcessToken target_base=0x7FF65623B000 retval=0x1 last_error=0x0
+[API_CALL] id=324 tid=0x1001 pc=0x7FF656245170 return_to=0x180002710 target=advapi32.dll!GetTokenInformation target_base=0x7FF65623B000 args={arg0=0x8010, arg1=0x14, arg2=0x7FEFFFFFE244<stack+0x3FE244>:"*", arg3=0x4, arg4=0x7FEFFFFFE240}
+[API_RET] id=324 tid=0x1001 pc=0x7FF656245170 target=advapi32.dll!GetTokenInformation target_base=0x7FF65623B000 retval=0x1 last_error=0x0
+[API_CALL] id=325 tid=0x1001 pc=0x7FF6EC841060 return_to=0x180002722 target=kernel32.dll!CloseHandle target_base=0x7FF6EC837000 args={arg0=0x8010}
+[API_RET] id=325 tid=0x1001 pc=0x7FF6EC841060 target=kernel32.dll!CloseHandle target_base=0x7FF6EC837000 retval=0x1 last_error=0x0
+[API_CALL] id=326 tid=0x1001 pc=0x7FF6EC842600 return_to=0x180002B6E target=kernel32.dll!lstrcpyW target_base=0x7FF6EC837000 args={arg0=0x7FEFFFFFE528, arg1=0x180035340<58ac2f65e335922be3f60e57099dc8a3+0x35340>:"EdgeCheck"}
+[API_RET] id=326 tid=0x1001 pc=0x7FF6EC842600 target=kernel32.dll!lstrcpyW target_base=0x7FF6EC837000 retval=0x7FEFFFFFE528 last_error=0x0
+[API_CALL] id=327 tid=0x1001 pc=0x7FF6EC841770 return_to=0x180002BA0 target=kernel32.dll!GetModuleFileNameW target_base=0x7FF6EC837000 args={arg0=0x180000000<58ac2f65e335922be3f60e57099dc8a3+0x0>:"MZ", arg1=0x7FEFFFFFE728, arg2=0x200}
+[API_RET] id=327 tid=0x1001 pc=0x7FF6EC841770 target=kernel32.dll!GetModuleFileNameW target_base=0x7FF6EC837000 retval=0x3D last_error=0x0
+[API_CALL] id=328 tid=0x1001 pc=0x7FF6C94C6090 return_to=0x180002BAD target=ole32.dll!CoInitializeEx target_base=0x7FF6C94BC000 args={arg0=NULL, arg1=0x2}
+[API_RET] id=328 tid=0x1001 pc=0x7FF6C94C6090 target=ole32.dll!CoInitializeEx target_base=0x7FF6C94BC000 retval=0x0 last_error=0x0
+[API_CALL] id=329 tid=0x1001 pc=0x7FF6C94C6040 return_to=0x180002BF1 target=ole32.dll!CoCreateInstance target_base=0x7FF6C94BC000 args={arg0=0x18002B820<58ac2f65e335922be3f60e57099dc8a3+0x2B820>:"㚟྇ꓥ䳼㺽䔕才䰽ﵫ䦣랹쬉팼䟰﻿﷿﻿ﳿ﻿﷿﻿ﯿሙଙሙЙሙଙሙ\u0019)耀\u0001", arg1=NULL, arg2=0x1, arg3=0x18002B800<58ac2f65e335922be3f60e57099dc8a3+0x2B800>:"꓇⾫䶩䀓鞖찠퐿蔏䟠둗䉶⦟얅セ؀㚟྇ꓥ䳼㺽䔕才䰽ﵫ䦣랹쬉팼䟰﻿﷿﻿ﳿ﻿﷿﻿ﯿሙଙሙЙሙଙሙ\u0019)耀\u0001", arg4=0x7FEFFFFFE498}
+[API_RET] id=329 tid=0x1001 pc=0x7FF6C94C6040 target=ole32.dll!CoCreateInstance target_base=0x7FF6C94BC000 retval=0x80040154 last_error=0x0
+[API_CALL] id=330 tid=0x1001 pc=0x7FF6C94C6100 return_to=0x180002D37 target=ole32.dll!CoUninitialize target_base=0x7FF6C94BC000 args={}
+[API_RET] id=330 tid=0x1001 pc=0x7FF6C94C6100 target=ole32.dll!CoUninitialize target_base=0x7FF6C94BC000 retval=0x0 last_error=0x0
+[API_CALL] id=331 tid=0x1001 pc=0x7FF6EC8422B0 return_to=0x1800013A2 target=kernel32.dll!Sleep target_base=0x7FF6EC837000 args={arg0=0xEA60}
+[API_CALL] id=332 tid=0x1001 pc=0x7FF6EC8422B0 return_to=0x1800013A2 target=kernel32.dll!Sleep target_base=0x7FF6EC837000 args={arg0=0xEA60}
+[API_RET] id=332 tid=0x1001 pc=0x7FF6EC8422B0 target=kernel32.dll!Sleep target_base=0x7FF6EC837000 retval=0x0 last_error=0x0
+[API_CALL] id=333 tid=0x1001 pc=0x7FF6BF115070 return_to=0x180008A24 target=wininet.dll!InternetCanonicalizeUrlW target_base=0x7FF6BF10B000 args={arg0=0x1800351C0<58ac2f65e335922be3f60e57099dc8a3+0x351C0>:"https://load.ssangyongcne.o-r.kr/dashBoardRead.php", arg1=0x7FEFFFFFE708, arg2=0x7FEFFFFFE2D8<stack+0x3FE2D8>:"Ѐ", arg3=0x2000000}
+[API_RET] id=333 tid=0x1001 pc=0x7FF6BF115070 target=wininet.dll!InternetCanonicalizeUrlW target_base=0x7FF6BF10B000 retval=0x1 last_error=0x0
+[API_CALL] id=334 tid=0x1001 pc=0x7FF6BF1150C0 return_to=0x180008A3F target=wininet.dll!InternetCrackUrlW target_base=0x7FF6BF10B000 args={arg0=0x1800351C0<58ac2f65e335922be3f60e57099dc8a3+0x351C0>:"https://load.ssangyongcne.o-r.kr/dashBoardRead.php", arg1=NULL, arg2=NULL, arg3=0x7FEFFFFFE268<stack+0x3FE268>:"h"}
+[API_RET] id=334 tid=0x1001 pc=0x7FF6BF1150C0 target=wininet.dll!InternetCrackUrlW target_base=0x7FF6BF10B000 retval=0x1 last_error=0x0
+[API_CALL] id=335 tid=0x1001 pc=0x7FF6D6014050 return_to=0x180008A91 target=winhttp.dll!WinHttpOpen target_base=0x7FF6D600A000 args={pszAgentW=0x1800355B0<58ac2f65e335922be3f60e57099dc8a3+0x355B0>:"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.130 Safari/537.36", dwAccessType=4, pszProxyW=NULL, pszProxyBypassW=NULL, dwFlags=0x0}
+[API_RET] id=335 tid=0x1001 pc=0x7FF6D6014050 target=winhttp.dll!WinHttpOpen target_base=0x7FF6D600A000 retval=0xC000 last_error=0x0
+[API_CALL] id=336 tid=0x1001 pc=0x7FF6D6014020 return_to=0x180008AB1 target=winhttp.dll!WinHttpConnect target_base=0x7FF6D600A000 args={hSession=0xC000, pswzServerName=0x7FEFFFFFE2E8<stack+0x3FE2E8>:"load.ssangyongcne.o-r.kr", nServerPort=443, dwReserved=0x0}
+[HTTP_CONNECT] connection_handle=49156 host="load.ssangyongcne.o-r.kr" port=443 service=3 session_handle=49152 source="WinHttpConnect"
+[API_RET] id=336 tid=0x1001 pc=0x7FF6D6014020 target=winhttp.dll!WinHttpConnect target_base=0x7FF6D600A000 retval=0xC004 last_error=0x0
+[API_CALL] id=337 tid=0x1001 pc=0x7FF6D6014060 return_to=0x180008AE6 target=winhttp.dll!WinHttpOpenRequest target_base=0x7FF6D600A000 args={hConnect=0xC004, pwszVerb=0x180035698<58ac2f65e335922be3f60e57099dc8a3+0x35698>:"GET", pwszObjectName=0x7FEFFFFFE4F8<stack+0x3FE4F8>:"/dashBoardRead.php", pwszVersion=NULL, pwszReferrer=NULL, ppwszAcceptTypes=NULL, dwFlags=0x800000, dwContext=0x310030}
+[API_RET] id=337 tid=0x1001 pc=0x7FF6D6014060 target=winhttp.dll!WinHttpOpenRequest target_base=0x7FF6D600A000 retval=0xC008 last_error=0x0
+[API_CALL] id=338 tid=0x1001 pc=0x7FF6D6014000 return_to=0x180008B17 target=winhttp.dll!WinHttpAddRequestHeaders target_base=0x7FF6D600A000 args={hRequest=0xC008, lpszHeaders=0x1800356A0<58ac2f65e335922be3f60e57099dc8a3+0x356A0>:"Accept: */*\r\n", dwHeadersLength=4294967295, dwModifiers=0x20000000}
+[API_RET] id=338 tid=0x1001 pc=0x7FF6D6014000 target=winhttp.dll!WinHttpAddRequestHeaders target_base=0x7FF6D600A000 retval=0x1 last_error=0x0
+[API_CALL] id=339 tid=0x1001 pc=0x7FF6D60140D0 return_to=0x180008B35 target=winhttp.dll!WinHttpSetOption target_base=0x7FF6D600A000 args={arg0=0xC008, arg1=0x1F, arg2=0x7FEFFFFFE2D8<stack+0x3FE2D8>:"㌀", arg3=0x4}
+[API_RET] id=339 tid=0x1001 pc=0x7FF6D60140D0 target=winhttp.dll!WinHttpSetOption target_base=0x7FF6D600A000 retval=0x1 last_error=0x0
+[API_CALL] id=340 tid=0x1001 pc=0x7FF6D60140C0 return_to=0x180008B58 target=winhttp.dll!WinHttpSendRequest target_base=0x7FF6D600A000 args={hRequest=0xC008, lpszHeaders=NULL, dwHeadersLength=0, lpOptional=NULL, dwOptionalLength=0, dwTotalLength=0, dwContext=0x0}
+[HTTP_REQUEST] headers="Accept: */*\r\n" host="load.ssangyongcne.o-r.kr" parent_handle=49156 port=443 request_handle=49160 sent=true service=3 source="WinHttpSendRequest" target="/dashBoardRead.php" verb="GET" version="HTTP/1.1"
+[API_RET] id=340 tid=0x1001 pc=0x7FF6D60140C0 target=winhttp.dll!WinHttpSendRequest target_base=0x7FF6D600A000 retval=0x1 last_error=0x0
+[API_CALL] id=341 tid=0x1001 pc=0x7FF6D60140B0 return_to=0x180008B63 target=winhttp.dll!WinHttpReceiveResponse target_base=0x7FF6D600A000 args={arg0=0xC008, arg1=NULL}
+[API_RET] id=341 tid=0x1001 pc=0x7FF6D60140B0 target=winhttp.dll!WinHttpReceiveResponse target_base=0x7FF6D600A000 retval=0x1 last_error=0x0
+[API_CALL] id=342 tid=0x1001 pc=0x7FF6EC841AE0 return_to=0x180019230 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 args={arg0=0xC82E1000, arg1=NULL, arg2=0xA00000}
+[API_RET] id=342 tid=0x1001 pc=0x7FF6EC841AE0 target=kernel32.dll!HeapAlloc target_base=0x7FF6EC837000 retval=0x7FF66DDA4000 last_error=0x0
+[API_HOTSPOT] top_calls=[{"count":90,"target":"kernel32.dll!InitializeCriticalSectionEx"},{"count":61,"target":"kernel32.dll!HeapAlloc"},{"count":31,"target":"kernel32.dll!HeapFree"},{"count":24,"target":"kernel32.dll!GetSystemFirmwareTable"},{"count":12,"target":"kernel32.dll!EnumSystemFirmwareTables"},{"count":11,"target":"kernel32.dll!EnterCriticalSection"},{"count":11,"target":"kernel32.dll!LeaveCriticalSection"},{"count":6,"target":"kernel32.dll!GetProcAddress"},{"count":6,"target":"kernel32.dll!MultiByteToWideChar"},{"count":6,"target":"kernel32.dll!WideCharToMultiByte"}] total_calls=342 unique_targets=60
+[USER32_HOTSPOT] active_hooks=0 active_timers=0 dispatch_message_calls=0 get_message_calls=0 hook_callback_dispatches=0 kill_timer_calls=0 peek_message_calls=0 set_timer_calls=0 synthetic_idle_messages=0 synthetic_timer_messages=0 translate_message_calls=0
+[RUN_STOP] exit_code=null instruction_budget=10000000 live_threads=1 main_thread_state="ready" main_tid=4097 reason="instruction_budget_exhausted" thread_states={"ready":1}
+[PROCESS_EXIT] exit_code=null handle=0 live_threads=1 main_thread_state="ready" main_tid=4097 reason="instruction_budget_exhausted" source="main" thread_states={"ready":1}

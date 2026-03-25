@@ -1,0 +1,133 @@
+[THREAD_CREATE] parameter=0 start_address=4199912 state="ready" thread_handle=32768 thread_tid=4097
+[ENTRY_INVOKE] address=4199912 address_module="567dbfa9f7d29702a70feb934ec08e54" address_module_base=4194304 address_module_path="/home/dev/Vm_Eng_Scan/Sample/567dbfa9f7d29702a70feb934ec08e54" address_owner="567dbfa9f7d29702a70feb934ec08e54+0x15E8" address_rva=5608 argc=0 args=[] base=4194304 invocation="native_entrypoint" module="567dbfa9f7d29702a70feb934ec08e54" path="/home/dev/Vm_Eng_Scan/Sample/567dbfa9f7d29702a70feb934ec08e54"
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4096 path="\\\\.\\PhysicalDrive0" physical_drive_index=0
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4100 path="\\\\.\\PhysicalDrive0" physical_drive_index=0
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4100 offset=0 path="\\\\.\\PhysicalDrive0" physical_drive_index=0 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4100 offset=134754745344 path="\\\\.\\PhysicalDrive0" physical_drive_index=0 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4104 path="\\\\.\\PhysicalDrive1" physical_drive_index=1
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4108 path="\\\\.\\PhysicalDrive1" physical_drive_index=1
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4108 offset=0 path="\\\\.\\PhysicalDrive1" physical_drive_index=1 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4108 offset=134754745344 path="\\\\.\\PhysicalDrive1" physical_drive_index=1 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4112 path="\\\\.\\PhysicalDrive2" physical_drive_index=2
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4116 path="\\\\.\\PhysicalDrive2" physical_drive_index=2
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4116 offset=0 path="\\\\.\\PhysicalDrive2" physical_drive_index=2 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4116 offset=134754745344 path="\\\\.\\PhysicalDrive2" physical_drive_index=2 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4120 path="\\\\.\\PhysicalDrive3" physical_drive_index=3
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4124 path="\\\\.\\PhysicalDrive3" physical_drive_index=3
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4124 offset=0 path="\\\\.\\PhysicalDrive3" physical_drive_index=3 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4124 offset=134754745344 path="\\\\.\\PhysicalDrive3" physical_drive_index=3 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4128 path="\\\\.\\PhysicalDrive4" physical_drive_index=4
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4132 path="\\\\.\\PhysicalDrive4" physical_drive_index=4
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4132 offset=0 path="\\\\.\\PhysicalDrive4" physical_drive_index=4 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4132 offset=134754745344 path="\\\\.\\PhysicalDrive4" physical_drive_index=4 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4136 path="\\\\.\\PhysicalDrive5" physical_drive_index=5
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4140 path="\\\\.\\PhysicalDrive5" physical_drive_index=5
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4140 offset=0 path="\\\\.\\PhysicalDrive5" physical_drive_index=5 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4140 offset=134754745344 path="\\\\.\\PhysicalDrive5" physical_drive_index=5 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4144 path="\\\\.\\PhysicalDrive6" physical_drive_index=6
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4148 path="\\\\.\\PhysicalDrive6" physical_drive_index=6
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4148 offset=0 path="\\\\.\\PhysicalDrive6" physical_drive_index=6 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4148 offset=134754745344 path="\\\\.\\PhysicalDrive6" physical_drive_index=6 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4152 path="\\\\.\\PhysicalDrive7" physical_drive_index=7
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4156 path="\\\\.\\PhysicalDrive7" physical_drive_index=7
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4156 offset=0 path="\\\\.\\PhysicalDrive7" physical_drive_index=7 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4156 offset=134754745344 path="\\\\.\\PhysicalDrive7" physical_drive_index=7 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4160 path="\\\\.\\PhysicalDrive8" physical_drive_index=8
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4164 path="\\\\.\\PhysicalDrive8" physical_drive_index=8
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4164 offset=0 path="\\\\.\\PhysicalDrive8" physical_drive_index=8 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4164 offset=134754745344 path="\\\\.\\PhysicalDrive8" physical_drive_index=8 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4168 path="\\\\.\\PhysicalDrive9" physical_drive_index=9
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4172 path="\\\\.\\PhysicalDrive9" physical_drive_index=9
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4172 offset=0 path="\\\\.\\PhysicalDrive9" physical_drive_index=9 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4172 offset=134754745344 path="\\\\.\\PhysicalDrive9" physical_drive_index=9 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[THREAD_CREATE] parameter=1378684928 start_address=4203744 state="ready" thread_handle=32772 thread_tid=4098
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4176 path="\\\\?\\Volume{54a1f3c2-9f4a-48d2-8c71-112233445566}"
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4180 path="\\\\?\\Volume{54a1f3c2-9f4a-48d2-8c71-112233445566}"
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4184 path="\\\\.\\PhysicalDrive0" physical_drive_index=0
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4188 path="\\\\.\\PhysicalDrive0" physical_drive_index=0
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4188 offset=0 path="\\\\.\\PhysicalDrive0" physical_drive_index=0 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4188 offset=134754745344 path="\\\\.\\PhysicalDrive0" physical_drive_index=0 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4192 path="\\\\.\\PhysicalDrive1" physical_drive_index=1
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4196 path="\\\\.\\PhysicalDrive1" physical_drive_index=1
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4196 offset=0 path="\\\\.\\PhysicalDrive1" physical_drive_index=1 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4196 offset=134754745344 path="\\\\.\\PhysicalDrive1" physical_drive_index=1 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4200 path="\\\\.\\PhysicalDrive2" physical_drive_index=2
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4204 path="\\\\.\\PhysicalDrive2" physical_drive_index=2
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4204 offset=0 path="\\\\.\\PhysicalDrive2" physical_drive_index=2 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4204 offset=134754745344 path="\\\\.\\PhysicalDrive2" physical_drive_index=2 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4208 path="\\\\.\\PhysicalDrive3" physical_drive_index=3
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4212 path="\\\\.\\PhysicalDrive3" physical_drive_index=3
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4212 offset=0 path="\\\\.\\PhysicalDrive3" physical_drive_index=3 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4212 offset=134754745344 path="\\\\.\\PhysicalDrive3" physical_drive_index=3 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4216 path="\\\\.\\PhysicalDrive4" physical_drive_index=4
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4220 path="\\\\.\\PhysicalDrive4" physical_drive_index=4
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4220 offset=0 path="\\\\.\\PhysicalDrive4" physical_drive_index=4 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4220 offset=134754745344 path="\\\\.\\PhysicalDrive4" physical_drive_index=4 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4224 path="\\\\.\\PhysicalDrive5" physical_drive_index=5
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4228 path="\\\\.\\PhysicalDrive5" physical_drive_index=5
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4228 offset=0 path="\\\\.\\PhysicalDrive5" physical_drive_index=5 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4228 offset=134754745344 path="\\\\.\\PhysicalDrive5" physical_drive_index=5 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4232 path="\\\\.\\PhysicalDrive6" physical_drive_index=6
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4236 path="\\\\.\\PhysicalDrive6" physical_drive_index=6
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4236 offset=0 path="\\\\.\\PhysicalDrive6" physical_drive_index=6 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4236 offset=134754745344 path="\\\\.\\PhysicalDrive6" physical_drive_index=6 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4240 path="\\\\.\\PhysicalDrive7" physical_drive_index=7
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4244 path="\\\\.\\PhysicalDrive7" physical_drive_index=7
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4244 offset=0 path="\\\\.\\PhysicalDrive7" physical_drive_index=7 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4244 offset=134754745344 path="\\\\.\\PhysicalDrive7" physical_drive_index=7 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4248 path="\\\\.\\PhysicalDrive8" physical_drive_index=8
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4252 path="\\\\.\\PhysicalDrive8" physical_drive_index=8
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4252 offset=0 path="\\\\.\\PhysicalDrive8" physical_drive_index=8 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4252 offset=134754745344 path="\\\\.\\PhysicalDrive8" physical_drive_index=8 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=0 device=true handle=4256 path="\\\\.\\PhysicalDrive9" physical_drive_index=9
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4260 path="\\\\.\\PhysicalDrive9" physical_drive_index=9
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4260 offset=0 path="\\\\.\\PhysicalDrive9" physical_drive_index=9 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4260 offset=134754745344 path="\\\\.\\PhysicalDrive9" physical_drive_index=9 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[THREAD_CREATE] parameter=1672155136 start_address=4203744 state="ready" thread_handle=32776 thread_tid=4099
+[THREAD_CREATE] parameter=1718804480 start_address=4203744 state="ready" thread_handle=32780 thread_tid=4100
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4264 path="\\\\?\\Volume{54a1f3c2-9f4a-48d2-8c71-112233445566}"
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4268 path="\\\\?\\Volume{54a1f3c2-9f4a-48d2-8c71-112233445566}"
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4272 path="\\\\?\\Volume{564f0044-1144-2244-3344-440000000044}"
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4276 path="\\\\?\\Volume{564f0044-1144-2244-3344-440000000044}"
+[THREAD_CREATE] parameter=1401901056 start_address=4203744 state="ready" thread_handle=32784 thread_tid=4101
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4280 path="\\\\?\\Volume{564f0045-1145-2245-3345-440000000045}"
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4284 path="\\\\?\\Volume{564f0045-1145-2245-3345-440000000045}"
+[THREAD_CREATE] parameter=1401901056 start_address=4203744 state="ready" thread_handle=32788 thread_tid=4102
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4288 path="\\\\?\\Volume{564f0046-1146-2246-3346-440000000046}"
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4292 path="\\\\?\\Volume{564f0046-1146-2246-3346-440000000046}"
+[THREAD_CREATE] parameter=1401901056 start_address=4203744 state="ready" thread_handle=32792 thread_tid=4103
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4296 path="\\\\?\\Volume{564f0047-1147-2247-3347-440000000047}"
+[FILE_OPEN] creation_disposition=3 desired_access=256 device=true handle=4300 path="\\\\?\\Volume{564f0047-1147-2247-3347-440000000047}"
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4304 path="\\\\.\\PhysicalDrive0" physical_drive_index=0
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4304 offset=0 path="\\\\.\\PhysicalDrive0" physical_drive_index=0 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4304 offset=134754745344 path="\\\\.\\PhysicalDrive0" physical_drive_index=0 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4308 path="\\\\.\\PhysicalDrive1" physical_drive_index=1
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4308 offset=0 path="\\\\.\\PhysicalDrive1" physical_drive_index=1 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4308 offset=134754745344 path="\\\\.\\PhysicalDrive1" physical_drive_index=1 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4312 path="\\\\.\\PhysicalDrive2" physical_drive_index=2
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4312 offset=0 path="\\\\.\\PhysicalDrive2" physical_drive_index=2 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4312 offset=134754745344 path="\\\\.\\PhysicalDrive2" physical_drive_index=2 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4316 path="\\\\.\\PhysicalDrive3" physical_drive_index=3
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4316 offset=0 path="\\\\.\\PhysicalDrive3" physical_drive_index=3 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4316 offset=134754745344 path="\\\\.\\PhysicalDrive3" physical_drive_index=3 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4320 path="\\\\.\\PhysicalDrive4" physical_drive_index=4
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4320 offset=0 path="\\\\.\\PhysicalDrive4" physical_drive_index=4 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4320 offset=134754745344 path="\\\\.\\PhysicalDrive4" physical_drive_index=4 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4324 path="\\\\.\\PhysicalDrive5" physical_drive_index=5
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4324 offset=0 path="\\\\.\\PhysicalDrive5" physical_drive_index=5 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4324 offset=134754745344 path="\\\\.\\PhysicalDrive5" physical_drive_index=5 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4328 path="\\\\.\\PhysicalDrive6" physical_drive_index=6
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4328 offset=0 path="\\\\.\\PhysicalDrive6" physical_drive_index=6 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4328 offset=134754745344 path="\\\\.\\PhysicalDrive6" physical_drive_index=6 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4332 path="\\\\.\\PhysicalDrive7" physical_drive_index=7
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4332 offset=0 path="\\\\.\\PhysicalDrive7" physical_drive_index=7 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4332 offset=134754745344 path="\\\\.\\PhysicalDrive7" physical_drive_index=7 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4336 path="\\\\.\\PhysicalDrive8" physical_drive_index=8
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4336 offset=0 path="\\\\.\\PhysicalDrive8" physical_drive_index=8 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4336 offset=134754745344 path="\\\\.\\PhysicalDrive8" physical_drive_index=8 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_OPEN] creation_disposition=3 desired_access=3221225472 device=true handle=4340 path="\\\\.\\PhysicalDrive9" physical_drive_index=9
+[FILE_WRITE] all_zero=true bytes=17408 device=true handle=4340 offset=0 path="\\\\.\\PhysicalDrive9" physical_drive_index=9 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[FILE_WRITE] all_zero=true bytes=16896 device=true handle=4340 offset=134754745344 path="\\\\.\\PhysicalDrive9" physical_drive_index=9 preview_hex="00 00 00 00 00 00 00 00 00 00 ..."
+[USER32_HOTSPOT] active_hooks=0 active_timers=0 dispatch_message_calls=0 get_message_calls=0 hook_callback_dispatches=0 kill_timer_calls=0 peek_message_calls=0 set_timer_calls=0 synthetic_idle_messages=0 synthetic_timer_messages=0 translate_message_calls=0
+[RUN_STOP] exit_code=0 instruction_budget=50000000 live_threads=0 main_thread_state="terminated" main_tid=4097 reason="all_threads_terminated" thread_states={"terminated":7}
+[PROCESS_EXIT] exit_code=0 handle=0 live_threads=0 main_thread_state="terminated" main_tid=4097 reason="all_threads_terminated" source="main" thread_states={"terminated":7}

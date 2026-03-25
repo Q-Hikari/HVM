@@ -1,0 +1,69 @@
+{
+  "main_module": "Sample/58ac2f65e335922be3f60e57099dc8a3",
+  "entry_module": "Sample/58ac2f65e335922be3f60e57099dc8a3",
+  "entry_export": "DllRegisterServer",
+  "entry_args": [],
+  "module_search_paths": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "allowed_read_dirs": [
+    "Sample",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "hidden_device_paths": [
+    "\\\\.\\VBoxMiniRdrDN"
+  ],
+  "hidden_registry_keys": [
+    "SOFTWARE\\VMware, Inc.\\VMware Tools"
+  ],
+  "blocked_read_dirs": [
+    "C:/Users"
+  ],
+  "trace_api_calls": true,
+  "api_log_to_console": false,
+  "api_log_include_return": true,
+  "api_log_string_limit": 512,
+  "console_output_to_console": false,
+  "environment_overrides": {
+    "registry": {
+      "keys": [
+        {
+          "path": "HKEY_LOCAL_MACHINE\\SYSTEM\\HardwareConfig\\Current",
+          "values": [
+            {
+              "name": "SystemManufacturer",
+              "value_type": 1,
+              "string": "Gigabyte Technology Co., Ltd."
+            },
+            {
+              "name": "BIOSVendor",
+              "value_type": 1,
+              "string": "American Megatrends International, LLC."
+            },
+            {
+              "name": "SystemFamily",
+              "value_type": 1,
+              "string": "Desktop"
+            },
+            {
+              "name": "SystemProductName",
+              "value_type": 1,
+              "string": "B660M DS3H DDR4"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "unknown_api_policy": "log_zero",
+  "max_instructions": 10000000,
+  "sandbox_output_dir": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/58ac2f65e335922be3f60e57099dc8a3/sandbox",
+  "api_log_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/58ac2f65e335922be3f60e57099dc8a3/logs/58ac2f65e335922be3f60e57099dc8a3.api.log",
+  "api_jsonl_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/58ac2f65e335922be3f60e57099dc8a3/logs/58ac2f65e335922be3f60e57099dc8a3.api.jsonl",
+  "api_human_log_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/58ac2f65e335922be3f60e57099dc8a3/logs/58ac2f65e335922be3f60e57099dc8a3.api.human.log",
+  "console_output_path": "/home/dev/Vm_Eng_Scan/run_outputs/hvm_hikari_virtual_engine_20260325_batch/58ac2f65e335922be3f60e57099dc8a3/logs/58ac2f65e335922be3f60e57099dc8a3.console.log",
+  "command_line": "58ac2f65e335922be3f60e57099dc8a3"
+}
