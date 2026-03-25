@@ -32,8 +32,20 @@
 #include "exec/memory.h"
 #include "exec/ioport.h"
 
-#ifdef CONFIG_FALLOCATE_PUNCH_HOLE
+#if defined(CONFIG_FALLOCATE_PUNCH_HOLE) && defined(__has_include)
+#if __has_include(<linux/falloc.h>)
 #include <linux/falloc.h>
+#endif
+#elif defined(CONFIG_FALLOCATE_PUNCH_HOLE)
+#include <linux/falloc.h>
+#endif
+
+#ifndef FALLOC_FL_KEEP_SIZE
+#define FALLOC_FL_KEEP_SIZE 0x01
+#endif
+
+#ifndef FALLOC_FL_PUNCH_HOLE
+#define FALLOC_FL_PUNCH_HOLE 0x02
 #endif
 
 #include "accel/tcg/translate-all.h"
