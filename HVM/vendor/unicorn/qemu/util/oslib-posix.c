@@ -29,12 +29,21 @@
 #include <uc_priv.h>
 #include "qemu/osdep.h"
 
-#ifdef CONFIG_LINUX
+#if defined(CONFIG_LINUX) && defined(__has_include)
+#if __has_include(<linux/mman.h>)
 #include <linux/mman.h>
-#else  /* !CONFIG_LINUX */
+#endif
+#elif defined(CONFIG_LINUX)
+#include <linux/mman.h>
+#endif
+
+#ifndef MAP_SYNC
 #define MAP_SYNC              0x0
+#endif
+
+#ifndef MAP_SHARED_VALIDATE
 #define MAP_SHARED_VALIDATE   0x0
-#endif /* CONFIG_LINUX */
+#endif
 
 #ifndef __MINGW32__
 static void *qemu_ram_mmap(struct uc_struct *uc,
