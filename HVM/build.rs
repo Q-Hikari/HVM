@@ -8,12 +8,6 @@ fn main() {
     register_vendor_changes(Path::new("vendor/unicorn"));
 
     let mut config = cmake::Config::new("vendor/unicorn");
-    if target_env() == "msvc" {
-        config.define(
-            "CMAKE_MSVC_RUNTIME_LIBRARY",
-            "MultiThreaded$<$<CONFIG:Debug>:Debug>",
-        );
-    }
     let dst = config
         .define("BUILD_SHARED_LIBS", "OFF")
         .define("UNICORN_LEGACY_STATIC_ARCHIVE", "ON")
