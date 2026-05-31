@@ -63,7 +63,7 @@ fn collect_os_version() -> OsVersion {
         let mut info: OSVERSIONINFOEXW = unsafe { mem::zeroed() };
         info.dwOSVersionInfoSize = mem::size_of::<OSVERSIONINFOEXW>() as u32;
         unsafe {
-            let _ = RtlGetVersion(&mut info);
+            let _ = GetVersionExW(&mut info as *mut _ as *mut OSVERSIONINFOW);
         }
         v.major = info.dwMajorVersion;
         v.minor = info.dwMinorVersion;
@@ -108,7 +108,7 @@ fn collect_locale() -> LocaleProfile {
 
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::System::SystemInformation::*;
+        use windows::Win32::Globalization::*;
         l.acp = unsafe { GetACP() };
         l.oemcp = unsafe { GetOEMCP() };
     }
@@ -147,6 +147,7 @@ fn collect_display() -> DisplayProfile {
 
     #[cfg(target_os = "windows")]
     {
+        use windows::Win32::Foundation::POINT;
         use windows::Win32::UI::WindowsAndMessaging::*;
         unsafe {
             d.screen_width = GetSystemMetrics(SM_CXSCREEN);
@@ -527,8 +528,8 @@ fn collect_services() -> Vec<ServiceEntry> {
 
                 let _ = EnumServicesStatusW(
                     mgr,
-                    SERVICE_TYPE(SERVICE_WIN32.0),
-                    SERVICE_STATE(SERVICE_STATE_ALL.0),
+                    SERVICE_WIN32,
+                    SERVICE_STATE_ALL,
                     None,
                     0,
                     &mut needed,
@@ -543,8 +544,8 @@ fn collect_services() -> Vec<ServiceEntry> {
 
                 if EnumServicesStatusW(
                     mgr,
-                    SERVICE_TYPE(SERVICE_WIN32.0),
-                    SERVICE_STATE(SERVICE_STATE_ALL.0),
+                    SERVICE_WIN32,
+                    SERVICE_STATE_ALL,
                     Some(ptr),
                     buf_size as u32,
                     &mut needed,
@@ -555,14 +556,14 @@ fn collect_services() -> Vec<ServiceEntry> {
                 {
                     for i in 0..returned as usize {
                         let svc = &*ptr.add(i);
-                        let name = wide_to_string(&*svc.lpServiceName);
-                        let display = wide_to_string(&*svc.lpDisplayName);
+                        let name = pwstr_to_string(svc.lpServiceName);
+                        let display = pwstr_to_string(svc.lpDisplayName);
                         let mut entry = ServiceEntry {
                             name,
                             display_name: display,
-                            current_state: svc.ServiceStatus.dwCurrentState,
-                            process_id: svc.ServiceStatus.dwProcessId,
-                            service_type: svc.ServiceStatus.dwServiceType,
+                            current_state: svc.ServiceStatus.dwCurrentState.0,
+                            process_id: 0,
+                            service_type: svc.ServiceStatus.dwServiceType.0,
                             ..ServiceEntry::default()
                         };
 
@@ -576,10 +577,10 @@ fn collect_services() -> Vec<ServiceEntry> {
                                 let cfg_ptr = cfg_buf.as_mut_ptr() as *mut QUERY_SERVICE_CONFIGW;
                                 if QueryServiceConfigW(hsvc, Some(cfg_ptr), cb, &mut cb).is_ok() {
                                     let cfg = cfg_buf.as_ptr() as *const QUERY_SERVICE_CONFIGW;
-                                    entry.start_type = (*cfg).dwStartType;
+                                    entry.start_type = (*cfg).dwStartType.0;
                                     if !(*cfg).lpBinaryPathName.is_null() {
                                         entry.binary_path =
-                                            wide_to_string(&*(*cfg).lpBinaryPathName);
+                                            pwstr_to_string((*cfg).lpBinaryPathName);
                                     }
                                 }
                             }
@@ -603,7 +604,7 @@ fn collect_services() -> Vec<ServiceEntry> {
                                 {
                                     let desc = desc_buf.as_ptr() as *const SERVICE_DESCRIPTIONW;
                                     if !(*desc).lpDescription.is_null() {
-                                        entry.description = wide_to_string(&*(*desc).lpDescription);
+                                        entry.description = pwstr_to_string((*desc).lpDescription);
                                     }
                                 }
                             }
@@ -896,6 +897,21 @@ fn cstr_to_string(ptr: *const i8) -> String {
         return String::new();
     }
     unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string() }
+}
+
+#[cfg(target_os = "windows")]
+fn pwstr_to_string(ptr: windows::core::PWSTR) -> String {
+    if ptr.is_null() {
+        return String::new();
+    }
+
+    unsafe {
+        let mut len = 0usize;
+        while *ptr.0.add(len) != 0 {
+            len += 1;
+        }
+        String::from_utf16_lossy(std::slice::from_raw_parts(ptr.0, len))
+    }
 }
 
 fn wide_bytes_to_string(bytes: &[u8]) -> String {
