@@ -9,6 +9,10 @@ impl WindowsProcessEnvironment {
         }
     }
 
+    pub(in crate::runtime::windows_env) fn write_u8(&mut self, address: u64, value: u8) {
+        self.write_bytes(address, &[value]);
+    }
+
     pub(in crate::runtime::windows_env) fn write_u16(&mut self, address: u64, value: u16) {
         self.write_bytes(address, &value.to_le_bytes());
     }
@@ -31,6 +35,9 @@ impl WindowsProcessEnvironment {
         if encoded.len() > reserved {
             return Err(MemoryError::OutOfMemory {
                 size: encoded.len() as u64,
+                tag: Some("windows_env:wide_string_buffer".to_string()),
+                preferred: None,
+                avoid_history: None,
             });
         }
         self.write_zeroes(address, reserved);
@@ -49,6 +56,9 @@ impl WindowsProcessEnvironment {
         if encoded.len() > reserved {
             return Err(MemoryError::OutOfMemory {
                 size: encoded.len() as u64,
+                tag: Some("windows_env:ansi_string_buffer".to_string()),
+                preferred: None,
+                avoid_history: None,
             });
         }
         self.write_zeroes(address, reserved);
@@ -70,7 +80,30 @@ impl WindowsProcessEnvironment {
         size: usize,
         mark_dirty: bool,
     ) {
-        self.write_bytes_inner(address, &vec![0; size], mark_dirty);
+        if size == 0 {
+            return;
+        }
+        let mut changed = false;
+        let mut cursor = address;
+        let end = address.saturating_add(size as u64);
+        while cursor < end {
+            let page_base = cursor & !(PAGE_SIZE - 1);
+            let offset = (cursor - page_base) as usize;
+            let chunk_len = ((PAGE_SIZE as usize) - offset).min((end - cursor) as usize);
+            let page = self.page_mut(page_base);
+            if page[offset..offset + chunk_len]
+                .iter()
+                .any(|byte| *byte != 0)
+            {
+                page[offset..offset + chunk_len].fill(0);
+                changed = true;
+            }
+            cursor = cursor.saturating_add(chunk_len as u64);
+        }
+        if mark_dirty && changed {
+            self.dirty = true;
+            self.mark_dirty_pages(address, size);
+        }
     }
 
     pub(in crate::runtime::windows_env) fn write_bytes_inner(
@@ -79,17 +112,52 @@ impl WindowsProcessEnvironment {
         data: &[u8],
         mark_dirty: bool,
     ) {
+        if data.is_empty() {
+            return;
+        }
         let mut changed = false;
-        for (offset, byte) in data.iter().enumerate() {
-            let target = address + offset as u64;
-            if self.memory.get(&target).copied() != Some(*byte) {
-                self.memory.insert(target, *byte);
+        let mut written = 0usize;
+        let end = address.saturating_add(data.len() as u64);
+        let mut cursor = address;
+        while cursor < end {
+            let page_base = cursor & !(PAGE_SIZE - 1);
+            let offset = (cursor - page_base) as usize;
+            let chunk_len = ((PAGE_SIZE as usize) - offset).min(data.len() - written);
+            let page = self.page_mut(page_base);
+            let source = &data[written..written + chunk_len];
+            if page[offset..offset + chunk_len] != *source {
+                page[offset..offset + chunk_len].copy_from_slice(source);
                 changed = true;
             }
+            written += chunk_len;
+            cursor = cursor.saturating_add(chunk_len as u64);
         }
         if mark_dirty && changed {
             self.dirty = true;
             self.mark_dirty_pages(address, data.len());
         }
+    }
+
+    fn page_mut(&mut self, page_base: u64) -> &mut EnvironmentPage {
+        self.memory
+            .entry(page_base)
+            .or_insert_with(|| Box::new([0u8; PAGE_SIZE as usize]))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_and_write_bytes_across_page_boundaries() {
+        let mut env = WindowsProcessEnvironment::for_tests_x86();
+        let address = env.current_teb() + PAGE_SIZE - 2;
+        env.write_bytes(address, &[0x11, 0x22, 0x33, 0x44]);
+
+        assert_eq!(
+            env.read_bytes(address, 4).unwrap(),
+            vec![0x11, 0x22, 0x33, 0x44]
+        );
     }
 }

@@ -12,8 +12,39 @@ fn sample_config() -> hvm::config::EngineConfig {
     load_config(config_path).unwrap()
 }
 
+fn sample_config_x64() -> hvm::config::EngineConfig {
+    let config_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../configs/sample_42c4b1eaeba9de5a873970687b4abc34_trace.json");
+    load_config(config_path).unwrap()
+}
+
+const X86_CONTEXT_EIP_OFFSET: u32 = 0xB8;
+const X86_CONTEXT_ESP_OFFSET: u32 = 0xC4;
+
 fn trace_config(test_name: &str) -> (hvm::config::EngineConfig, PathBuf) {
     let mut config = sample_config();
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "hvm-hikari-virtual-engine-{test_name}-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    let trace_path = root.join("trace.api.jsonl");
+    config.trace_api_calls = true;
+    config.trace_native_events = true;
+    config.api_log_to_console = false;
+    config.console_output_to_console = false;
+    config.api_log_path = Some(root.join("trace.api.log"));
+    config.api_jsonl_path = Some(trace_path.clone());
+    config.console_output_path = Some(root.join("trace.console.log"));
+    (config, trace_path)
+}
+
+fn trace_config_x64(test_name: &str) -> (hvm::config::EngineConfig, PathBuf) {
+    let mut config = sample_config_x64();
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -129,6 +160,478 @@ fn native_unicorn_x86_seh_continue_execution_recovers_from_unmapped_read() {
     engine.write_test_bytes(code, &bytes).unwrap();
 
     assert_eq!(engine.call_native_for_test(code, &[]).unwrap(), 0x1234_5678);
+}
+
+#[test]
+fn native_unicorn_x86_vectored_exception_handler_continues_after_breakpoint() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let add_handler = engine.bind_hook_for_test("kernel32.dll", "AddVectoredExceptionHandler");
+    let page = engine.allocate_executable_test_page(0x6000_2400).unwrap();
+    let wrapper = page;
+    let handler = page + 0x100;
+    let resume = (wrapper + 1) as u32;
+
+    let mut handler_bytes = vec![0x8B, 0x44, 0x24, 0x04];
+    handler_bytes.extend_from_slice(&[0x8B, 0x40, 0x04]);
+    handler_bytes.extend_from_slice(&[0xC7, 0x80, 0xB8, 0x00, 0x00, 0x00]);
+    handler_bytes.extend_from_slice(&resume.to_le_bytes());
+    handler_bytes.extend_from_slice(&[0x31, 0xC0, 0xC3]);
+
+    engine.write_test_bytes(handler, &handler_bytes).unwrap();
+    engine
+        .write_test_bytes(wrapper, &[0xCC, 0xB8, 0x78, 0x56, 0x34, 0x12, 0xC3])
+        .unwrap();
+
+    assert_ne!(
+        engine
+            .dispatch_bound_stub(add_handler, &[1, handler])
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+}
+
+#[test]
+fn native_unicorn_x86_lstrlena_hook_invalid_probe_dispatches_seh() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let lstrlen = engine.bind_hook_for_test("kernel32.dll", "lstrlenA");
+    let page = engine.allocate_executable_test_page(0x6000_2600).unwrap();
+    let wrapper = page;
+    let recovery = (page + 31) as u32;
+    let handler = (page + 0x100) as u32;
+    let fault_ptr = 0x901B_F017u32;
+
+    let mut wrapper_bytes = Vec::new();
+    wrapper_bytes.push(0x68);
+    wrapper_bytes.extend_from_slice(&handler.to_le_bytes());
+    wrapper_bytes.extend_from_slice(&[0x64, 0xFF, 0x35, 0x00, 0x00, 0x00, 0x00]);
+    wrapper_bytes.extend_from_slice(&[0x64, 0x89, 0x25, 0x00, 0x00, 0x00, 0x00]);
+    wrapper_bytes.push(0x68);
+    wrapper_bytes.extend_from_slice(&fault_ptr.to_le_bytes());
+    wrapper_bytes.push(0xB8);
+    wrapper_bytes.extend_from_slice(&(lstrlen as u32).to_le_bytes());
+    wrapper_bytes.extend_from_slice(&[0xFF, 0xD0]);
+    wrapper_bytes.push(0xB8);
+    wrapper_bytes.extend_from_slice(&0x1234_5678u32.to_le_bytes());
+    wrapper_bytes.extend_from_slice(&[0x8B, 0x0C, 0x24]);
+    wrapper_bytes.extend_from_slice(&[0x64, 0x89, 0x0D, 0x00, 0x00, 0x00, 0x00]);
+    wrapper_bytes.extend_from_slice(&[0x83, 0xC4, 0x08, 0xC3]);
+
+    let mut handler_bytes = vec![0x8B, 0x44, 0x24, 0x0C];
+    handler_bytes.extend_from_slice(&[0x8B, 0x88]);
+    handler_bytes.extend_from_slice(&X86_CONTEXT_ESP_OFFSET.to_le_bytes());
+    handler_bytes.extend_from_slice(&[0x83, 0xC1, 0x08]);
+    handler_bytes.extend_from_slice(&[0x89, 0x88]);
+    handler_bytes.extend_from_slice(&X86_CONTEXT_ESP_OFFSET.to_le_bytes());
+    handler_bytes.extend_from_slice(&[0xC7, 0x80]);
+    handler_bytes.extend_from_slice(&X86_CONTEXT_EIP_OFFSET.to_le_bytes());
+    handler_bytes.extend_from_slice(&recovery.to_le_bytes());
+    handler_bytes.extend_from_slice(&[0x31, 0xC0, 0xC3]);
+
+    engine.write_test_bytes(wrapper, &wrapper_bytes).unwrap();
+    engine
+        .write_test_bytes(handler as u64, &handler_bytes)
+        .unwrap();
+
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+}
+
+#[test]
+fn native_unicorn_x64_top_level_filter_continues_after_breakpoint() {
+    let mut engine = VirtualExecutionEngine::new(sample_config_x64()).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if !engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let set_filter = engine.bind_hook_for_test("kernel32.dll", "SetUnhandledExceptionFilter");
+    let page = engine.allocate_executable_test_page(0x6000_2800).unwrap();
+    let wrapper = page;
+    let filter = page + 0x100;
+    let resume = wrapper + 1;
+
+    let mut filter_bytes = vec![0x48, 0x8B, 0x41, 0x08, 0x48, 0xBA];
+    filter_bytes.extend_from_slice(&resume.to_le_bytes());
+    filter_bytes.extend_from_slice(&[0x48, 0x89, 0x90, 0xF8, 0x00, 0x00, 0x00]);
+    filter_bytes.extend_from_slice(&[0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xC3]);
+
+    engine.write_test_bytes(filter, &filter_bytes).unwrap();
+    engine
+        .write_test_bytes(wrapper, &[0xCC, 0xB8, 0x78, 0x56, 0x34, 0x12, 0xC3])
+        .unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(set_filter, &[filter]).unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+}
+
+#[test]
+fn native_unicorn_x64_top_level_filter_receives_dispatch_reason() {
+    let mut engine = VirtualExecutionEngine::new(sample_config_x64()).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if !engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let set_filter = engine.bind_hook_for_test("kernel32.dll", "SetUnhandledExceptionFilter");
+    let page = engine.allocate_executable_test_page(0x6000_2c00).unwrap();
+    let wrapper = page;
+    let filter = page + 0x100;
+    let resume = wrapper + 1;
+
+    let mut filter_bytes = vec![0x83, 0xEA, 0x01, 0x83, 0xFA, 0x01, 0x74, 0x01, 0xCC];
+    filter_bytes.extend_from_slice(&[0x48, 0x8B, 0x41, 0x08, 0x48, 0xBA]);
+    filter_bytes.extend_from_slice(&resume.to_le_bytes());
+    filter_bytes.extend_from_slice(&[0x48, 0x89, 0x90, 0xF8, 0x00, 0x00, 0x00]);
+    filter_bytes.extend_from_slice(&[0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xC3]);
+
+    engine.write_test_bytes(filter, &filter_bytes).unwrap();
+    engine
+        .write_test_bytes(wrapper, &[0xCC, 0xB8, 0x78, 0x56, 0x34, 0x12, 0xC3])
+        .unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(set_filter, &[filter]).unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+}
+
+#[test]
+fn native_unicorn_x64_top_level_filter_preserves_unused_arg_registers() {
+    let mut engine = VirtualExecutionEngine::new(sample_config_x64()).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if !engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let set_filter = engine.bind_hook_for_test("kernel32.dll", "SetUnhandledExceptionFilter");
+    let page = engine.allocate_executable_test_page(0x6000_3000).unwrap();
+    let wrapper = page;
+    let filter = page + 0x100;
+    let resume = wrapper + 6;
+
+    let mut filter_bytes = vec![0x83, 0xEA, 0x01, 0x83, 0xFA, 0x01, 0x74, 0x01, 0xCC];
+    filter_bytes.extend_from_slice(&[0x48, 0x8B, 0x41, 0x08, 0x48, 0xBA]);
+    filter_bytes.extend_from_slice(&resume.to_le_bytes());
+    filter_bytes.extend_from_slice(&[0x48, 0x89, 0x90, 0xF8, 0x00, 0x00, 0x00]);
+    filter_bytes.extend_from_slice(&[0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xC3]);
+
+    engine.write_test_bytes(filter, &filter_bytes).unwrap();
+    engine
+        .write_test_bytes(
+            wrapper,
+            &[
+                0xBA, 0x02, 0x00, 0x00, 0x00, 0xCC, 0xB8, 0x78, 0x56, 0x34, 0x12, 0xC3,
+            ],
+        )
+        .unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(set_filter, &[filter]).unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+}
+
+#[test]
+fn native_unicorn_x64_top_level_filter_does_not_reenter_recursively() {
+    let (config, trace_path) = trace_config_x64("native-x64-filter-reentry");
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if !engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let set_filter = engine.bind_hook_for_test("kernel32.dll", "SetUnhandledExceptionFilter");
+    let page = engine.allocate_executable_test_page(0x6000_3800).unwrap();
+    let wrapper = page;
+    let filter = page + 0x100;
+
+    let mut filter_bytes = vec![0x48, 0x83, 0xEC, 0x28, 0xE8];
+    let call_site = filter + filter_bytes.len() as u64 + 4;
+    let displacement = i32::try_from(wrapper as i64 - call_site as i64).unwrap();
+    filter_bytes.extend_from_slice(&displacement.to_le_bytes());
+    filter_bytes.extend_from_slice(&[0x48, 0x83, 0xC4, 0x28, 0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xC3]);
+
+    engine.write_test_bytes(filter, &filter_bytes).unwrap();
+    engine.write_test_bytes(wrapper, &[0xCC, 0xC3]).unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(set_filter, &[filter]).unwrap(),
+        0
+    );
+    assert!(engine.call_native_for_test(wrapper, &[]).is_err());
+    drop(engine);
+
+    let records = load_records(&trace_path);
+    let seh_dispatches = records
+        .iter()
+        .filter(|record| record.get("marker").and_then(Value::as_str) == Some("SEH_X64_DISPATCH"))
+        .count();
+    assert_eq!(seh_dispatches, 2);
+    let filter_blocks = records
+        .iter()
+        .filter(|record| {
+            record.get("marker").and_then(Value::as_str) == Some("NATIVE_BLOCK")
+                && record.get("pc").and_then(Value::as_u64) == Some(filter)
+        })
+        .count();
+    assert_eq!(filter_blocks, 1);
+}
+
+#[test]
+fn native_unicorn_x64_top_level_filter_recovers_shared_epilogue_return() {
+    let mut engine = VirtualExecutionEngine::new(sample_config_x64()).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if !engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let set_filter = engine.bind_hook_for_test("kernel32.dll", "SetUnhandledExceptionFilter");
+    let page = engine.allocate_executable_test_page(0x6000_3c00).unwrap();
+    let wrapper = page;
+    let filter = page + 0x100;
+    let shared_epilogue = page + 0x180;
+    let resume = wrapper + 1;
+
+    let mut filter_bytes = vec![0x48, 0x83, 0xEC, 0x28, 0x48, 0x8B, 0x41, 0x08, 0x48, 0xBA];
+    filter_bytes.extend_from_slice(&resume.to_le_bytes());
+    filter_bytes.extend_from_slice(&[0x48, 0x89, 0x90, 0xF8, 0x00, 0x00, 0x00]);
+    filter_bytes.extend_from_slice(&[0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xE9]);
+    let jmp_site = filter + filter_bytes.len() as u64 + 4;
+    let displacement = i32::try_from(shared_epilogue as i64 - jmp_site as i64).unwrap();
+    filter_bytes.extend_from_slice(&displacement.to_le_bytes());
+
+    engine.write_test_bytes(filter, &filter_bytes).unwrap();
+    engine
+        .write_test_bytes(
+            shared_epilogue,
+            &[0x48, 0x83, 0xC4, 0x28, 0x41, 0x5E, 0x5F, 0x5E, 0x5B, 0xC3],
+        )
+        .unwrap();
+    engine
+        .write_test_bytes(wrapper, &[0xCC, 0xB8, 0x78, 0x56, 0x34, 0x12, 0xC3])
+        .unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(set_filter, &[filter]).unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+}
+
+#[test]
+fn native_unicorn_x64_top_level_filter_recovers_overwritten_shared_epilogue_return() {
+    let mut engine = VirtualExecutionEngine::new(sample_config_x64()).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if !engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let set_filter = engine.bind_hook_for_test("kernel32.dll", "SetUnhandledExceptionFilter");
+    let page = engine.allocate_executable_test_page(0x6000_4000).unwrap();
+    let wrapper = page;
+    let filter = page + 0x100;
+    let shared_epilogue = page + 0x180;
+    let resume = wrapper + 1;
+
+    let mut filter_bytes = vec![0x48, 0x83, 0xEC, 0x28, 0x31, 0xC0];
+    for offset in [0x28u8, 0x30, 0x38, 0x40, 0x48] {
+        filter_bytes.extend_from_slice(&[0x48, 0x89, 0x44, 0x24, offset]);
+    }
+    filter_bytes.extend_from_slice(&[0x48, 0x8B, 0x41, 0x08, 0x48, 0xBA]);
+    filter_bytes.extend_from_slice(&resume.to_le_bytes());
+    filter_bytes.extend_from_slice(&[0x48, 0x89, 0x90, 0xF8, 0x00, 0x00, 0x00]);
+    filter_bytes.extend_from_slice(&[0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xE9]);
+    let jmp_site = filter + filter_bytes.len() as u64 + 4;
+    let displacement = i32::try_from(shared_epilogue as i64 - jmp_site as i64).unwrap();
+    filter_bytes.extend_from_slice(&displacement.to_le_bytes());
+
+    engine.write_test_bytes(filter, &filter_bytes).unwrap();
+    engine
+        .write_test_bytes(
+            shared_epilogue,
+            &[0x48, 0x83, 0xC4, 0x28, 0x41, 0x5E, 0x5F, 0x5E, 0x5B, 0xC3],
+        )
+        .unwrap();
+    engine
+        .write_test_bytes(wrapper, &[0xCC, 0xB8, 0x78, 0x56, 0x34, 0x12, 0xC3])
+        .unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(set_filter, &[filter]).unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+}
+
+#[test]
+fn native_unicorn_x64_seh_unwinds_null_ret_leaf_before_top_level_filter() {
+    let (config, trace_path) = trace_config_x64("native-x64-null-ret-leaf");
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+
+    if !engine.has_native_unicorn() {
+        return;
+    }
+    if !engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let set_filter = engine.bind_hook_for_test("kernel32.dll", "SetUnhandledExceptionFilter");
+    let page = engine.allocate_executable_test_page(0x6000_4400).unwrap();
+    let wrapper = page;
+    let filter = page + 0x100;
+    let resume = wrapper + 24;
+
+    let mut filter_bytes = vec![0x48, 0x8B, 0x41, 0x08, 0x48, 0xBA];
+    filter_bytes.extend_from_slice(&resume.to_le_bytes());
+    filter_bytes.extend_from_slice(&[0x48, 0x89, 0x90, 0xF8, 0x00, 0x00, 0x00]);
+    filter_bytes.extend_from_slice(&[0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0xC3]);
+
+    engine.write_test_bytes(filter, &filter_bytes).unwrap();
+    engine
+        .write_test_bytes(
+            wrapper,
+            &[
+                0x48, 0x83, 0xEC, 0x18, 0x31, 0xC0, 0x48, 0x89, 0x04, 0x24, 0x48, 0x89, 0x44, 0x24,
+                0x08, 0x48, 0x89, 0x44, 0x24, 0x10, 0xC3, 0x90, 0x90, 0x90, 0xB8, 0x78, 0x56, 0x34,
+                0x12, 0xC3,
+            ],
+        )
+        .unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(set_filter, &[filter]).unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.call_native_for_test(wrapper, &[]).unwrap(),
+        0x1234_5678
+    );
+    drop(engine);
+
+    let records = load_records(&trace_path);
+    let null_pc_leaf_frames = records
+        .iter()
+        .filter(|record| {
+            record.get("marker").and_then(Value::as_str) == Some("SEH_X64_FRAME")
+                && record.get("control_pc").and_then(Value::as_u64) == Some(0)
+                && record.get("leaf").and_then(Value::as_bool) == Some(true)
+        })
+        .count();
+    assert!(null_pc_leaf_frames >= 1);
 }
 
 #[test]

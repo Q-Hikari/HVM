@@ -33,6 +33,16 @@ fn allocate_stack_uses_default_layout() {
 }
 
 #[test]
+fn allocate_stack_honors_overridden_stack_size() {
+    let mut memory = MemoryManager::for_tests();
+    memory.set_stack_size(0x2345);
+    let (base, top) = memory.allocate_stack().unwrap();
+
+    assert_eq!(base, 0x701F_D000);
+    assert_eq!(top, 0x701F_F000);
+}
+
+#[test]
 fn unmap_removes_region_from_lookup() {
     let mut memory = MemoryManager::for_tests();
     let base = memory

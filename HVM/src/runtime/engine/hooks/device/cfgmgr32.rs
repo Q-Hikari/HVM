@@ -22,7 +22,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("cfgmgr32.dll", "CM_Locate_DevNodeA") => true,
@@ -49,83 +49,74 @@ impl VirtualExecutionEngine {
 
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
-                ("cfgmgr32.dll", "CM_Locate_DevNodeA") => self.cm_locate_devnode(
-                    arg(args, 0),
-                    &self.read_c_string_from_memory(arg(args, 1))?,
-                ),
-                ("cfgmgr32.dll", "CM_Locate_DevNodeW") => self.cm_locate_devnode(
-                    arg(args, 0),
-                    &self.read_wide_string_from_memory(arg(args, 1))?,
-                ),
-                ("cfgmgr32.dll", "CM_Get_Device_IDA") => self.cm_get_device_id(
-                    false,
-                    arg(args, 0) as u32,
-                    arg(args, 1),
-                    arg(args, 2) as usize,
-                ),
-                ("cfgmgr32.dll", "CM_Get_Device_IDW") => self.cm_get_device_id(
-                    true,
-                    arg(args, 0) as u32,
-                    arg(args, 1),
-                    arg(args, 2) as usize,
-                ),
+                ("cfgmgr32.dll", "CM_Locate_DevNodeA") => {
+                    self.cm_locate_devnode(ctx.raw(0), &self.read_c_string_from_memory(ctx.raw(1))?)
+                }
+                ("cfgmgr32.dll", "CM_Locate_DevNodeW") => self
+                    .cm_locate_devnode(ctx.raw(0), &self.read_wide_string_from_memory(ctx.raw(1))?),
+                ("cfgmgr32.dll", "CM_Get_Device_IDA") => {
+                    self.cm_get_device_id(false, ctx.raw(0) as u32, ctx.raw(1), ctx.raw(2) as usize)
+                }
+                ("cfgmgr32.dll", "CM_Get_Device_IDW") => {
+                    self.cm_get_device_id(true, ctx.raw(0) as u32, ctx.raw(1), ctx.raw(2) as usize)
+                }
                 ("cfgmgr32.dll", "CM_Get_Device_ID_Size") => {
-                    self.cm_get_device_id_size(arg(args, 0), arg(args, 1) as u32)
+                    self.cm_get_device_id_size(ctx.raw(0), ctx.raw(1) as u32)
                 }
                 ("cfgmgr32.dll", "CM_Get_Parent") => {
-                    self.cm_get_parent(arg(args, 0), arg(args, 1) as u32)
+                    self.cm_get_parent(ctx.raw(0), ctx.raw(1) as u32)
                 }
                 ("cfgmgr32.dll", "CM_Get_Child") => {
-                    self.cm_get_child(arg(args, 0), arg(args, 1) as u32)
+                    self.cm_get_child(ctx.raw(0), ctx.raw(1) as u32)
                 }
                 ("cfgmgr32.dll", "CM_Get_Sibling") => {
-                    self.cm_get_sibling(arg(args, 0), arg(args, 1) as u32)
+                    self.cm_get_sibling(ctx.raw(0), ctx.raw(1) as u32)
                 }
                 ("cfgmgr32.dll", "CM_Get_DevNode_Status") => {
-                    self.cm_get_devnode_status(arg(args, 0), arg(args, 1), arg(args, 2) as u32)
+                    self.cm_get_devnode_status(ctx.raw(0), ctx.raw(1), ctx.raw(2) as u32)
                 }
                 ("cfgmgr32.dll", "CM_Get_DevNode_Registry_PropertyA") => self
                     .cm_get_devnode_registry_property(
                         false,
-                        arg(args, 0) as u32,
-                        arg(args, 1) as u32,
-                        arg(args, 2),
-                        arg(args, 3),
-                        arg(args, 4),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1) as u32,
+                        ctx.raw(2),
+                        ctx.raw(3),
+                        ctx.raw(4),
                     ),
                 ("cfgmgr32.dll", "CM_Get_DevNode_Registry_PropertyW") => self
                     .cm_get_devnode_registry_property(
                         true,
-                        arg(args, 0) as u32,
-                        arg(args, 1) as u32,
-                        arg(args, 2),
-                        arg(args, 3),
-                        arg(args, 4),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1) as u32,
+                        ctx.raw(2),
+                        ctx.raw(3),
+                        ctx.raw(4),
                     ),
                 ("cfgmgr32.dll", "CM_MapCrToWin32Err") => {
-                    Ok(self.cm_map_cr_to_win32_err(arg(args, 0), arg(args, 1)))
+                    Ok(self.cm_map_cr_to_win32_err(ctx.raw(0), ctx.raw(1)))
                 }
                 ("cfgmgr32.dll", "CM_Get_Device_ID_List_SizeA") => self.cm_get_device_id_list_size(
                     false,
-                    arg(args, 0),
-                    &self.read_c_string_from_memory(arg(args, 1))?,
+                    ctx.raw(0),
+                    &self.read_c_string_from_memory(ctx.raw(1))?,
                 ),
                 ("cfgmgr32.dll", "CM_Get_Device_ID_List_SizeW") => self.cm_get_device_id_list_size(
                     true,
-                    arg(args, 0),
-                    &self.read_wide_string_from_memory(arg(args, 1))?,
+                    ctx.raw(0),
+                    &self.read_wide_string_from_memory(ctx.raw(1))?,
                 ),
                 ("cfgmgr32.dll", "CM_Get_Device_ID_ListA") => self.cm_get_device_id_list(
                     false,
-                    &self.read_c_string_from_memory(arg(args, 0))?,
-                    arg(args, 1),
-                    arg(args, 2) as usize,
+                    &self.read_c_string_from_memory(ctx.raw(0))?,
+                    ctx.raw(1),
+                    ctx.raw(2) as usize,
                 ),
                 ("cfgmgr32.dll", "CM_Get_Device_ID_ListW") => self.cm_get_device_id_list(
                     true,
-                    &self.read_wide_string_from_memory(arg(args, 0))?,
-                    arg(args, 1),
-                    arg(args, 2) as usize,
+                    &self.read_wide_string_from_memory(ctx.raw(0))?,
+                    ctx.raw(1),
+                    ctx.raw(2) as usize,
                 ),
                 _ => unreachable!("prechecked extracted dispatch should always match"),
             }
@@ -137,12 +128,16 @@ impl VirtualExecutionEngine {
             return Ok(CR_INVALID_POINTER);
         }
         let device = if instance_id.trim().is_empty() {
-            self.devices
+            self.dispatch
+                .devices
                 .list_devices("", "ROOT", false)
                 .into_iter()
                 .next()
         } else {
-            self.devices.find_by_instance_id(instance_id).cloned()
+            self.dispatch
+                .devices
+                .find_by_instance_id(instance_id)
+                .cloned()
         };
         let Some(device) = device else {
             return Ok(CR_NO_SUCH_DEVINST);
@@ -158,7 +153,7 @@ impl VirtualExecutionEngine {
         buffer: u64,
         buffer_len: usize,
     ) -> Result<u64, VmError> {
-        let Some(device) = self.devices.get(devinst).cloned() else {
+        let Some(device) = self.dispatch.devices.get(devinst).cloned() else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
         let required = if wide {
@@ -181,7 +176,7 @@ impl VirtualExecutionEngine {
         if len_ptr == 0 {
             return Ok(CR_INVALID_POINTER);
         }
-        let Some(device) = self.devices.get(devinst) else {
+        let Some(device) = self.dispatch.devices.get(devinst) else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
         self.write_u32(
@@ -199,7 +194,7 @@ impl VirtualExecutionEngine {
         if parent_ptr == 0 {
             return Ok(CR_INVALID_POINTER);
         }
-        let Some(device) = self.devices.get(devinst) else {
+        let Some(device) = self.dispatch.devices.get(devinst) else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
         if device.parent == 0 {
@@ -213,7 +208,7 @@ impl VirtualExecutionEngine {
         if child_ptr == 0 {
             return Ok(CR_INVALID_POINTER);
         }
-        let Some(device) = self.devices.get(devinst) else {
+        let Some(device) = self.dispatch.devices.get(devinst) else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
         let Some(&child) = device.children.first() else {
@@ -227,10 +222,10 @@ impl VirtualExecutionEngine {
         if sibling_ptr == 0 {
             return Ok(CR_INVALID_POINTER);
         }
-        let Some(device) = self.devices.get(devinst) else {
+        let Some(device) = self.dispatch.devices.get(devinst) else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
-        let Some(parent) = self.devices.get(device.parent) else {
+        let Some(parent) = self.dispatch.devices.get(device.parent) else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
         let Some(index) = parent
@@ -253,7 +248,7 @@ impl VirtualExecutionEngine {
         problem_ptr: u64,
         devinst: u32,
     ) -> Result<u64, VmError> {
-        let Some(device) = self.devices.get(devinst) else {
+        let Some(device) = self.dispatch.devices.get(devinst) else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
         let status = device.status;
@@ -276,13 +271,16 @@ impl VirtualExecutionEngine {
         buffer: u64,
         buffer_size_ptr: u64,
     ) -> Result<u64, VmError> {
-        let Some(device) = self.devices.get(devinst).cloned() else {
+        let Some(device) = self.dispatch.devices.get(devinst).cloned() else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
         let Some(property_key) = cm_property_key(property) else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
-        let Some((value_type, data)) = self.devices.property_data(&device, property_key, wide)
+        let Some((value_type, data)) =
+            self.dispatch
+                .devices
+                .property_data(&device, property_key, wide)
         else {
             return Ok(CR_NO_SUCH_DEVINST);
         };
@@ -300,7 +298,7 @@ impl VirtualExecutionEngine {
         if buffer == 0 || capacity < data.len() {
             return Ok(CR_BUFFER_SMALL);
         }
-        self.modules.memory_mut().write(buffer, &data)?;
+        self.core.modules.memory_mut().write(buffer, &data)?;
         Ok(CR_SUCCESS)
     }
 
@@ -338,12 +336,12 @@ impl VirtualExecutionEngine {
         if buffer == 0 || buffer_len < required_chars {
             return Ok(CR_BUFFER_SMALL);
         }
-        self.modules.memory_mut().write(buffer, &payload)?;
+        self.core.modules.memory_mut().write(buffer, &payload)?;
         Ok(CR_SUCCESS)
     }
 
     fn cm_device_id_list_payload(&self, filter: &str, wide: bool) -> (Vec<u8>, usize) {
-        let devices = filter_cm_devices(&self.devices, filter);
+        let devices = filter_cm_devices(&self.dispatch.devices, filter);
         if devices.is_empty() {
             if wide {
                 return (vec![0, 0, 0, 0], 2);

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use hvm::memory::manager::MemoryManager;
 use hvm::models::ModuleRecord;
-use hvm::runtime::windows_env::WindowsProcessEnvironment;
+use hvm::runtime::windows_env::{path_mapping::VirtualPathMapper, WindowsProcessEnvironment};
 
 fn loader_test_module(name: &str, path: Option<&str>, base: u64) -> ModuleRecord {
     ModuleRecord {
@@ -10,10 +10,13 @@ fn loader_test_module(name: &str, path: Option<&str>, base: u64) -> ModuleRecord
         path: path.map(PathBuf::from),
         arch: "x86".to_string(),
         is_dll: false,
+        allow_execution: true,
         base,
+        visible_base: base,
         size: 0x5000,
         entrypoint: base + 0x1000,
         image_base: base,
+        time_date_stamp: 0,
         synthetic: path.is_none(),
         tls_callbacks: Vec::new(),
         initialized: true,
@@ -146,6 +149,21 @@ fn allocate_thread_teb_returns_distinct_thread_contexts() {
 }
 
 #[test]
+fn allocate_thread_teb_seeds_stack_backed_exception_list() {
+    let mut env = WindowsProcessEnvironment::for_tests_x86();
+    let thread = env.allocate_thread_teb(0x7020_0000, 0x7000_0000).unwrap();
+    let exception_list = env
+        .read_pointer(thread.teb_base + env.offsets().teb_exception_list as u64)
+        .unwrap();
+
+    assert_ne!(exception_list, u32::MAX as u64);
+    assert!(exception_list >= thread.stack_limit);
+    assert!(exception_list < thread.stack_base);
+    assert_eq!(env.read_pointer(exception_list).unwrap(), u32::MAX as u64);
+    assert_eq!(env.read_pointer(exception_list + 4).unwrap(), 0);
+}
+
+#[test]
 fn sync_last_error_updates_current_thread_teb() {
     let mut env = WindowsProcessEnvironment::for_tests_x86();
     let first = env.allocate_thread_teb(0x7020_0000, 0x7000_0000).unwrap();
@@ -233,6 +251,36 @@ fn sync_modules_populates_loader_module_lists_in_load_order() {
 }
 
 #[test]
+fn sync_modules_exposes_visible_base_through_loader_entries() {
+    let mut env = WindowsProcessEnvironment::for_tests_x86();
+    let mapper = VirtualPathMapper::default();
+    let mut module = loader_test_module("ntdll.dll", None, 0x4B28_0000);
+    module.is_dll = true;
+    module.visible_base = 0x76A3_0000;
+    module.entrypoint = module.base + 0x3610;
+
+    env.sync_modules_with_mapper_and_orders(
+        std::slice::from_ref(&module),
+        &[module.base],
+        &[module.base],
+        &mapper,
+    )
+    .unwrap();
+
+    assert_eq!(
+        env.loader_module_bases().unwrap(),
+        vec![module.visible_base]
+    );
+
+    let entry = env
+        .loader_entry_for_module_base(module.visible_base)
+        .unwrap()
+        .unwrap();
+    assert_eq!(env.read_pointer(entry + 0x18).unwrap(), module.visible_base);
+    assert_eq!(env.read_pointer(entry + 0x1C).unwrap(), 0x76A3_3610);
+}
+
+#[test]
 fn sync_modules_rebuilds_loader_lists_after_module_removal() {
     let mut env = WindowsProcessEnvironment::for_tests_x86();
     let modules = vec![
@@ -244,6 +292,178 @@ fn sync_modules_rebuilds_loader_lists_after_module_removal() {
 
     assert_eq!(env.loader_module_bases().unwrap(), vec![0x0040_0000]);
     assert_eq!(env.loader_module_names().unwrap(), vec!["sample.exe"]);
+}
+
+#[test]
+fn sync_modules_keeps_existing_loader_entry_addresses_stable_when_adding_modules() {
+    let mut env = WindowsProcessEnvironment::for_tests_x64();
+    let initial_modules = vec![
+        loader_test_module("sample.exe", Some("/tmp/sample.exe"), 0x1400_0000_0),
+        loader_test_module("kernel32.dll", None, 0x7ff6_7600_0000),
+    ];
+    let expanded_modules = vec![
+        initial_modules[0].clone(),
+        initial_modules[1].clone(),
+        loader_test_module("cabinet.dll", None, 0x7ff6_77b0_0000),
+    ];
+
+    env.sync_modules(&initial_modules).unwrap();
+    let sample_entry = env
+        .loader_entry_for_module_base(initial_modules[0].base)
+        .unwrap()
+        .unwrap();
+    let kernel32_entry = env
+        .loader_entry_for_module_base(initial_modules[1].base)
+        .unwrap()
+        .unwrap();
+
+    env.sync_modules(&expanded_modules).unwrap();
+
+    assert_eq!(
+        env.loader_entry_for_module_base(initial_modules[0].base)
+            .unwrap()
+            .unwrap(),
+        sample_entry
+    );
+    assert_eq!(
+        env.loader_entry_for_module_base(initial_modules[1].base)
+            .unwrap()
+            .unwrap(),
+        kernel32_entry
+    );
+    assert_eq!(
+        env.loader_module_bases().unwrap(),
+        vec![0x1400_0000_0, 0x7ff6_7600_0000, 0x7ff6_77b0_0000]
+    );
+}
+
+#[test]
+fn sync_modules_reserves_x64_loader_entry_tail_before_inline_strings() {
+    let mut env = WindowsProcessEnvironment::for_tests_x64();
+    let module = loader_test_module("cabinet.dll", None, 0x7ff6_77b0_0000);
+
+    env.sync_modules(std::slice::from_ref(&module)).unwrap();
+
+    let entry = env
+        .loader_entry_for_module_base(module.base)
+        .unwrap()
+        .unwrap();
+    let base_name_buffer = env.read_pointer(entry + 0x60).unwrap();
+    let hash_links = entry + 0x70;
+
+    assert!(base_name_buffer >= entry + 0x100);
+    assert_eq!(env.read_pointer(hash_links).unwrap(), hash_links);
+    assert_eq!(env.read_pointer(hash_links + 8).unwrap(), hash_links);
+    assert_eq!(env.read_pointer(entry + 0x80).unwrap(), 0);
+}
+
+#[test]
+fn sync_modules_supports_larger_x64_loader_population() {
+    let mut env = WindowsProcessEnvironment::for_tests_x64();
+    let modules = (0..52)
+        .map(|index| {
+            let name = format!("module_{index:02}.dll");
+            let path = format!("/tmp/{name}");
+            loader_test_module(
+                &name,
+                Some(&path),
+                0x7ff6_7600_0000 + (index as u64 * 0x10000),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    env.sync_modules(&modules).unwrap();
+
+    assert_eq!(env.loader_module_bases().unwrap().len(), modules.len());
+    assert_eq!(env.loader_module_names().unwrap().len(), modules.len());
+}
+
+#[test]
+fn sync_modules_can_materialize_distinct_memory_and_initialization_orders() {
+    let mut env = WindowsProcessEnvironment::for_tests_x86();
+    let mapper = VirtualPathMapper::default();
+    let modules = vec![
+        loader_test_module("sample.exe", Some("/tmp/sample.exe"), 0x0040_0000),
+        loader_test_module("kernel32.dll", None, 0x7600_0000),
+        loader_test_module("user32.dll", None, 0x7500_0000),
+    ];
+
+    env.sync_modules_with_mapper_and_orders(
+        &modules,
+        &[0x0040_0000, 0x7500_0000, 0x7600_0000],
+        &[0x7600_0000, 0x7500_0000],
+        &mapper,
+    )
+    .unwrap();
+
+    let ldr_base = env.current_peb() + 0x0C;
+    let ldr = env.read_pointer(ldr_base).unwrap();
+
+    let memory_head = ldr + 0x14;
+    let first_memory_entry = env.read_pointer(memory_head).unwrap() - 0x08;
+    let second_memory_link = env.read_pointer(memory_head).unwrap();
+    let second_memory_entry = env.read_pointer(second_memory_link).unwrap() - 0x08;
+    let third_memory_link = env.read_pointer(second_memory_link).unwrap();
+    let third_memory_entry = env.read_pointer(third_memory_link).unwrap() - 0x08;
+
+    let init_head = ldr + 0x1C;
+    let first_init_entry = env.read_pointer(init_head).unwrap() - 0x10;
+    let second_init_link = env.read_pointer(init_head).unwrap();
+    let second_init_entry = env.read_pointer(second_init_link).unwrap() - 0x10;
+
+    assert_eq!(
+        env.read_pointer(first_memory_entry + 0x18).unwrap(),
+        0x0040_0000
+    );
+    assert_eq!(
+        env.read_pointer(second_memory_entry + 0x18).unwrap(),
+        0x7500_0000
+    );
+    assert_eq!(
+        env.read_pointer(third_memory_entry + 0x18).unwrap(),
+        0x7600_0000
+    );
+    assert_eq!(
+        env.read_pointer(first_init_entry + 0x18).unwrap(),
+        0x7600_0000
+    );
+    assert_eq!(
+        env.read_pointer(second_init_entry + 0x18).unwrap(),
+        0x7500_0000
+    );
+}
+
+#[test]
+fn sync_modules_populates_loader_entry_tail_fields() {
+    let mut env = WindowsProcessEnvironment::for_tests_x86();
+    let mapper = VirtualPathMapper::default();
+    let mut module = loader_test_module("kernel32.dll", Some("/tmp/kernel32.dll"), 0x7600_0000);
+    module.is_dll = true;
+    module.synthetic = false;
+    module.time_date_stamp = 0x5E2A_5C00;
+
+    env.sync_modules_with_mapper_and_orders(
+        std::slice::from_ref(&module),
+        &[module.base],
+        &[module.base],
+        &mapper,
+    )
+    .unwrap();
+
+    let entry = env
+        .loader_entry_for_module_base(module.base)
+        .unwrap()
+        .unwrap();
+    let hash_links = entry + 0x3C;
+
+    assert_eq!(env.read_pointer(entry + 0x34).unwrap(), 0x0000_0006);
+    assert_eq!(env.read_pointer(entry + 0x38).unwrap(), u16::MAX as u64);
+    assert_eq!(env.read_pointer(hash_links).unwrap(), hash_links);
+    assert_eq!(env.read_pointer(hash_links + 4).unwrap(), hash_links);
+    assert_eq!(
+        env.read_pointer(entry + 0x44).unwrap(),
+        module.time_date_stamp as u64
+    );
 }
 
 #[test]

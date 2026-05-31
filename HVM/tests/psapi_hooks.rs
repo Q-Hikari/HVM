@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hvm::config::load_config;
+use hvm::config::{load_config, EnvironmentOverrides};
 use hvm::runtime::engine::VirtualExecutionEngine;
 use hvm::samples::{first_runnable_exported_sample, first_runnable_sample};
 
@@ -259,6 +260,58 @@ fn psapi_module_information_reports_runtime_module_layout() {
     );
     assert!(PathBuf::from(read_wide_c_string(&engine, mapped_name, 260))
         .ends_with(Path::new("Sample").join(&entry_module.name)));
+}
+
+#[test]
+fn psapi_module_information_uses_visible_module_base() {
+    let mut config = sample_config();
+    config.environment_overrides = Some(EnvironmentOverrides {
+        module_visible_bases: Some(BTreeMap::from([(
+            String::from("kernel32.dll"),
+            0x7A57_0000,
+        )])),
+        ..EnvironmentOverrides::default()
+    });
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+
+    let module = engine
+        .modules()
+        .loaded_modules()
+        .into_iter()
+        .find(|module| module.name.eq_ignore_ascii_case("kernel32.dll"))
+        .unwrap();
+    let get_module_information = engine.bind_hook_for_test("psapi.dll", "GetModuleInformation");
+    let module_info = engine.allocate_executable_test_page(0x6336_8000).unwrap();
+    let pointer_size = runtime_pointer_size(&engine);
+    let module_info_size = if pointer_size == 8 { 24 } else { 12 };
+    let expected_entrypoint = module.visible_base + (module.entrypoint - module.base);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(
+                get_module_information,
+                &[
+                    u32::MAX as u64,
+                    module.visible_base,
+                    module_info,
+                    module_info_size as u64,
+                ]
+            )
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        read_runtime_pointer(&engine, module_info),
+        module.visible_base
+    );
+    assert_eq!(
+        read_runtime_pointer(
+            &engine,
+            module_info + if pointer_size == 8 { 16 } else { 8 }
+        ),
+        expected_entrypoint
+    );
 }
 
 #[test]

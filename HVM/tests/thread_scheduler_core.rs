@@ -51,9 +51,9 @@ fn initialize_x86_thread_context_sets_entry_stack_and_flags() {
 
     let snapshot = scheduler.thread_snapshot(thread.tid).unwrap();
 
-    assert_eq!(snapshot.registers.get("eip"), Some(&0x401000));
-    assert_eq!(snapshot.registers.get("eflags"), Some(&0x202));
-    assert_eq!(snapshot.registers.get("esp"), Some(&(0x701F_F000 - 8)));
+    assert_eq!(snapshot.registers.eip, 0x401000);
+    assert_eq!(snapshot.registers.eflags, 0x202);
+    assert_eq!(snapshot.registers.esp, 0x701F_F000 - 8);
     assert_eq!(snapshot.exit_address, 0xDEAD_C0DE);
     assert_eq!(snapshot.teb_base, 0x7000_0000);
     assert_eq!(snapshot.stack_base, 0x7020_0000);

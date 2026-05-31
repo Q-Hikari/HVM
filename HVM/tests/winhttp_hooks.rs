@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use hvm::config::{
-    load_config, HttpResponseHeader, HttpResponsePayload, HttpResponseRule,
-};
+use hvm::config::{load_config, HttpResponseHeader, HttpResponsePayload, HttpResponseRule};
 use hvm::runtime::engine::VirtualExecutionEngine;
 
 fn read_u32(engine: &VirtualExecutionEngine, address: u64) -> u32 {

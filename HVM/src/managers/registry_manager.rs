@@ -28,7 +28,7 @@ struct RegistryKey {
     values: BTreeMap<String, RegistryValue>,
 }
 
-/// Mirrors the Python registry manager used by the legacy runtime.
+/// Manages the emulated Windows registry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegistryManager {
     next_handle: u32,
@@ -183,6 +183,11 @@ impl RegistryManager {
         key.subkeys.iter().nth(index as usize).map(String::as_str)
     }
 
+    pub fn enum_value(&self, handle: u32, index: u32) -> Option<&RegistryValue> {
+        let key = self.lookup_key(handle)?;
+        key.values.values().nth(index as usize)
+    }
+
     pub fn query_info(&self, handle: u32) -> (u32, u32, u32, u32, u32) {
         let Some(key) = self.lookup_key(handle) else {
             return (0, 0, 0, 0, 0);
@@ -257,6 +262,22 @@ impl RegistryManager {
                     name: "CurrentBuild".to_string(),
                     value_type: 1,
                     data: wide_string("19045"),
+                },
+            );
+            key.values.insert(
+                "currentbuildnumber".to_string(),
+                RegistryValue {
+                    name: "CurrentBuildNumber".to_string(),
+                    value_type: 1,
+                    data: wide_string("19045"),
+                },
+            );
+            key.values.insert(
+                "ubr".to_string(),
+                RegistryValue {
+                    name: "UBR".to_string(),
+                    value_type: 4,
+                    data: 0x0900u32.to_le_bytes().to_vec(),
                 },
             );
             key.values.insert(

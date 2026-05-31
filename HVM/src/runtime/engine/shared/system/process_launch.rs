@@ -12,20 +12,20 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(());
         }
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             let mut payload = [0u8; 16];
             payload[0..4].copy_from_slice(&process_handle.to_le_bytes());
             payload[4..8].copy_from_slice(&thread_handle.to_le_bytes());
             payload[8..12].copy_from_slice(&process_id.to_le_bytes());
             payload[12..16].copy_from_slice(&thread_id.to_le_bytes());
-            self.modules.memory_mut().write(address, &payload)?;
+            self.core.modules.memory_mut().write(address, &payload)?;
         } else {
             let mut payload = [0u8; 24];
             payload[0..8].copy_from_slice(&(process_handle as u64).to_le_bytes());
             payload[8..16].copy_from_slice(&(thread_handle as u64).to_le_bytes());
             payload[16..20].copy_from_slice(&process_id.to_le_bytes());
             payload[20..24].copy_from_slice(&thread_id.to_le_bytes());
-            self.modules.memory_mut().write(address, &payload)?;
+            self.core.modules.memory_mut().write(address, &payload)?;
         }
         Ok(())
     }
@@ -44,6 +44,7 @@ impl VirtualExecutionEngine {
         fields.insert("image_path".to_string(), json!(image_path));
         fields.insert("command_line".to_string(), json!(command_line));
         fields.insert("current_directory".to_string(), json!(current_directory));
+        self.record_process_operation("create", Some(image_path), Some(command_line), None);
         self.log_runtime_event("PROCESS_SPAWN", fields)
     }
 }

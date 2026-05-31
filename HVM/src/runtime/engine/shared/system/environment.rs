@@ -1,49 +1,125 @@
 use super::*;
 
 impl VirtualExecutionEngine {
+    pub(in crate::runtime::engine) fn active_user_profile(
+        &self,
+    ) -> Option<&crate::environment_profile::UserAccountProfile> {
+        let active_user = self.active_user_name().trim();
+        self.core
+            .environment_profile
+            .users
+            .iter()
+            .find(|user| user.name.eq_ignore_ascii_case(active_user))
+    }
+
+    pub(in crate::runtime::engine) fn active_token_integrity_rid(&self) -> u32 {
+        const SECURITY_MANDATORY_LOW_RID: u32 = 0x1000;
+        const SECURITY_MANDATORY_MEDIUM_RID: u32 = 0x2000;
+        const SECURITY_MANDATORY_HIGH_RID: u32 = 0x3000;
+
+        if let Some(user) = self.active_user_profile() {
+            if let Some(rid) = user.integrity_level_rid {
+                return rid;
+            }
+            return match user.privilege_level {
+                0 => SECURITY_MANDATORY_LOW_RID,
+                2.. => SECURITY_MANDATORY_HIGH_RID,
+                _ => SECURITY_MANDATORY_MEDIUM_RID,
+            };
+        }
+        SECURITY_MANDATORY_MEDIUM_RID
+    }
+
+    pub(in crate::runtime::engine) fn token_integrity_information_bytes(
+        &self,
+        buffer_address: u64,
+    ) -> Vec<u8> {
+        const SE_GROUP_INTEGRITY: u32 = 0x0000_0020;
+        const SE_GROUP_INTEGRITY_ENABLED: u32 = 0x0000_0040;
+
+        let pointer_size = if self.core.arch.is_x86() { 4 } else { 8 };
+        let sid = self.token_integrity_sid_bytes();
+        let mut payload = vec![0u8; pointer_size + 4 + sid.len()];
+        let sid_offset = (pointer_size + 4) as u64;
+        let sid_ptr = buffer_address.saturating_add(sid_offset);
+
+        if pointer_size == 4 {
+            payload[..4].copy_from_slice(&(sid_ptr as u32).to_le_bytes());
+        } else {
+            payload[..8].copy_from_slice(&sid_ptr.to_le_bytes());
+        }
+
+        payload[pointer_size..pointer_size + 4]
+            .copy_from_slice(&(SE_GROUP_INTEGRITY | SE_GROUP_INTEGRITY_ENABLED).to_le_bytes());
+        payload[pointer_size + 4..].copy_from_slice(&sid);
+        payload
+    }
+
+    fn token_integrity_sid_bytes(&self) -> Vec<u8> {
+        let mut sid = vec![0u8; 12];
+        sid[0] = 1;
+        sid[1] = 1;
+        sid[7] = 16;
+        sid[8..12].copy_from_slice(&self.active_token_integrity_rid().to_le_bytes());
+        sid
+    }
+
     pub(in crate::runtime::engine) fn current_directory_display_text(&self) -> String {
-        self.current_directory.to_string_lossy().to_string()
+        self.core.current_directory.to_string_lossy().to_string()
     }
 
     pub(in crate::runtime::engine) fn current_process_id(&self) -> u32 {
-        self.environment_profile.machine.process_id.max(1)
+        self.core.environment_profile.machine.process_id.max(1)
     }
 
     pub(in crate::runtime::engine) fn active_computer_name(&self) -> &str {
-        self.environment_profile.machine.computer_name.as_str()
+        self.core.environment_profile.machine.computer_name.as_str()
     }
 
     pub(in crate::runtime::engine) fn active_user_name(&self) -> &str {
-        self.environment_profile.machine.user_name.as_str()
+        self.core.environment_profile.machine.user_name.as_str()
     }
 
     pub(in crate::runtime::engine) fn ansi_code_page(&self) -> u64 {
-        u64::from(self.environment_profile.locale.acp.max(1))
+        u64::from(self.core.environment_profile.locale.acp.max(1))
     }
 
     pub(in crate::runtime::engine) fn oem_code_page(&self) -> u64 {
-        u64::from(self.environment_profile.locale.oemcp.max(1))
+        u64::from(self.core.environment_profile.locale.oemcp.max(1))
     }
 
     pub(in crate::runtime::engine) fn console_code_page(&self) -> u64 {
-        u64::from(self.environment_profile.locale.console_cp.max(1))
+        u64::from(self.core.environment_profile.locale.console_cp.max(1))
     }
 
     pub(in crate::runtime::engine) fn console_output_code_page(&self) -> u64 {
-        u64::from(self.environment_profile.locale.console_output_cp.max(1))
+        u64::from(
+            self.core
+                .environment_profile
+                .locale
+                .console_output_cp
+                .max(1),
+        )
     }
 
     pub(in crate::runtime::engine) fn user_default_lcid(&self) -> u64 {
-        u64::from(self.environment_profile.locale.user_default_lcid.max(1))
+        u64::from(
+            self.core
+                .environment_profile
+                .locale
+                .user_default_lcid
+                .max(1),
+        )
     }
 
     pub(in crate::runtime::engine) fn thread_locale(&self) -> u64 {
-        u64::from(self.environment_profile.locale.thread_locale.max(1))
+        u64::from(self.core.environment_profile.locale.thread_locale.max(1))
     }
 
     pub(in crate::runtime::engine) fn system_default_ui_language(&self) -> u64 {
         u64::from(
-            self.environment_profile
+            self.core
+                .environment_profile
                 .locale
                 .system_default_ui_language
                 .max(1),
@@ -52,7 +128,8 @@ impl VirtualExecutionEngine {
 
     pub(in crate::runtime::engine) fn user_default_ui_language(&self) -> u64 {
         u64::from(
-            self.environment_profile
+            self.core
+                .environment_profile
                 .locale
                 .user_default_ui_language
                 .max(1),
@@ -60,7 +137,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn version_return_value(&self) -> u64 {
-        let version = &self.environment_profile.os_version;
+        let version = &self.core.environment_profile.os_version;
         ((u64::from(version.build.min(0x7FFF))) << 16)
             | ((u64::from(version.minor & 0xFF)) << 8)
             | u64::from(version.major & 0xFF)
@@ -69,13 +146,13 @@ impl VirtualExecutionEngine {
     pub(in crate::runtime::engine) fn volume_profile(
         &self,
     ) -> &crate::environment_profile::VolumeProfile {
-        &self.environment_profile.volume
+        &self.core.environment_profile.volume
     }
 
     pub(in crate::runtime::engine) fn shell_folder_profile(
         &self,
     ) -> &crate::environment_profile::ShellFolderProfile {
-        &self.environment_profile.shell_folders
+        &self.core.environment_profile.shell_folders
     }
 
     pub(in crate::runtime::engine) fn initialize_runtime_environment_variables(
@@ -83,13 +160,13 @@ impl VirtualExecutionEngine {
         dll_path: &str,
         tmp_directory: &str,
     ) -> Result<(), VmError> {
-        self.environment_variables.clear();
+        self.core.environment_variables.clear();
 
         for (name, value) in self.derived_runtime_environment_entries(dll_path, tmp_directory) {
             self.set_runtime_environment_variable_internal(&name, Some(value));
         }
 
-        let profile_variables = self.environment_profile.environment_variables.clone();
+        let profile_variables = self.core.environment_profile.environment_variables.clone();
         for variable in &profile_variables {
             self.set_runtime_environment_variable_internal(
                 &variable.name,
@@ -105,12 +182,13 @@ impl VirtualExecutionEngine {
 
         let mut entries = Vec::new();
         for key in RESERVED_ORDER {
-            if let Some(variable) = self.environment_variables.get(*key) {
+            if let Some(variable) = self.core.environment_variables.get(*key) {
                 entries.push((variable.name.clone(), variable.value.clone()));
             }
         }
 
         let mut remaining = self
+            .core
             .environment_variables
             .iter()
             .filter(|(key, _)| {
@@ -133,7 +211,7 @@ impl VirtualExecutionEngine {
             return Some(self.current_directory_display_text());
         }
         let normalized = name.to_ascii_lowercase();
-        if let Some(variable) = self.environment_variables.get(&normalized) {
+        if let Some(variable) = self.core.environment_variables.get(&normalized) {
             return Some(variable.value.clone());
         }
         match normalized.as_str() {
@@ -222,7 +300,7 @@ impl VirtualExecutionEngine {
             ("USERNAME".to_string(), self.active_user_name().to_string()),
             (
                 "USERDOMAIN".to_string(),
-                self.environment_profile.machine.user_domain.clone(),
+                self.core.environment_profile.machine.user_domain.clone(),
             ),
             (
                 "COMPUTERNAME".to_string(),
@@ -252,7 +330,8 @@ impl VirtualExecutionEngine {
         &mut self,
     ) -> Result<(), VmError> {
         let entries = self.runtime_environment_entries();
-        self.process_env
+        self.core
+            .process_env
             .write_environment_blocks_from_entries(&entries)
             .map_err(VmError::from)
     }
@@ -264,7 +343,7 @@ impl VirtualExecutionEngine {
         }
 
         if let Some(value) = value {
-            self.environment_variables.insert(
+            self.core.environment_variables.insert(
                 normalized,
                 RuntimeEnvironmentVariable {
                     name: name.to_string(),
@@ -272,7 +351,7 @@ impl VirtualExecutionEngine {
                 },
             );
         } else {
-            self.environment_variables.remove(&normalized);
+            self.core.environment_variables.remove(&normalized);
         }
     }
 }

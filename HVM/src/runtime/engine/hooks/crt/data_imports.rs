@@ -15,7 +15,8 @@ impl VirtualExecutionEngine {
             if import.size == 4 {
                 self.write_u32(thunk, cell as u32)?;
             } else {
-                self.modules
+                self.core
+                    .modules
                     .memory_mut()
                     .write(thunk, &cell.to_le_bytes())?;
             }

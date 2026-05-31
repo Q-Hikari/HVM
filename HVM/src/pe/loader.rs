@@ -80,7 +80,6 @@ pub fn map_image(path: &Path, memory: &mut MemoryManager) -> Result<ModuleRecord
     apply_base_relocations(&pe, base, memory)?;
     finalize_image_protections(memory, base, image_size, headers_size as u64, &pe.sections)?;
     let exports = collect_exports(&bytes, &pe, base);
-
     Ok(ModuleRecord {
         name: resolved_path
             .file_name()
@@ -90,10 +89,13 @@ pub fn map_image(path: &Path, memory: &mut MemoryManager) -> Result<ModuleRecord
         path: Some(resolved_path),
         arch: _arch.to_string(),
         is_dll: pe.header.coff_header.characteristics & IMAGE_FILE_DLL != 0,
+        allow_execution: true,
         base,
+        visible_base: base,
         size: image_size,
         entrypoint: base + pe.entry as u64,
         image_base,
+        time_date_stamp: pe.header.coff_header.time_date_stamp,
         synthetic: false,
         tls_callbacks: collect_tls_callbacks(&pe, base),
         initialized: false,
@@ -247,20 +249,34 @@ fn parse_forwarded_export_target(
 }
 
 fn normalize_forwarded_export_target(reexport: &Reexport<'_>) -> Option<ForwardedExportTarget> {
-    match reexport {
-        Reexport::DLLName { export, lib } => Some(ForwardedExportTarget::ByName {
-            module: normalize_module_name(Path::new(lib)),
-            function: export.to_ascii_lowercase(),
-        }),
-        Reexport::DLLOrdinal { ordinal, lib } => {
-            u16::try_from(*ordinal)
-                .ok()
-                .map(|ordinal| ForwardedExportTarget::ByOrdinal {
-                    module: normalize_module_name(Path::new(lib)),
-                    ordinal,
-                })
-        }
+    let raw_spec = match reexport {
+        Reexport::DLLName { export, lib } => format!("{lib}.{export}"),
+        Reexport::DLLOrdinal { ordinal, lib } => format!("{lib}.#{ordinal}"),
+    };
+    parse_forwarded_export_spec(&raw_spec)
+}
+
+fn parse_forwarded_export_spec(spec: &str) -> Option<ForwardedExportTarget> {
+    // Some PE parsers split forwarders at the first '.', which breaks
+    // targets like `kernel32.dll.CreateFileMappingW`. Re-parse from the
+    // right so the full module filename is preserved.
+    let (module, target) = spec.rsplit_once('.')?;
+    if module.is_empty() || target.is_empty() {
+        return None;
     }
+
+    let module = normalize_module_name(Path::new(module));
+    if let Some(ordinal_text) = target.strip_prefix('#') {
+        return ordinal_text
+            .parse::<u16>()
+            .ok()
+            .map(|ordinal| ForwardedExportTarget::ByOrdinal { module, ordinal });
+    }
+
+    Some(ForwardedExportTarget::ByName {
+        module,
+        function: target.to_ascii_lowercase(),
+    })
 }
 
 fn rva_to_offset(pe: &PE<'_>, rva: usize, _file_alignment: u32) -> Option<usize> {
@@ -314,5 +330,40 @@ fn section_to_perms(characteristics: u32) -> u32 {
         crate::memory::manager::PROT_READ
     } else {
         perms
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_forwarded_export_spec;
+    use crate::models::ForwardedExportTarget;
+
+    #[test]
+    fn forwarded_exports_keep_full_dll_suffix_in_module_name() {
+        assert_eq!(
+            parse_forwarded_export_spec("kernel32.dll.CreateFileMappingW"),
+            Some(ForwardedExportTarget::ByName {
+                module: "kernel32.dll".to_string(),
+                function: "createfilemappingw".to_string(),
+            })
+        );
+        assert_eq!(
+            parse_forwarded_export_spec("api-ms-win-core-memory-l1-1-0.dll.VirtualAlloc"),
+            Some(ForwardedExportTarget::ByName {
+                module: "api-ms-win-core-memory-l1-1-0.dll".to_string(),
+                function: "virtualalloc".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn forwarded_export_ordinals_keep_full_dll_suffix_in_module_name() {
+        assert_eq!(
+            parse_forwarded_export_spec("kernelbase.dll.#123"),
+            Some(ForwardedExportTarget::ByOrdinal {
+                module: "kernelbase.dll".to_string(),
+                ordinal: 123,
+            })
+        );
     }
 }

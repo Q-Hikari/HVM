@@ -13,6 +13,9 @@ impl WindowsProcessEnvironment {
         {
             return Err(MemoryError::OutOfMemory {
                 size: wide.len().max(ansi.len()) as u64,
+                tag: Some("process:environment_block".to_string()),
+                preferred: None,
+                avoid_history: None,
             });
         }
 

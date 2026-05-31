@@ -19,10 +19,13 @@ pub struct ModuleRecord {
     pub path: Option<std::path::PathBuf>,
     pub arch: String,
     pub is_dll: bool,
+    pub allow_execution: bool,
     pub base: u64,
+    pub visible_base: u64,
     pub size: u64,
     pub entrypoint: u64,
     pub image_base: u64,
+    pub time_date_stamp: u32,
     pub synthetic: bool,
     pub tls_callbacks: Vec<u64>,
     pub initialized: bool,
@@ -34,7 +37,7 @@ pub struct ModuleRecord {
     pub stub_cursor: u64,
 }
 
-/// Captures the PE metadata printed by the Python `inspect` command.
+/// Captures the PE metadata printed by the `inspect` command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeInspectReport {
     pub name: String,
@@ -56,6 +59,8 @@ pub enum RunStopReason {
     InstructionBudgetExhausted,
     SchedulerIdle,
     RunComplete,
+    UnsupportedHook,
+    MemoryAccessViolation,
 }
 
 impl RunStopReason {
@@ -67,6 +72,8 @@ impl RunStopReason {
             Self::InstructionBudgetExhausted => "instruction_budget_exhausted",
             Self::SchedulerIdle => "scheduler_idle",
             Self::RunComplete => "run_complete",
+            Self::UnsupportedHook => "unsupported_hook",
+            Self::MemoryAccessViolation => "memory_access_violation",
         }
     }
 }

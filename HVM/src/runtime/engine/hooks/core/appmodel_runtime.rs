@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("api-ms-win-appmodel-runtime-l1-1-2.dll", "AppPolicyGetProcessTerminationMethod")
@@ -28,8 +28,8 @@ impl VirtualExecutionEngine {
                     "api-ms-win-appmodel-runtime-l1-1-2.dll",
                     "AppPolicyGetThreadInitializationType",
                 ) => {
-                    if arg(args, 1) != 0 {
-                        self.write_u32(arg(args, 1), 0)?;
+                    if ctx.raw(1) != 0 {
+                        self.write_u32(ctx.raw(1), 0)?;
                     }
                     Ok(ERROR_SUCCESS)
                 }

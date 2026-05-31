@@ -378,30 +378,38 @@ impl FileMappingManager {
         if data.is_empty() {
             return Some(Vec::new());
         }
-        let view = self.view_containing(process_key, address)?.clone();
-        let write_start = address.checked_sub(view.base)?;
+        let view = self.view_containing(process_key, address)?;
+        let view_base = view.base;
+        let view_size = view.size;
+        let view_offset = view.offset;
+        let view_copy_on_write = view.copy_on_write;
+        let view_mapping_handle = view.mapping_handle;
+        let write_start = address.checked_sub(view_base)?;
         let write_end = write_start.checked_add(data.len() as u64)?;
-        if write_end > view.size {
+        if write_end > view_size {
             return None;
         }
-        if view.copy_on_write {
+        if view_copy_on_write {
             return Some(Vec::new());
         }
 
-        let mapping_start = view.offset.checked_add(write_start)?;
+        let mapping_start = view_offset.checked_add(write_start)?;
         let mapping_end = mapping_start.checked_add(data.len() as u64)?;
-        let mapping = self.mappings.get_mut(&view.mapping_handle)?;
+        let mapping = self.mappings.get_mut(&view_mapping_handle)?;
         if mapping_end as usize > mapping.content.len() {
             return None;
         }
         mapping.content[mapping_start as usize..mapping_end as usize].copy_from_slice(data);
+        if mapping.views.len() <= 1 {
+            return Some(Vec::new());
+        }
 
         Some(
             mapping
                 .views
                 .iter()
                 .filter_map(|&(target_process_key, target_base)| {
-                    if target_process_key == process_key && target_base == view.base {
+                    if target_process_key == process_key && target_base == view_base {
                         return None;
                     }
                     let target_view = self.views.get(&(target_process_key, target_base))?;
@@ -486,11 +494,11 @@ impl FileMappingManager {
     }
 
     fn view_containing(&self, process_key: u64, address: u64) -> Option<&MappingViewRecord> {
-        self.views.values().find(|view| {
-            view.process_key == process_key
-                && view.base <= address
-                && address < view.base + view.alloc_size
-        })
+        let (_, view) = self
+            .views
+            .range((process_key, 0)..=(process_key, address))
+            .next_back()?;
+        (address < view.base.saturating_add(view.alloc_size)).then_some(view)
     }
 }
 
@@ -594,4 +602,89 @@ fn effective_view_protect(protect: u32, writable: bool, copy_on_write: bool) -> 
 
 fn base_page_protect(protect: u32) -> u32 {
     protect & !PAGE_GUARD
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn record_view_write_updates_single_view_without_targets() {
+        let mut manager = FileMappingManager::new();
+        let mapping = manager
+            .create_mapping(0, PAGE_READWRITE, PAGE_SIZE, "", false, None)
+            .unwrap();
+        let mut memory = MemoryManager::for_tests();
+        let view = manager
+            .map_view(
+                mapping.handle,
+                1,
+                FILE_MAP_WRITE,
+                0,
+                PAGE_SIZE,
+                Some(0x4000),
+                None,
+                "test",
+                &mut memory,
+            )
+            .unwrap();
+
+        let targets = manager
+            .record_view_write(1, view.base + 4, &[0x11, 0x22, 0x33, 0x44])
+            .unwrap();
+
+        assert!(targets.is_empty());
+        let mapping = manager.mappings.get(&view.mapping_handle).unwrap();
+        assert_eq!(&mapping.content[4..8], &[0x11, 0x22, 0x33, 0x44]);
+    }
+
+    #[test]
+    fn record_view_write_finds_sibling_view_by_ordered_lookup() {
+        let mut manager = FileMappingManager::new();
+        let mapping = manager
+            .create_mapping(0, PAGE_READWRITE, PAGE_SIZE, "", false, None)
+            .unwrap();
+        let mut process1_memory = MemoryManager::for_tests();
+        let mut process2_memory = MemoryManager::for_tests();
+        let process1_view = manager
+            .map_view(
+                mapping.handle,
+                1,
+                FILE_MAP_WRITE,
+                0,
+                PAGE_SIZE,
+                Some(0x9000),
+                None,
+                "p1",
+                &mut process1_memory,
+            )
+            .unwrap();
+        let process2_view = manager
+            .map_view(
+                mapping.handle,
+                2,
+                FILE_MAP_WRITE,
+                0,
+                PAGE_SIZE,
+                Some(0x1000),
+                None,
+                "p2",
+                &mut process2_memory,
+            )
+            .unwrap();
+
+        let targets = manager
+            .record_view_write(2, process2_view.base + 8, &[0xAA, 0xBB, 0xCC, 0xDD])
+            .unwrap();
+
+        assert_eq!(
+            targets,
+            vec![MappingWriteTarget {
+                process_key: 1,
+                address: process1_view.base + 8,
+                source_offset: 0,
+                length: 4,
+            }]
+        );
+    }
 }

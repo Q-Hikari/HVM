@@ -54,9 +54,7 @@ fn load_records(path: &Path) -> Vec<Value> {
         .collect()
 }
 
-fn parent_process_trace_config(
-    test_name: &str,
-) -> (hvm::config::EngineConfig, PathBuf, PathBuf) {
+fn parent_process_trace_config(test_name: &str) -> (hvm::config::EngineConfig, PathBuf, PathBuf) {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -369,14 +367,7 @@ fn create_remote_api_thread_translates_entry_and_stages_remote_parameter() {
             .unwrap(),
         dll_name
     );
-    assert_eq!(
-        thread
-            .registers
-            .get("eip")
-            .copied()
-            .or_else(|| thread.registers.get("rip").copied()),
-        Some(load_library_a)
-    );
+    assert_eq!(thread.registers.eip | thread.registers.rip, load_library_a);
 
     engine.flush_api_logs_for_test().unwrap();
 
@@ -749,6 +740,66 @@ fn modified_image_emits_exit_dump_when_hash_changes() {
     let bytes = fs::read(dump_path).unwrap();
     assert_eq!(bytes.len() as u64, capture_size);
     assert_eq!(&bytes[0x1000..0x1004], b"\xCC\xCC\xCC\xCC");
+}
+
+#[test]
+fn oversized_image_file_clamps_baseline_capture_to_mapped_image_size() {
+    let (mut config, trace_path, root) = trace_config("image-modified-dump-clamp");
+    let original_sample = config.main_module.clone();
+    let oversized_sample = root.join("oversized-main.exe");
+    let mut bytes = fs::read(&original_sample).unwrap();
+    bytes.extend(vec![0xA5; 0x4000]);
+    fs::write(&oversized_sample, &bytes).unwrap();
+
+    config.main_module = oversized_sample.clone();
+    config.allowed_read_dirs.push(root.clone());
+
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+    engine.capture_image_hash_baselines_for_test().unwrap();
+
+    let main_module = engine.main_module().unwrap().clone();
+    let oversized_file_size = fs::metadata(main_module.path.as_ref().unwrap())
+        .unwrap()
+        .len();
+    assert!(oversized_file_size > main_module.size);
+
+    engine
+        .write_test_bytes(main_module.base + 0x1000, b"\xCC\xCC\xCC\xCC")
+        .unwrap();
+    engine
+        .log_modified_image_dumps_for_test("test_exit")
+        .unwrap();
+    engine.flush_api_logs_for_test().unwrap();
+
+    let records = load_records(&trace_path);
+    let dump = records
+        .iter()
+        .find(|record| record.get("marker").and_then(Value::as_str) == Some("IMAGE_MODIFIED_DUMP"))
+        .unwrap();
+    assert_eq!(
+        dump.get("module_base").and_then(Value::as_u64),
+        Some(main_module.base)
+    );
+    assert_eq!(
+        dump.get("module_size").and_then(Value::as_u64),
+        Some(main_module.size)
+    );
+    assert_eq!(
+        dump.get("requested_size").and_then(Value::as_u64),
+        Some(main_module.size)
+    );
+    assert_eq!(
+        dump.get("captured_size").and_then(Value::as_u64),
+        Some(main_module.size)
+    );
+    assert_eq!(
+        dump.get("capture_size").and_then(Value::as_u64),
+        Some(main_module.size)
+    );
+    let dump_path = PathBuf::from(dump.get("dump_path").and_then(Value::as_str).unwrap());
+    let dumped_bytes = fs::read(dump_path).unwrap();
+    assert_eq!(dumped_bytes.len() as u64, main_module.size);
 }
 
 #[test]

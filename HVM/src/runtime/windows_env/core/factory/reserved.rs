@@ -1,10 +1,8 @@
-use crate::memory::manager::MemoryRegion;
-
 use super::*;
 
 impl WindowsProcessEnvironment {
-    /// Builds a process environment mirror using the already-reserved Python-compatible
-    /// memory footprint from the runtime memory manager.
+    /// Builds a process environment mirror using the already-reserved memory footprint
+    /// from the runtime memory manager.
     pub fn from_reserved(
         memory: &MemoryManager,
         arch: &'static ArchSpec,
@@ -54,8 +52,8 @@ impl WindowsProcessEnvironment {
     ) -> Result<u64, MemoryError> {
         memory
             .regions
-            .iter()
-            .find(|region: &&MemoryRegion| region.tag == tag)
+            .values()
+            .find(|region| region.tag == tag)
             .map(|region| region.base)
             .ok_or(MemoryError::MissingRegion {
                 address: 0,

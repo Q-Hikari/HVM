@@ -1,153 +1,36 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "psapi.dll",
-        "EnumProcesses",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "EnumProcessModules",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "EnumProcessModulesEx",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32EnumProcessModules",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32EnumProcessModulesEx",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetModuleBaseNameA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetModuleBaseNameW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32GetModuleBaseNameA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32GetModuleBaseNameW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetModuleFileNameExA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetModuleFileNameExW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32GetModuleFileNameExA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32GetModuleFileNameExW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetModuleInformation",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32GetModuleInformation",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetProcessImageFileNameA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetProcessImageFileNameW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetMappedFileNameA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetMappedFileNameW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "EmptyWorkingSet",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "psapi.dll",
-        "GetProcessMemoryInfo",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "kernel32.dll",
-        "K32GetProcessMemoryInfo",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS_PSAPI_DLL: &[(&str, LogicalAbi)] = &[
+    ("EnumProcesses", LogicalAbi::WinApi),
+    ("EnumProcessModules", LogicalAbi::WinApi),
+    ("EnumProcessModulesEx", LogicalAbi::WinApi),
+    ("GetModuleBaseNameA", LogicalAbi::WinApi),
+    ("GetModuleBaseNameW", LogicalAbi::WinApi),
+    ("GetModuleFileNameExA", LogicalAbi::WinApi),
+    ("GetModuleFileNameExW", LogicalAbi::WinApi),
+    ("GetModuleInformation", LogicalAbi::WinApi),
+    ("GetProcessImageFileNameA", LogicalAbi::WinApi),
+    ("GetProcessImageFileNameW", LogicalAbi::WinApi),
+    ("GetMappedFileNameA", LogicalAbi::WinApi),
+    ("GetMappedFileNameW", LogicalAbi::WinApi),
+    ("EmptyWorkingSet", LogicalAbi::WinApi),
+    ("GetProcessMemoryInfo", LogicalAbi::WinApi),
 ];
 
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct PsapiHookLibrary;
-
-impl HookLibrary for PsapiHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
+static FUNCTIONS_KERNEL32_DLL: &[(&str, LogicalAbi)] = &[
+    ("K32EnumProcessModules", LogicalAbi::WinApi),
+    ("K32EnumProcessModulesEx", LogicalAbi::WinApi),
+    ("K32GetModuleBaseNameA", LogicalAbi::WinApi),
+    ("K32GetModuleBaseNameW", LogicalAbi::WinApi),
+    ("K32GetModuleFileNameExA", LogicalAbi::WinApi),
+    ("K32GetModuleFileNameExW", LogicalAbi::WinApi),
+    ("K32GetModuleInformation", LogicalAbi::WinApi),
+    ("K32GetProcessMemoryInfo", LogicalAbi::WinApi),
+];
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_psapi_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&PsapiHookLibrary);
+    registry.register_function_stubs("psapi.dll", &FUNCTIONS_PSAPI_DLL);
+    registry.register_function_stubs("kernel32.dll", &FUNCTIONS_KERNEL32_DLL);
 }

@@ -1,3 +1,6 @@
+use crate::hooks::types::LogicalAbi;
+use crate::runtime::engine::abi::{post_return_stack_pointer, select_adapter};
+
 use super::*;
 
 impl VirtualExecutionEngine {
@@ -14,12 +17,17 @@ impl VirtualExecutionEngine {
         if timer_ids.is_empty() {
             return;
         }
-        if let Some(queue) = self.user32_state.thread_messages.get_mut(&thread_id) {
+        if let Some(queue) = self.ui.user32_state.thread_messages.get_mut(&thread_id) {
             queue.retain(|message| {
                 !(message.message == WM_TIMER && timer_ids.contains(&(message.w_param as u32)))
             });
         }
-        if let Some(queue) = self.user32_state.pending_hook_messages.get_mut(&thread_id) {
+        if let Some(queue) = self
+            .ui
+            .user32_state
+            .pending_hook_messages
+            .get_mut(&thread_id)
+        {
             queue.retain(|message| {
                 !(message.message == WM_TIMER && timer_ids.contains(&(message.w_param as u32)))
             });
@@ -31,8 +39,9 @@ impl VirtualExecutionEngine {
         thread_id: u32,
         max_messages: usize,
     ) -> usize {
-        let now_tick = self.time.current().tick_ms;
+        let now_tick = self.dispatch.time.current().tick_ms;
         let due_timers: Vec<User32TimerRecord> = self
+            .ui
             .user32_state
             .timers
             .values()
@@ -43,13 +52,14 @@ impl VirtualExecutionEngine {
         for timer in due_timers {
             let next_due_tick =
                 Self::user32_timer_next_due_tick(timer.next_due_tick, timer.elapse_ms, now_tick);
-            if let Some(live_timer) = self.user32_state.timers.get_mut(&timer.timer_id) {
+            if let Some(live_timer) = self.ui.user32_state.timers.get_mut(&timer.timer_id) {
                 live_timer.next_due_tick = next_due_tick;
             }
             if injected >= max_messages.max(1) {
                 continue;
             }
             let already_queued = self
+                .ui
                 .user32_state
                 .thread_messages
                 .get(&thread_id)
@@ -68,18 +78,22 @@ impl VirtualExecutionEngine {
                 timer.timer_id,
                 timer.callback,
             );
-            self.user32_state.synthetic_timer_messages =
-                self.user32_state.synthetic_timer_messages.saturating_add(1);
-            Self::user32_queue_message(&mut self.user32_state.thread_messages, message.clone());
-            Self::user32_queue_message(&mut self.user32_state.pending_hook_messages, message);
+            self.ui.user32_state.synthetic_timer_messages = self
+                .ui
+                .user32_state
+                .synthetic_timer_messages
+                .saturating_add(1);
+            Self::user32_queue_message(&mut self.ui.user32_state.thread_messages, message.clone());
+            Self::user32_queue_message(&mut self.ui.user32_state.pending_hook_messages, message);
             injected = injected.saturating_add(1);
         }
         injected
     }
 
     pub(super) fn user32_message_wait_delay_ms(&self, thread_id: u32) -> u32 {
-        let now_tick = self.time.current().tick_ms;
-        self.user32_state
+        let now_tick = self.dispatch.time.current().tick_ms;
+        self.ui
+            .user32_state
             .timers
             .values()
             .filter(|timer| timer.thread_id == thread_id)
@@ -100,13 +114,13 @@ impl VirtualExecutionEngine {
         if message.message != WM_TIMER || message.l_param == 0 {
             return Ok(0);
         }
-        if self.arch.is_x64() && unicorn_context_active() {
-            self.schedule_active_x64_user32_timer_callback(
+        if unicorn_context_active() {
+            self.schedule_active_user32_timer_callback(
                 message.l_param,
                 message.hwnd,
                 message.message,
                 message.w_param,
-                self.time.current().tick_ms,
+                self.dispatch.time.current().tick_ms,
             )?;
             return Ok(0);
         }
@@ -116,7 +130,7 @@ impl VirtualExecutionEngine {
                 message.hwnd,
                 message.message as u64,
                 message.w_param,
-                self.time.current().tick_ms,
+                self.dispatch.time.current().tick_ms,
             ],
         )
     }
@@ -128,18 +142,20 @@ impl VirtualExecutionEngine {
         elapse_ms: u32,
         callback: u64,
     ) -> Result<u64, VmError> {
-        let _profile = self.runtime_profiler.start_scope("user32.set_timer");
-        self.user32_state.set_timer_calls = self.user32_state.set_timer_calls.saturating_add(1);
+        let _profile = self.core.runtime_profiler.start_scope("user32.set_timer");
+        self.ui.user32_state.set_timer_calls =
+            self.ui.user32_state.set_timer_calls.saturating_add(1);
         let thread_id = self.user32_current_thread_id();
         let interval_ms = elapse_ms.max(1);
         let timer_id = if requested_id != 0 {
             requested_id
         } else {
-            let next = self.user32_state.next_timer_id.max(1);
-            self.user32_state.next_timer_id = self.user32_state.next_timer_id.saturating_add(1);
+            let next = self.ui.user32_state.next_timer_id.max(1);
+            self.ui.user32_state.next_timer_id =
+                self.ui.user32_state.next_timer_id.saturating_add(1);
             next
         };
-        self.user32_state.timers.insert(
+        self.ui.user32_state.timers.insert(
             timer_id,
             User32TimerRecord {
                 hwnd,
@@ -148,6 +164,7 @@ impl VirtualExecutionEngine {
                 callback,
                 thread_id,
                 next_due_tick: self
+                    .dispatch
                     .time
                     .current()
                     .tick_ms
@@ -159,9 +176,11 @@ impl VirtualExecutionEngine {
     }
 
     pub(super) fn user32_kill_timer(&mut self, hwnd: u32, timer_id: u32) -> bool {
-        self.user32_state.kill_timer_calls = self.user32_state.kill_timer_calls.saturating_add(1);
+        self.ui.user32_state.kill_timer_calls =
+            self.ui.user32_state.kill_timer_calls.saturating_add(1);
         let thread_id = self.user32_current_thread_id();
         let timer_ids: Vec<u32> = self
+            .ui
             .user32_state
             .timers
             .iter()
@@ -173,19 +192,20 @@ impl VirtualExecutionEngine {
             })
             .collect();
         for id in &timer_ids {
-            let _ = self.user32_state.timers.remove(id);
+            let _ = self.ui.user32_state.timers.remove(id);
         }
         self.user32_purge_timer_messages(thread_id, &timer_ids);
         !timer_ids.is_empty()
     }
 
     fn ensure_user32_timerproc_continue_stub(&mut self) -> u64 {
-        self.hooks
+        self.core
+            .hooks
             .binding_address("user32.dll", "__vm_timerproc_continue")
             .unwrap_or_else(|| self.bind_hook_for_test("user32.dll", "__vm_timerproc_continue"))
     }
 
-    pub(super) fn schedule_active_x64_user32_timer_callback(
+    pub(super) fn schedule_active_user32_timer_callback(
         &mut self,
         callback: u64,
         hwnd: u64,
@@ -196,86 +216,111 @@ impl VirtualExecutionEngine {
         let continuation = self.ensure_user32_timerproc_continue_stub();
         let (api_ptr, uc) = self.active_unicorn_api_and_handle()?;
         let api = unsafe { &*api_ptr };
-        let entry_rsp = unsafe { api.reg_read_raw(uc, UC_X86_REG_RSP) }.map_err(|detail| {
-            VmError::NativeExecution {
-                op: "uc_reg_read(rsp)",
+        let sp_reg = if self.core.arch.is_x64() {
+            UC_X86_REG_RSP
+        } else {
+            UC_X86_REG_ESP
+        };
+        let entry_rsp =
+            unsafe { api.reg_read_raw(uc, sp_reg) }.map_err(|detail| VmError::NativeExecution {
+                op: "uc_reg_read(sp)",
                 detail,
-            }
-        })?;
-        let return_address = unsafe { api.mem_read_raw(uc, entry_rsp, 8) }
-            .map_err(|detail| VmError::NativeExecution {
-                op: "uc_mem_read(stack)",
-                detail,
-            })
-            .map(|bytes| u64::from_le_bytes(bytes.try_into().unwrap()))?;
-        let resume_rsp = entry_rsp.checked_add(8).ok_or(VmError::RuntimeInvariant(
-            "user32 timer callback resume stack overflow",
-        ))?;
-        let call_rsp = entry_rsp
-            .checked_sub(0x28)
-            .ok_or(VmError::RuntimeInvariant(
-                "user32 timer callback stack underflow",
-            ))?;
-        let mut frame = [0u8; 0x28];
-        frame[..8].copy_from_slice(&continuation.to_le_bytes());
-        self.modules.memory_mut().write(call_rsp, &frame)?;
-        unsafe { api.mem_write_raw(uc, call_rsp, &frame) }.map_err(|detail| {
-            VmError::NativeExecution {
-                op: "uc_mem_write(user32_timerproc_continuation)",
-                detail,
-            }
-        })?;
-        for (regid, value, op) in [
-            (UC_X86_REG_RIP, callback, "uc_reg_write(rip)"),
-            (UC_X86_REG_RSP, call_rsp, "uc_reg_write(rsp)"),
-            (UC_X86_REG_RCX, hwnd, "uc_reg_write(rcx)"),
-            (UC_X86_REG_RDX, message as u64, "uc_reg_write(rdx)"),
-            (UC_X86_REG_R8, timer_id, "uc_reg_write(r8)"),
-            (UC_X86_REG_R9, timer_tick, "uc_reg_write(r9)"),
-        ] {
-            unsafe { api.reg_write_raw(uc, regid, value) }
-                .map_err(|detail| VmError::NativeExecution { op, detail })?;
-        }
-        self.pending_user32_timer_callbacks
+            })?;
+        let ptr_size = self.core.arch.pointer_size as u64;
+        let ra_bytes =
+            unsafe { api.mem_read_raw(uc, entry_rsp, ptr_size as usize) }.map_err(|detail| {
+                VmError::NativeExecution {
+                    op: "uc_mem_read(stack)",
+                    detail,
+                }
+            })?;
+        let return_address = if self.core.arch.is_x64() {
+            u64::from_le_bytes(ra_bytes.try_into().unwrap_or([0; 8]))
+        } else {
+            u32::from_le_bytes(ra_bytes[..4].try_into().unwrap_or([0; 4])) as u64
+        };
+        let resume_rsp =
+            post_return_stack_pointer(&self.core.arch, LogicalAbi::WinApi, 1, entry_rsp);
+
+        let args = [hwnd, message as u64, timer_id, timer_tick];
+        let adapter = select_adapter(&self.core.arch, &LogicalAbi::Callback);
+        let _prepared = {
+            let mut reg_read = |regid: i32| unsafe { api.reg_read_raw(uc, regid).map_err(|s| s) };
+            let mut reg_write = |regid: i32, value: u64| unsafe {
+                api.reg_write_raw(uc, regid, value).map_err(|s| s)
+            };
+            let mut mem_write = |addr: u64, data: &[u8]| unsafe {
+                api.mem_write_raw(uc, addr, data).map_err(|s| s)
+            };
+            adapter.prepare_callback_frame(
+                &self.core.arch,
+                callback,
+                continuation,
+                &args,
+                entry_rsp,
+                &mut reg_read,
+                &mut reg_write,
+                &mut mem_write,
+            )?
+        };
+
+        self.ui
+            .pending_user32_timer_callbacks
             .push(PendingUser32TimerCallback {
                 entry_rsp,
                 resume_rsp,
                 return_address,
             });
-        self.defer_api_return = true;
+        self.dispatch.request_resume_at_updated_pc();
         Ok(())
     }
 
-    fn complete_active_x64_user32_timer_callback(
+    fn complete_active_user32_timer_callback(
         &mut self,
         state: PendingUser32TimerCallback,
         retval: u64,
     ) -> Result<(), VmError> {
         let (api_ptr, uc) = self.active_unicorn_api_and_handle()?;
         let api = unsafe { &*api_ptr };
-        for (regid, value, op) in [
-            (UC_X86_REG_RAX, retval, "uc_reg_write(rax)"),
-            (UC_X86_REG_RSP, state.resume_rsp, "uc_reg_write(rsp)"),
-            (UC_X86_REG_RIP, state.return_address, "uc_reg_write(rip)"),
-        ] {
-            unsafe { api.reg_write_raw(uc, regid, value) }
-                .map_err(|detail| VmError::NativeExecution { op, detail })?;
+        let adapter = select_adapter(&self.core.arch, &LogicalAbi::Callback);
+        {
+            let mut reg_write = |regid: i32, value: u64| unsafe {
+                api.reg_write_raw(uc, regid, value).map_err(|s| s)
+            };
+            adapter.write_return_value(&self.core.arch, retval, &mut reg_write)?;
         }
-        self.defer_api_return = true;
+        let (sp_reg, pc_reg) = if self.core.arch.is_x64() {
+            (UC_X86_REG_RSP, UC_X86_REG_RIP)
+        } else {
+            (UC_X86_REG_ESP, UC_X86_REG_EIP)
+        };
+        unsafe { api.reg_write_raw(uc, sp_reg, state.resume_rsp) }.map_err(|detail| {
+            VmError::NativeExecution {
+                op: "uc_reg_write(sp)",
+                detail,
+            }
+        })?;
+        unsafe { api.reg_write_raw(uc, pc_reg, state.return_address) }.map_err(|detail| {
+            VmError::NativeExecution {
+                op: "uc_reg_write(pc)",
+                detail,
+            }
+        })?;
+        self.dispatch.request_resume_at_updated_pc();
         Ok(())
     }
 
     pub(super) fn resume_pending_user32_timer_callback(&mut self) -> Result<u64, VmError> {
-        let callback_result = if self.arch.is_x64() && unicorn_context_active() {
+        let callback_result = if unicorn_context_active() {
             self.active_unicorn_return_value()?
         } else {
             0
         };
-        let Some(state) = self.pending_user32_timer_callbacks.pop() else {
+        let Some(state) = self.ui.pending_user32_timer_callbacks.pop() else {
             return Ok(callback_result);
         };
-        if self.arch.is_x64() && unicorn_context_active() {
-            self.complete_active_x64_user32_timer_callback(state, callback_result)?;
+        if unicorn_context_active() {
+            self.complete_active_user32_timer_callback(state, callback_result)?;
         }
         Ok(callback_result)
     }

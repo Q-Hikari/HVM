@@ -6,9 +6,10 @@ impl VirtualExecutionEngine {
             return Ok(());
         }
         self.write_pointer_value(table, 0)?;
-        self.write_pointer_value(table + self.arch.pointer_size as u64, 0)?;
-        self.write_pointer_value(table + (self.arch.pointer_size as u64 * 2), 0)?;
-        self.msvcrt_onexit_tables
+        self.write_pointer_value(table + self.core.arch.pointer_size as u64, 0)?;
+        self.write_pointer_value(table + (self.core.arch.pointer_size as u64 * 2), 0)?;
+        self.crt
+            .msvcrt_onexit_tables
             .insert(table, MsvcrtOnExitTable::default());
         Ok(())
     }
@@ -21,22 +22,25 @@ impl VirtualExecutionEngine {
         if table == 0 {
             return Ok(u64::MAX);
         }
-        if !self.msvcrt_onexit_tables.contains_key(&table) {
+        if !self.crt.msvcrt_onexit_tables.contains_key(&table) {
             self.initialize_msvcrt_onexit_table(table)?;
         }
-        let pointer_size = self.arch.pointer_size as u64;
+        let pointer_size = self.core.arch.pointer_size as u64;
         let needs_storage = self
+            .crt
             .msvcrt_onexit_tables
             .get(&table)
             .map(|entry| entry.storage.is_none())
             .unwrap_or(true);
         if needs_storage {
             let storage =
-                self.modules
+                self.core
+                    .modules
                     .memory_mut()
                     .reserve(PAGE_SIZE, None, "msvcrt:onexit", true)?;
             let capacity = (PAGE_SIZE / pointer_size.max(1)) as usize;
             let entry = self
+                .crt
                 .msvcrt_onexit_tables
                 .get_mut(&table)
                 .ok_or(VmError::RuntimeInvariant("missing onexit table after init"))?;
@@ -44,6 +48,7 @@ impl VirtualExecutionEngine {
             entry.capacity = capacity.max(1);
         }
         let entry = self
+            .crt
             .msvcrt_onexit_tables
             .get_mut(&table)
             .ok_or(VmError::RuntimeInvariant("missing onexit table state"))?;
@@ -73,6 +78,7 @@ impl VirtualExecutionEngine {
             return Ok(0);
         }
         let functions = self
+            .crt
             .msvcrt_onexit_tables
             .remove(&table)
             .map(|mut entry| {

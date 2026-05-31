@@ -33,7 +33,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("setupapi.dll", "SetupDiGetClassDevsA") => true,
@@ -61,122 +61,120 @@ impl VirtualExecutionEngine {
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
                 ("setupapi.dll", "SetupDiGetClassDevsA") => self.setup_di_get_class_devs(
-                    arg(args, 0),
-                    &self.read_c_string_from_memory(arg(args, 1))?,
-                    arg(args, 3) as u32,
+                    ctx.raw(0),
+                    &self.read_c_string_from_memory(ctx.raw(1))?,
+                    ctx.raw(3) as u32,
                 ),
                 ("setupapi.dll", "SetupDiGetClassDevsW") => self.setup_di_get_class_devs(
-                    arg(args, 0),
-                    &self.read_wide_string_from_memory(arg(args, 1))?,
-                    arg(args, 3) as u32,
+                    ctx.raw(0),
+                    &self.read_wide_string_from_memory(ctx.raw(1))?,
+                    ctx.raw(3) as u32,
                 ),
                 ("setupapi.dll", "SetupDiDestroyDeviceInfoList") => {
-                    Ok(self.setup_di_destroy_device_info_list(arg(args, 0) as u32))
+                    Ok(self.setup_di_destroy_device_info_list(ctx.raw(0) as u32))
                 }
-                ("setupapi.dll", "SetupDiEnumDeviceInfo") => self.setup_di_enum_device_info(
-                    arg(args, 0) as u32,
-                    arg(args, 1) as u32,
-                    arg(args, 2),
-                ),
+                ("setupapi.dll", "SetupDiEnumDeviceInfo") => {
+                    self.setup_di_enum_device_info(ctx.raw(0) as u32, ctx.raw(1) as u32, ctx.raw(2))
+                }
                 ("setupapi.dll", "SetupDiGetDeviceRegistryPropertyA") => self
                     .setup_di_get_device_registry_property(
                         false,
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2) as u32,
-                        arg(args, 3),
-                        arg(args, 4),
-                        arg(args, 5) as usize,
-                        arg(args, 6),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1),
+                        ctx.raw(2) as u32,
+                        ctx.raw(3),
+                        ctx.raw(4),
+                        ctx.raw(5) as usize,
+                        ctx.raw(6),
                     ),
                 ("setupapi.dll", "SetupDiGetDeviceRegistryPropertyW") => self
                     .setup_di_get_device_registry_property(
                         true,
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2) as u32,
-                        arg(args, 3),
-                        arg(args, 4),
-                        arg(args, 5) as usize,
-                        arg(args, 6),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1),
+                        ctx.raw(2) as u32,
+                        ctx.raw(3),
+                        ctx.raw(4),
+                        ctx.raw(5) as usize,
+                        ctx.raw(6),
                     ),
                 ("setupapi.dll", "SetupDiGetDeviceInstanceIdA") => self
                     .setup_di_get_device_instance_id(
                         false,
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3) as usize,
-                        arg(args, 4),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1),
+                        ctx.raw(2),
+                        ctx.raw(3) as usize,
+                        ctx.raw(4),
                     ),
                 ("setupapi.dll", "SetupDiGetDeviceInstanceIdW") => self
                     .setup_di_get_device_instance_id(
                         true,
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3) as usize,
-                        arg(args, 4),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1),
+                        ctx.raw(2),
+                        ctx.raw(3) as usize,
+                        ctx.raw(4),
                     ),
                 ("setupapi.dll", "SetupDiOpenDevRegKey") => {
-                    self.setup_di_open_dev_reg_key(arg(args, 0) as u32, arg(args, 1))
+                    self.setup_di_open_dev_reg_key(ctx.raw(0) as u32, ctx.raw(1))
                 }
                 ("setupapi.dll", "SetupDiEnumDeviceInterfaces") => self
                     .setup_di_enum_device_interfaces(
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3) as u32,
-                        arg(args, 4),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1),
+                        ctx.raw(2),
+                        ctx.raw(3) as u32,
+                        ctx.raw(4),
                     ),
                 ("setupapi.dll", "SetupDiGetDeviceInterfaceDetailA") => self
                     .setup_di_get_device_interface_detail(
                         false,
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3) as usize,
-                        arg(args, 4),
-                        arg(args, 5),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1),
+                        ctx.raw(2),
+                        ctx.raw(3) as usize,
+                        ctx.raw(4),
+                        ctx.raw(5),
                     ),
                 ("setupapi.dll", "SetupDiGetDeviceInterfaceDetailW") => self
                     .setup_di_get_device_interface_detail(
                         true,
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3) as usize,
-                        arg(args, 4),
-                        arg(args, 5),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1),
+                        ctx.raw(2),
+                        ctx.raw(3) as usize,
+                        ctx.raw(4),
+                        ctx.raw(5),
                     ),
                 ("setupapi.dll", "SetupDiClassGuidsFromNameA") => self
                     .setup_di_class_guids_from_name(
-                        &self.read_c_string_from_memory(arg(args, 0))?,
-                        arg(args, 1),
-                        arg(args, 2) as usize,
-                        arg(args, 3),
+                        &self.read_c_string_from_memory(ctx.raw(0))?,
+                        ctx.raw(1),
+                        ctx.raw(2) as usize,
+                        ctx.raw(3),
                     ),
                 ("setupapi.dll", "SetupDiClassGuidsFromNameW") => self
                     .setup_di_class_guids_from_name(
-                        &self.read_wide_string_from_memory(arg(args, 0))?,
-                        arg(args, 1),
-                        arg(args, 2) as usize,
-                        arg(args, 3),
+                        &self.read_wide_string_from_memory(ctx.raw(0))?,
+                        ctx.raw(1),
+                        ctx.raw(2) as usize,
+                        ctx.raw(3),
                     ),
                 ("setupapi.dll", "SetupDiGetINFClassA") => self.setup_di_get_inf_class(
-                    &self.read_c_string_from_memory(arg(args, 0))?,
-                    arg(args, 1),
-                    arg(args, 2) as usize,
-                    arg(args, 3),
-                    arg(args, 4),
+                    &self.read_c_string_from_memory(ctx.raw(0))?,
+                    ctx.raw(1),
+                    ctx.raw(2) as usize,
+                    ctx.raw(3),
+                    ctx.raw(4),
                     false,
                 ),
                 ("setupapi.dll", "SetupDiGetINFClassW") => self.setup_di_get_inf_class(
-                    &self.read_wide_string_from_memory(arg(args, 0))?,
-                    arg(args, 1),
-                    arg(args, 2) as usize,
-                    arg(args, 3),
-                    arg(args, 4),
+                    &self.read_wide_string_from_memory(ctx.raw(0))?,
+                    ctx.raw(1),
+                    ctx.raw(2) as usize,
+                    ctx.raw(3),
+                    ctx.raw(4),
                     true,
                 ),
                 _ => unreachable!("prechecked extracted dispatch should always match"),
@@ -185,7 +183,7 @@ impl VirtualExecutionEngine {
     }
 
     fn setup_di_info_layout(&self) -> SetupDiInfoLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             SetupDiInfoLayout {
                 size: 28,
                 class_guid_offset: 4,
@@ -203,7 +201,7 @@ impl VirtualExecutionEngine {
     }
 
     fn setup_di_interface_detail_layout(&self, wide: bool) -> SetupDiInterfaceDetailLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             SetupDiInterfaceDetailLayout {
                 cb_size: if wide { 6 } else { 5 },
                 path_offset: 4,
@@ -230,14 +228,15 @@ impl VirtualExecutionEngine {
 
     fn setup_di_open_set(&mut self, devices: Vec<u32>) -> u64 {
         let handle = self.allocate_object_handle();
-        self.setup_device_sets
+        self.handles
+            .setup_device_sets
             .insert(handle, SetupDeviceInfoSetState { devices });
         self.set_last_error(ERROR_SUCCESS as u32);
         handle as u64
     }
 
     fn setup_di_get_set(&self, handle: u32) -> Option<&SetupDeviceInfoSetState> {
-        self.setup_device_sets.get(&handle)
+        self.handles.setup_device_sets.get(&handle)
     }
 
     fn setup_di_get_device(
@@ -247,7 +246,7 @@ impl VirtualExecutionEngine {
     ) -> Option<DeviceRecord> {
         let devinst = self.read_setup_di_devinst(devinfo_data_ptr).ok()?;
         self.setup_di_get_set(devinfo_handle)?;
-        self.devices.get(devinst).cloned()
+        self.dispatch.devices.get(devinst).cloned()
     }
 
     fn read_setup_di_devinst(&self, devinfo_data_ptr: u64) -> Result<u32, VmError> {
@@ -266,7 +265,8 @@ impl VirtualExecutionEngine {
         self.fill_memory_pattern(address, layout.size, 0)?;
         self.write_u32(address, layout.size as u32)?;
         if let Some(bytes) = parse_guid_string_le(class_guid) {
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .write(address + layout.class_guid_offset, &bytes)?;
         }
@@ -284,6 +284,7 @@ impl VirtualExecutionEngine {
         let class_guid = self.setup_di_filter_guid(class_guid_ptr)?;
         let present_only = flags & DIGCF_PRESENT != 0;
         let devices = self
+            .dispatch
             .devices
             .list_devices(&class_guid, enumerator, present_only)
             .into_iter()
@@ -293,7 +294,7 @@ impl VirtualExecutionEngine {
     }
 
     fn setup_di_destroy_device_info_list(&mut self, handle: u32) -> u64 {
-        let ok = self.setup_device_sets.remove(&handle).is_some();
+        let ok = self.handles.setup_device_sets.remove(&handle).is_some();
         self.set_last_error(if ok {
             ERROR_SUCCESS as u32
         } else {
@@ -320,7 +321,7 @@ impl VirtualExecutionEngine {
             self.set_last_error(ERROR_NO_MORE_ITEMS as u32);
             return Ok(0);
         };
-        let Some(device) = self.devices.get(devinst).cloned() else {
+        let Some(device) = self.dispatch.devices.get(devinst).cloned() else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
@@ -348,7 +349,10 @@ impl VirtualExecutionEngine {
             self.set_last_error(ERROR_INVALID_PARAMETER as u32);
             return Ok(0);
         };
-        let Some((value_type, data)) = self.devices.property_data(&device, property_key, wide)
+        let Some((value_type, data)) =
+            self.dispatch
+                .devices
+                .property_data(&device, property_key, wide)
         else {
             self.set_last_error(ERROR_INVALID_PARAMETER as u32);
             return Ok(0);
@@ -411,8 +415,17 @@ impl VirtualExecutionEngine {
             device.instance_id.replace('/', "\\")
         );
         let path = format!("HKEY_LOCAL_MACHINE\\{subkey}");
-        seed_device_registry_snapshot(&mut self.registry, &self.devices, &device, &path);
-        let Some(key) = self.registry.open_key(HKEY_LOCAL_MACHINE, &subkey, false) else {
+        seed_device_registry_snapshot(
+            &mut self.core.registry,
+            &self.dispatch.devices,
+            &device,
+            &path,
+        );
+        let Some(key) = self
+            .core
+            .registry
+            .open_key(HKEY_LOCAL_MACHINE, &subkey, false)
+        else {
             self.set_last_error(ERROR_FILE_NOT_FOUND as u32);
             return Ok(self.invalid_handle_value_for_arch());
         };
@@ -427,7 +440,7 @@ impl VirtualExecutionEngine {
         guid_capacity: usize,
         required_size_ptr: u64,
     ) -> Result<u64, VmError> {
-        let guids = self.devices.class_guids_from_name(class_name);
+        let guids = self.dispatch.devices.class_guids_from_name(class_name);
         if required_size_ptr != 0 {
             self.write_u32(required_size_ptr, guids.len().min(u32::MAX as usize) as u32)?;
         }
@@ -442,7 +455,8 @@ impl VirtualExecutionEngine {
         let writable = guid_capacity.min(guids.len());
         for (index, guid) in guids.iter().take(writable).enumerate() {
             if let Some(bytes) = parse_guid_string_le(guid) {
-                self.modules
+                self.core
+                    .modules
                     .memory_mut()
                     .write(guid_list_ptr + index as u64 * 16, &bytes)?;
             }
@@ -460,10 +474,13 @@ impl VirtualExecutionEngine {
         class_guid_ptr: u64,
         wide: bool,
     ) -> Result<u64, VmError> {
-        let (class_name, class_guid) = infer_setup_class(&self.devices, inf_path);
+        let (class_name, class_guid) = infer_setup_class(&self.dispatch.devices, inf_path);
         if class_guid_ptr != 0 {
             if let Some(bytes) = parse_guid_string_le(&class_guid) {
-                self.modules.memory_mut().write(class_guid_ptr, &bytes)?;
+                self.core
+                    .modules
+                    .memory_mut()
+                    .write(class_guid_ptr, &bytes)?;
             }
         }
         let required_chars = if wide {
@@ -518,7 +535,7 @@ impl VirtualExecutionEngine {
             self.set_last_error(ERROR_NO_MORE_ITEMS as u32);
             return Ok(0);
         };
-        let Some(device) = self.devices.get(devinst).cloned() else {
+        let Some(device) = self.dispatch.devices.get(devinst).cloned() else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
@@ -558,11 +575,11 @@ impl VirtualExecutionEngine {
         };
         let layout = self.setup_di_info_layout();
         let devinst = self.read_pointer_value(interface_data_ptr + layout.reserved_offset)? as u32;
-        let Some(device) = self.devices.get(devinst).cloned() else {
+        let Some(device) = self.dispatch.devices.get(devinst).cloned() else {
             self.set_last_error(ERROR_INVALID_PARAMETER as u32);
             return Ok(0);
         };
-        let path = self.devices.device_path(&device);
+        let path = self.dispatch.devices.device_path(&device);
         let detail_layout = self.setup_di_interface_detail_layout(wide);
         let string_bytes = if wide {
             wide_storage_size(&path)
@@ -619,7 +636,7 @@ impl VirtualExecutionEngine {
             self.set_last_error(ERROR_INSUFFICIENT_BUFFER as u32);
             return Ok(0);
         }
-        self.modules.memory_mut().write(buffer, data)?;
+        self.core.modules.memory_mut().write(buffer, data)?;
         self.set_last_error(ERROR_SUCCESS as u32);
         Ok(1)
     }

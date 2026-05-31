@@ -24,7 +24,7 @@ impl VirtualExecutionEngine {
         let lookup = self.lookup_x64_runtime_function_entry(control_pc)?;
         let module_base = lookup.as_ref().map(|entry| entry.image_base).unwrap_or(0);
         if image_base_ptr != 0 {
-            if self.arch.is_x86() {
+            if self.core.arch.is_x86() {
                 self.write_u32(image_base_ptr, module_base as u32)?;
             } else {
                 self.write_pointer_value(image_base_ptr, module_base)?;
@@ -41,12 +41,13 @@ impl VirtualExecutionEngine {
         module_base_ptr: u64,
     ) -> Result<u64, VmError> {
         let module_base = self
+            .core
             .modules
             .get_by_address(pc_value)
             .map(|module| module.base)
             .unwrap_or(0);
         if module_base_ptr != 0 {
-            if self.arch.is_x86() {
+            if self.core.arch.is_x86() {
                 self.write_u32(module_base_ptr, module_base as u32)?;
             } else {
                 self.write_pointer_value(module_base_ptr, module_base)?;

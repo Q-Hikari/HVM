@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use crate::environment_profile::ServiceProfile;
 use crate::managers::handle_table::HandleTable;
@@ -19,12 +19,12 @@ pub struct ServiceHandle {
 #[derive(Debug)]
 pub struct ServiceManager {
     handles: HandleTable,
-    inventory: BTreeMap<String, ServiceProfile>,
+    inventory: HashMap<String, ServiceProfile>,
 }
 
 impl ServiceManager {
     pub fn new(handles: HandleTable, services: Vec<ServiceProfile>) -> Self {
-        let mut inventory = BTreeMap::new();
+        let mut inventory = HashMap::new();
         for service in services {
             if service.name.trim().is_empty() {
                 continue;
@@ -60,6 +60,30 @@ impl ServiceManager {
         }
         let key = service_name.to_ascii_lowercase();
         let service_name = self.inventory.get(&key)?.name.clone();
+        Some(self.handles.allocate(
+            "service",
+            ServiceHandle {
+                service_name,
+                access,
+            },
+        ))
+    }
+
+    pub fn create_service(
+        &mut self,
+        manager_handle: u32,
+        service: ServiceProfile,
+        access: u32,
+    ) -> Option<u32> {
+        if !self.is_manager_handle(manager_handle) {
+            return None;
+        }
+        let key = service.name.to_ascii_lowercase();
+        if self.inventory.contains_key(&key) {
+            return Some(0);
+        }
+        let service_name = service.name.clone();
+        self.inventory.insert(key, service);
         Some(self.handles.allocate(
             "service",
             ServiceHandle {

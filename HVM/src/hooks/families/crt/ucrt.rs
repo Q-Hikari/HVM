@@ -1,151 +1,69 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "api-ms-win-crt-runtime-l1-1-0.dll",
-        "_configure_narrow_argv",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "isalnum",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "isalpha",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "isspace",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "strncat_s",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "strncpy",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "strncpy_s",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "tolower",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "wcsncat_s",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-string-l1-1-0.dll",
-        "wcsncpy_s",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-filesystem-l1-1-0.dll",
-        "_wchmod",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-math-l1-1-0.dll",
-        "pow",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-time-l1-1-0.dll",
-        "_gmtime64_s",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-time-l1-1-0.dll",
-        "_localtime64_s",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "__stdio_common_vsnprintf_s",
-        7,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "__stdio_common_vsnwprintf_s",
-        7,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "__stdio_common_vsscanf",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "fclose",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "fopen",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "fread",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "fseek",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "api-ms-win-crt-stdio-l1-1-0.dll",
-        "ftell",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
+static FUNCTIONS_API_MS_WIN_CRT_RUNTIME_L1_1_0_DLL: &[(&str, LogicalAbi)] = &[
+    ("_configure_narrow_argv", LogicalAbi::Cdecl),
+    ("_configure_wide_argv", LogicalAbi::Cdecl),
 ];
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct UcrtHookLibrary;
+static FUNCTIONS_API_MS_WIN_CRT_STRING_L1_1_0_DLL: &[(&str, LogicalAbi)] = &[
+    ("isalnum", LogicalAbi::Cdecl),
+    ("isalpha", LogicalAbi::Cdecl),
+    ("isspace", LogicalAbi::Cdecl),
+    ("strncat_s", LogicalAbi::Cdecl),
+    ("strncpy", LogicalAbi::Cdecl),
+    ("strncpy_s", LogicalAbi::Cdecl),
+    ("tolower", LogicalAbi::Cdecl),
+    ("wcsncat_s", LogicalAbi::Cdecl),
+    ("wcsncpy_s", LogicalAbi::Cdecl),
+];
 
-impl HookLibrary for UcrtHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
+static FUNCTIONS_API_MS_WIN_CRT_FILESYSTEM_L1_1_0_DLL: &[(&str, LogicalAbi)] =
+    &[("_wchmod", LogicalAbi::Cdecl)];
+
+static FUNCTIONS_API_MS_WIN_CRT_MATH_L1_1_0_DLL: &[(&str, LogicalAbi)] =
+    &[("pow", LogicalAbi::Cdecl)];
+
+static FUNCTIONS_API_MS_WIN_CRT_TIME_L1_1_0_DLL: &[(&str, LogicalAbi)] = &[
+    ("_gmtime64_s", LogicalAbi::Cdecl),
+    ("_localtime64_s", LogicalAbi::Cdecl),
+];
+
+static FUNCTIONS_API_MS_WIN_CRT_STDIO_L1_1_0_DLL: &[(&str, LogicalAbi)] = &[
+    ("_set_fmode", LogicalAbi::Cdecl),
+    ("__stdio_common_vsnprintf_s", LogicalAbi::Cdecl),
+    ("__stdio_common_vsnwprintf_s", LogicalAbi::Cdecl),
+    ("__stdio_common_vsscanf", LogicalAbi::Cdecl),
+    ("fclose", LogicalAbi::Cdecl),
+    ("fopen", LogicalAbi::Cdecl),
+    ("fread", LogicalAbi::Cdecl),
+    ("fseek", LogicalAbi::Cdecl),
+    ("ftell", LogicalAbi::Cdecl),
+];
 
 pub fn register_ucrt_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&UcrtHookLibrary);
+    registry.register_function_stubs(
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        &FUNCTIONS_API_MS_WIN_CRT_RUNTIME_L1_1_0_DLL,
+    );
+    registry.register_function_stubs(
+        "api-ms-win-crt-string-l1-1-0.dll",
+        &FUNCTIONS_API_MS_WIN_CRT_STRING_L1_1_0_DLL,
+    );
+    registry.register_function_stubs(
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        &FUNCTIONS_API_MS_WIN_CRT_FILESYSTEM_L1_1_0_DLL,
+    );
+    registry.register_function_stubs(
+        "api-ms-win-crt-math-l1-1-0.dll",
+        &FUNCTIONS_API_MS_WIN_CRT_MATH_L1_1_0_DLL,
+    );
+    registry.register_function_stubs(
+        "api-ms-win-crt-time-l1-1-0.dll",
+        &FUNCTIONS_API_MS_WIN_CRT_TIME_L1_1_0_DLL,
+    );
+    registry.register_function_stubs(
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        &FUNCTIONS_API_MS_WIN_CRT_STDIO_L1_1_0_DLL,
+    );
 }

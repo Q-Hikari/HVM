@@ -27,7 +27,7 @@ impl VirtualExecutionEngine {
     }
 
     fn user32_wndclassex_layout(&self) -> (u64, u64, u64) {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             (8, 20, 40)
         } else {
             (8, 24, 64)
@@ -43,11 +43,12 @@ impl VirtualExecutionEngine {
             return Ok(None);
         }
         if let Some(atom) = Self::user32_identifier_atom(identifier) {
-            if let Some(key) = self.user32_state.class_atoms.get(&atom) {
-                return Ok(self.user32_state.registered_classes.get(key).cloned());
+            if let Some(key) = self.ui.user32_state.class_atoms.get(&atom) {
+                return Ok(self.ui.user32_state.registered_classes.get(key).cloned());
             }
-            if let Some(name) = self.global_atoms.get(&atom) {
+            if let Some(name) = self.objects.global_atoms.get(&atom) {
                 return Ok(self
+                    .ui
                     .user32_state
                     .registered_classes
                     .get(&Self::user32_class_key(name))
@@ -59,6 +60,7 @@ impl VirtualExecutionEngine {
             return Ok(None);
         };
         Ok(self
+            .ui
             .user32_state
             .registered_classes
             .get(&Self::user32_class_key(&name))
@@ -67,13 +69,59 @@ impl VirtualExecutionEngine {
 
     fn user32_allocate_created_window_handle(&mut self) -> u32 {
         if let Some(handle) = self
+            .ui
             .user32_state
             .active_window
-            .filter(|handle| !self.user32_state.windows.contains_key(handle))
+            .filter(|handle| !self.ui.user32_state.windows.contains_key(handle))
         {
             return handle;
         }
         self.allocate_object_handle()
+    }
+
+    fn user32_text_matches(candidate: &str, expected: &str) -> bool {
+        candidate == expected
+            || (candidate.is_ascii()
+                && expected.is_ascii()
+                && candidate.eq_ignore_ascii_case(expected))
+            || (!candidate.is_ascii()
+                && !expected.is_ascii()
+                && candidate.to_lowercase() == expected.to_lowercase())
+    }
+
+    pub(super) fn user32_find_window(
+        &mut self,
+        class_identifier: u64,
+        window_name_ptr: u64,
+        wide: bool,
+    ) -> Result<u64, VmError> {
+        let class_name =
+            if let Some(class) = self.user32_resolve_registered_class(class_identifier, wide)? {
+                Some(class.class_name)
+            } else {
+                self.user32_read_text_identifier(class_identifier, wide)?
+            };
+        let window_name = self.user32_read_text_identifier(window_name_ptr, wide)?;
+        if class_identifier == 0 && window_name_ptr == 0 {
+            return Ok(self.user32_window_handle("active") as u64);
+        }
+
+        let handle = self
+            .ui
+            .user32_state
+            .windows
+            .values()
+            .filter(|record| record.parent == 0)
+            .find(|record| {
+                class_name.as_ref().map_or(true, |expected| {
+                    Self::user32_text_matches(&record.class_name, expected)
+                }) && window_name.as_ref().map_or(true, |expected| {
+                    Self::user32_text_matches(&record.title, expected)
+                })
+            })
+            .map(|record| record.handle)
+            .unwrap_or(0);
+        Ok(handle as u64)
     }
 
     pub(super) fn user32_register_class_ex(
@@ -94,15 +142,15 @@ impl VirtualExecutionEngine {
             return Ok(0);
         };
         let key = Self::user32_class_key(&class_name);
-        let atom = if let Some(existing) = self.user32_state.registered_classes.get(&key) {
+        let atom = if let Some(existing) = self.ui.user32_state.registered_classes.get(&key) {
             existing.atom
         } else {
-            let next = self.user32_state.next_class_atom.max(1);
-            self.user32_state.next_class_atom = next.saturating_add(1).max(1);
+            let next = self.ui.user32_state.next_class_atom.max(1);
+            self.ui.user32_state.next_class_atom = next.saturating_add(1).max(1);
             next
         };
-        self.user32_state.class_atoms.insert(atom, key.clone());
-        self.user32_state.registered_classes.insert(
+        self.ui.user32_state.class_atoms.insert(atom, key.clone());
+        self.ui.user32_state.registered_classes.insert(
             key,
             User32ClassRecord {
                 atom,
@@ -139,7 +187,7 @@ impl VirtualExecutionEngine {
         let handle = self.user32_allocate_created_window_handle();
         let parent_handle = (parent & 0xFFFF_FFFF) as u32;
         let owner_thread = self.user32_current_thread_id();
-        self.user32_state.windows.insert(
+        self.ui.user32_state.windows.insert(
             handle,
             User32WindowRecord {
                 handle,
@@ -157,27 +205,70 @@ impl VirtualExecutionEngine {
                     .unwrap_or(instance),
             },
         );
-        self.user32_state.active_window = Some(handle);
-        if self.user32_state.desktop_window.is_none() {
-            self.user32_state.desktop_window = Some(handle);
+        self.ui.user32_state.active_window = Some(handle);
+        if self.ui.user32_state.desktop_window.is_none() {
+            self.ui.user32_state.desktop_window = Some(handle);
         }
-        if self.user32_state.shell_window.is_none() {
-            self.user32_state.shell_window = Some(handle);
+        if self.ui.user32_state.shell_window.is_none() {
+            self.ui.user32_state.shell_window = Some(handle);
         }
         self.set_last_error(ERROR_SUCCESS as u32);
         Ok(handle as u64)
     }
 
     pub(super) fn user32_parent_handle(&self, hwnd: u32) -> u32 {
-        self.user32_state
+        self.ui
+            .user32_state
             .windows
             .get(&hwnd)
             .map(|record| record.parent)
             .unwrap_or(0)
     }
 
+    pub(super) fn user32_get_window_thread_process_id(
+        &mut self,
+        hwnd: u32,
+        process_id_ptr: u64,
+    ) -> Result<u64, VmError> {
+        let thread_id = self
+            .ui
+            .user32_state
+            .windows
+            .get(&hwnd)
+            .and_then(|record| {
+                (record.owner_thread != 0)
+                    .then_some(record.owner_thread)
+                    .or_else(|| Some(self.user32_current_thread_id().max(1)))
+            })
+            .or_else(|| {
+                (Some(hwnd) == self.ui.user32_state.active_window
+                    || Some(hwnd) == self.ui.user32_state.desktop_window
+                    || Some(hwnd) == self.ui.user32_state.shell_window)
+                    .then(|| self.user32_current_thread_id().max(1))
+            })
+            .unwrap_or(0);
+
+        if process_id_ptr != 0 {
+            let process_id = if thread_id != 0 {
+                self.current_process_id()
+            } else {
+                0
+            };
+            self.write_u32(process_id_ptr, process_id)?;
+        }
+
+        if thread_id == 0 {
+            self.set_last_error(ERROR_INVALID_PARAMETER as u32);
+            return Ok(0);
+        }
+
+        self.set_last_error(ERROR_SUCCESS as u32);
+        Ok(thread_id as u64)
+    }
+
     pub(in crate::runtime::engine) fn user32_window_proc(&self, hwnd: u32) -> u64 {
-        self.user32_state
+        self.ui
+            .user32_state
             .windows
             .get(&hwnd)
             .map(|record| record.wnd_proc)
@@ -187,54 +278,55 @@ impl VirtualExecutionEngine {
     pub(super) fn user32_window_handle(&mut self, kind: &'static str) -> u32 {
         let handle = match kind {
             "desktop" => {
-                if let Some(handle) = self.user32_state.desktop_window {
+                if let Some(handle) = self.ui.user32_state.desktop_window {
                     return handle;
                 }
                 let handle = self.allocate_object_handle();
-                self.user32_state.desktop_window = Some(handle);
+                self.ui.user32_state.desktop_window = Some(handle);
                 handle
             }
             "active" => {
-                if let Some(handle) = self.user32_state.active_window {
+                if let Some(handle) = self.ui.user32_state.active_window {
                     return handle;
                 }
                 let handle = self.allocate_object_handle();
-                self.user32_state.active_window = Some(handle);
+                self.ui.user32_state.active_window = Some(handle);
                 handle
             }
             "shell" => {
-                if let Some(handle) = self.user32_state.shell_window {
+                if let Some(handle) = self.ui.user32_state.shell_window {
                     return handle;
                 }
                 let handle = self.allocate_object_handle();
-                self.user32_state.shell_window = Some(handle);
+                self.ui.user32_state.shell_window = Some(handle);
                 handle
             }
             _ => {
-                if let Some(handle) = self.user32_state.desktop_window {
+                if let Some(handle) = self.ui.user32_state.desktop_window {
                     return handle;
                 }
                 let handle = self.allocate_object_handle();
-                self.user32_state.desktop_window = Some(handle);
+                self.ui.user32_state.desktop_window = Some(handle);
                 handle
             }
         };
-        if self.user32_state.desktop_window.is_none() {
-            self.user32_state.desktop_window = Some(handle);
+        if self.ui.user32_state.desktop_window.is_none() {
+            self.ui.user32_state.desktop_window = Some(handle);
         }
-        if self.user32_state.active_window.is_none() {
-            self.user32_state.active_window = Some(handle);
+        if self.ui.user32_state.active_window.is_none() {
+            self.ui.user32_state.active_window = Some(handle);
         }
-        if self.user32_state.shell_window.is_none() {
-            self.user32_state.shell_window = Some(handle);
+        if self.ui.user32_state.shell_window.is_none() {
+            self.ui.user32_state.shell_window = Some(handle);
         }
         handle
     }
 
     pub(in crate::runtime::engine) fn user32_close_object_handle(&mut self, handle: u32) -> bool {
-        let mut closed = self.user32_state.hooks.remove(&handle).is_some();
-        closed |= self.user32_state.windows.remove(&handle).is_some();
+        let mut closed = self.ui.user32_state.hooks.remove(&handle).is_some();
+        closed |= self.ui.user32_state.windows.remove(&handle).is_some();
         let timer_ids: Vec<u32> = self
+            .ui
             .user32_state
             .timers
             .iter()
@@ -243,7 +335,7 @@ impl VirtualExecutionEngine {
             })
             .collect();
         let mut timer_threads: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-        for (timer_id, timer) in &self.user32_state.timers {
+        for (timer_id, timer) in &self.ui.user32_state.timers {
             if (timer.hwnd == handle) || (*timer_id == handle) {
                 timer_threads
                     .entry(timer.thread_id)
@@ -252,56 +344,56 @@ impl VirtualExecutionEngine {
             }
         }
         for timer_id in timer_ids {
-            closed |= self.user32_state.timers.remove(&timer_id).is_some();
+            closed |= self.ui.user32_state.timers.remove(&timer_id).is_some();
         }
         for (thread_id, timer_ids) in timer_threads {
             self.user32_purge_timer_messages(thread_id, &timer_ids);
         }
-        if self.user32_state.active_window == Some(handle) {
-            self.user32_state.active_window = None;
+        if self.ui.user32_state.active_window == Some(handle) {
+            self.ui.user32_state.active_window = None;
         }
-        if self.user32_state.desktop_window == Some(handle) {
-            self.user32_state.desktop_window = None;
+        if self.ui.user32_state.desktop_window == Some(handle) {
+            self.ui.user32_state.desktop_window = None;
         }
-        if self.user32_state.shell_window == Some(handle) {
-            self.user32_state.shell_window = None;
+        if self.ui.user32_state.shell_window == Some(handle) {
+            self.ui.user32_state.shell_window = None;
         }
         closed
     }
 
     pub(super) fn user32_dc_handle(&mut self) -> u32 {
-        if let Some(handle) = self.user32_state.default_dc {
+        if let Some(handle) = self.ui.user32_state.default_dc {
             return handle;
         }
         let handle = self.allocate_object_handle();
-        self.user32_state.default_dc = Some(handle);
+        self.ui.user32_state.default_dc = Some(handle);
         handle
     }
 
     pub(super) fn user32_icon_handle(&mut self, resource: u64) -> u32 {
-        if let Some(existing_handle) = self.user32_state.default_icon {
+        if let Some(existing_handle) = self.ui.user32_state.default_icon {
             return existing_handle.saturating_add(resource as u32);
         }
         let base_handle: u32 = self.allocate_object_handle();
-        self.user32_state.default_icon = Some(base_handle);
+        self.ui.user32_state.default_icon = Some(base_handle);
         base_handle.saturating_add(resource as u32)
     }
 
     pub(super) fn user32_cursor_handle(&mut self, resource: u64) -> u32 {
-        if let Some(existing_handle) = self.user32_state.default_cursor {
+        if let Some(existing_handle) = self.ui.user32_state.default_cursor {
             return existing_handle.saturating_add(resource as u32);
         }
         let base_handle: u32 = self.allocate_object_handle();
-        self.user32_state.default_cursor = Some(base_handle);
+        self.ui.user32_state.default_cursor = Some(base_handle);
         base_handle.saturating_add(resource as u32)
     }
 
     pub(super) fn user32_cursor_position(&self) -> (i32, i32) {
-        (self.user32_state.cursor_x, self.user32_state.cursor_y)
+        (self.ui.user32_state.cursor_x, self.ui.user32_state.cursor_y)
     }
 
     pub(super) fn user32_message_pos(&mut self) -> u32 {
-        let state = &mut self.user32_state;
+        let state = &mut self.ui.user32_state;
         let packed = ((state.message_y as u16 as u32) << 16) | (state.message_x as u16 as u32);
         let width = state.screen_width.max(1);
         let height = state.screen_height.max(1);

@@ -1,6 +1,7 @@
-use crate::hooks::base::{CallConv, HookDefinition, HookLibrary};
 use crate::hooks::registry::HookRegistry;
+use crate::hooks::types::LogicalAbi;
 
+#[allow(dead_code)]
 const EXPORTS: &[&str] = &[
     "??0?$basic_ios@DU?$char_traits@D@std@@@std@@IEAA@XZ",
     "??0?$basic_iostream@DU?$char_traits@D@std@@@std@@QEAA@PEAV?$basic_streambuf@DU?$char_traits@D@std@@@1@@Z",
@@ -87,23 +88,8 @@ const EXPORTS: &[&str] = &[
     "_Xtime_get_ticks",
 ];
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Msvcp140HookLibrary;
-
-impl HookLibrary for Msvcp140HookLibrary {
-    fn collect(&self) -> Vec<HookDefinition> {
-        EXPORTS
-            .iter()
-            .map(|function| HookDefinition {
-                module: "msvcp140.dll",
-                function,
-                argc: 0,
-                call_conv: CallConv::Win64,
-            })
-            .collect()
-    }
-}
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[];
 
 pub fn register_msvcp140_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&Msvcp140HookLibrary);
+    registry.register_function_stubs("msvcp140.dll", &FUNCTIONS);
 }

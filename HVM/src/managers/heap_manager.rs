@@ -31,7 +31,7 @@ pub struct HeapRecord {
     free_ranges: BTreeMap<u64, u64>,
 }
 
-/// Mirrors the Python heap manager over the shared emulated memory manager.
+/// Manages emulated heaps backed by the shared memory manager.
 #[derive(Debug)]
 pub struct HeapManager {
     process_heap: u32,
@@ -60,13 +60,23 @@ impl HeapManager {
         self.heaps.keys().copied().collect()
     }
 
-    /// Creates a new heap and initializes the same header fields as the Python baseline.
+    /// Creates a new heap and initializes its header fields.
     pub fn create_heap(&mut self, memory: &mut MemoryManager) -> Result<u32, MemoryError> {
         let base = memory.reserve(PAGE_SIZE, None, "heap", false)?;
         let mut header = vec![0u8; PAGE_SIZE as usize];
+        // Internal engine offsets
         let (flags_offset, force_flags_offset) = (0x0Cusize, 0x10usize);
         header[flags_offset..flags_offset + 4].copy_from_slice(&HEAP_GROWABLE.to_le_bytes());
         header[force_flags_offset..force_flags_offset + 4].copy_from_slice(&0u32.to_le_bytes());
+        // Standard Windows x64 heap header offsets for anti-debug bypass:
+        // Malware reads Heap+0x70 (Flags) and Heap+0x74 (ForceFlags)
+        // Normal process: Flags=HEAP_GROWABLE(2), ForceFlags=0
+        // Debugged process: Flags=0x50000062, ForceFlags=0x40000060
+        header[0x70..0x74].copy_from_slice(&HEAP_GROWABLE.to_le_bytes());
+        header[0x74..0x78].copy_from_slice(&0u32.to_le_bytes());
+        // x86 compatibility: Heap+0x40 (Flags), Heap+0x44 (ForceFlags)
+        header[0x40..0x44].copy_from_slice(&HEAP_GROWABLE.to_le_bytes());
+        header[0x44..0x48].copy_from_slice(&0u32.to_le_bytes());
         memory.write(base, &header)?;
 
         let handle = base as u32;

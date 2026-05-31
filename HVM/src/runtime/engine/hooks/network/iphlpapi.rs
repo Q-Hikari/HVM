@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("iphlpapi.dll", "GetBestInterface") => true,
@@ -23,23 +23,23 @@ impl VirtualExecutionEngine {
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
                 ("iphlpapi.dll", "GetBestInterface") => {
-                    let _ = arg(args, 0);
-                    self.iphlpapi_get_best_interface(arg(args, 1))
+                    let _ = ctx.raw(0);
+                    self.iphlpapi_get_best_interface(ctx.raw(1))
                 }
                 ("iphlpapi.dll", "GetNumberOfInterfaces") => {
-                    self.iphlpapi_get_number_of_interfaces(arg(args, 0))
+                    self.iphlpapi_get_number_of_interfaces(ctx.raw(0))
                 }
                 ("iphlpapi.dll", "GetFriendlyIfIndex") => {
-                    Ok(self.iphlpapi_get_friendly_if_index(arg(args, 0) as u32))
+                    Ok(self.iphlpapi_get_friendly_if_index(ctx.raw(0) as u32))
                 }
                 ("iphlpapi.dll", "GetAdaptersInfo") => {
-                    self.iphlpapi_get_adapters_info(arg(args, 0), arg(args, 1))
+                    self.iphlpapi_get_adapters_info(ctx.raw(0), ctx.raw(1))
                 }
                 ("iphlpapi.dll", "GetNetworkParams") => {
-                    self.iphlpapi_get_network_params(arg(args, 0), arg(args, 1))
+                    self.iphlpapi_get_network_params(ctx.raw(0), ctx.raw(1))
                 }
                 ("iphlpapi.dll", "GetAdaptersAddresses") => {
-                    self.iphlpapi_get_adapters_addresses(arg(args, 0), arg(args, 3), arg(args, 4))
+                    self.iphlpapi_get_adapters_addresses(ctx.raw(0), ctx.raw(3), ctx.raw(4))
                 }
                 _ => unreachable!("prechecked extracted dispatch should always match"),
             }

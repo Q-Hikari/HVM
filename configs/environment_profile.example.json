@@ -50,7 +50,19 @@
     "message_y": 31,
     "message_step_x": 0,
     "message_step_y": 0,
-    "remote_session": false
+    "double_click_time_ms": 500,
+    "caret_blink_time_ms": 530,
+    "remote_session": false,
+    "windows": [
+      {
+        "handle": 1064960,
+        "class_name": "SandboxieControlWndClass",
+        "title": "Sandboxie Control",
+        "parent_handle": 0,
+        "owner_thread_id": 0,
+        "instance": 0
+      }
+    ]
   },
   "volume": {
     "root_path": "C:\\",

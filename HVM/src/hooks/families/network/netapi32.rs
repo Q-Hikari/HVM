@@ -1,249 +1,52 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "netapi32.dll",
-        "Netbios",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetApiBufferFree",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetGetJoinInformation",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetGetDCName",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetGetAnyDCName",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetWkstaGetInfo",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUserEnum",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUserGetInfo",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetGroupEnum",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetGroupGetInfo",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUserGetGroups",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetGroupGetUsers",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUseEnum",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUseAdd",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUseDel",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUseGetInfo",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetFileEnum",
-        9,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetFileGetInfo",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetFileClose",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetConnectionEnum",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetShareCheck",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetRemoteTOD",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetShareEnum",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetShareGetInfo",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetSessionEnum",
-        9,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetWkstaUserEnum",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetLocalGroupEnum",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetUserGetLocalGroups",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetLocalGroupGetMembers",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetLocalGroupGetInfo",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetServerGetInfo",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "NetServerEnum",
-        9,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "DsRoleGetPrimaryDomainInformation",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "DsGetDcNameA",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "DsGetDcNameW",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "DsEnumerateDomainTrustsA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "DsEnumerateDomainTrustsW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "netapi32.dll",
-        "DsRoleFreeMemory",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("Netbios", LogicalAbi::WinApi),
+    ("NetApiBufferFree", LogicalAbi::WinApi),
+    ("NetGetJoinInformation", LogicalAbi::WinApi),
+    ("NetGetDCName", LogicalAbi::WinApi),
+    ("NetGetAnyDCName", LogicalAbi::WinApi),
+    ("NetWkstaGetInfo", LogicalAbi::WinApi),
+    ("NetUserEnum", LogicalAbi::WinApi),
+    ("NetUserGetInfo", LogicalAbi::WinApi),
+    ("NetUserAdd", LogicalAbi::WinApi),
+    ("NetUserSetInfo", LogicalAbi::WinApi),
+    ("NetGroupEnum", LogicalAbi::WinApi),
+    ("NetGroupGetInfo", LogicalAbi::WinApi),
+    ("NetUserGetGroups", LogicalAbi::WinApi),
+    ("NetGroupGetUsers", LogicalAbi::WinApi),
+    ("NetUseEnum", LogicalAbi::WinApi),
+    ("NetUseAdd", LogicalAbi::WinApi),
+    ("NetUseDel", LogicalAbi::WinApi),
+    ("NetUseGetInfo", LogicalAbi::WinApi),
+    ("NetFileEnum", LogicalAbi::WinApi),
+    ("NetFileGetInfo", LogicalAbi::WinApi),
+    ("NetFileClose", LogicalAbi::WinApi),
+    ("NetConnectionEnum", LogicalAbi::WinApi),
+    ("NetShareCheck", LogicalAbi::WinApi),
+    ("NetRemoteTOD", LogicalAbi::WinApi),
+    ("NetShareEnum", LogicalAbi::WinApi),
+    ("NetShareGetInfo", LogicalAbi::WinApi),
+    ("NetSessionEnum", LogicalAbi::WinApi),
+    ("NetWkstaUserEnum", LogicalAbi::WinApi),
+    ("NetLocalGroupEnum", LogicalAbi::WinApi),
+    ("NetUserGetLocalGroups", LogicalAbi::WinApi),
+    ("NetLocalGroupGetMembers", LogicalAbi::WinApi),
+    ("NetLocalGroupAddMembers", LogicalAbi::WinApi),
+    ("NetLocalGroupDelMembers", LogicalAbi::WinApi),
+    ("NetLocalGroupGetInfo", LogicalAbi::WinApi),
+    ("NetServerGetInfo", LogicalAbi::WinApi),
+    ("NetServerEnum", LogicalAbi::WinApi),
+    ("DsRoleGetPrimaryDomainInformation", LogicalAbi::WinApi),
+    ("DsGetDcNameA", LogicalAbi::WinApi),
+    ("DsGetDcNameW", LogicalAbi::WinApi),
+    ("DsEnumerateDomainTrustsA", LogicalAbi::WinApi),
+    ("DsEnumerateDomainTrustsW", LogicalAbi::WinApi),
+    ("DsRoleFreeMemory", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Netapi32HookLibrary;
-
-impl HookLibrary for Netapi32HookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_netapi32_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&Netapi32HookLibrary);
+    registry.register_function_stubs("netapi32.dll", &FUNCTIONS);
 }

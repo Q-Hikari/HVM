@@ -1,0 +1,688 @@
+{
+  "main_module": "MAIN_MODULE_PLACEHOLDER",
+  "sandbox_output_dir": "SANDBOX_PLACEHOLDER",
+  "process_image": "MAIN_MODULE_PLACEHOLDER",
+  "command_line": "COMMAND_LINE_PLACEHOLDER",
+  "parent_process_image": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "parent_process_pid": 7824,
+  "parent_process_command_line": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=utility",
+  "entry_module": null,
+  "entry_export": null,
+  "entry_ordinal": null,
+  "entry_args": [],
+  "module_search_paths": [
+    "Sample",
+    "system_dll/SysWOW64",
+    "system_dll",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "module_directory_x86": "system_dll/SysWOW64",
+  "modules_always_exist": true,
+  "functions_always_exist": true,
+  "whitelist_modules": [],
+  "preload_modules": [],
+  "volumes": [],
+  "auto_mount_module_dirs": true,
+  "allowed_read_dirs": [
+    "Sample",
+    "system_dll/SysWOW64",
+    "system_dll",
+    "C:/Windows/System32",
+    "C:/Windows/SysWOW64"
+  ],
+  "blocked_read_dirs": [
+    "C:/Users"
+  ],
+  "hidden_device_paths": [],
+  "hidden_registry_keys": [],
+  "http_response_rules": [
+    {
+      "host": "google.com",
+      "path": "/",
+      "verb": "GET",
+      "status_code": 200,
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "text/html"
+        },
+        {
+          "name": "Server",
+          "value": "nginx"
+        }
+      ],
+      "body": "<html><body><h1>OK</h1></body></html>"
+    }
+  ],
+  "interception_rules": {
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "value_name": null,
+        "action": "return_data",
+        "string": "C:\\Windows\\System32\\SecurityHealthSystray.exe"
+      }
+    ],
+    "files": [],
+    "system": [
+      {
+        "query": "GetSystemInfo.numberOfProcessors",
+        "value": 4
+      }
+    ]
+  },
+  "max_instructions": 500000000,
+  "stack_reserve_size": null,
+  "observation_checkpoints": [],
+  "trace_api_calls": true,
+  "trace_native_events": false,
+  "api_log_to_console": false,
+  "api_log_path": null,
+  "api_jsonl_path": "",
+  "api_human_log_path": "HUMAN_LOG_PLACEHOLDER",
+  "api_log_include_return": true,
+  "api_log_include_context": true,
+  "api_log_stack_words": 6,
+  "api_log_string_limit": 65536,
+  "console_output_to_console": false,
+  "console_output_path": "CONSOLE_LOG_PLACEHOLDER",
+  "unknown_api_policy": "log_zero",
+  "environment_profile": null,
+  "environment_overrides": {
+    "machine": {
+      "computer_name": "DESKTOP-QA8F2N7",
+      "user_name": "liming",
+      "user_domain": "WORKGROUP",
+      "dns_domain_name": "",
+      "forest_name": "",
+      "domain_controller": "",
+      "domain_guid": "",
+      "machine_guid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "process_id": 18432,
+      "image_path": "F:\\sample.exe",
+      "parent_process_id": 7824,
+      "parent_image_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "parent_command_line": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=utility",
+      "system_root": "C:\\Windows",
+      "system32": "C:\\Windows\\System32",
+      "temp_dir": "C:\\Users\\liming\\AppData\\Local\\Temp",
+      "current_directory": "F:\\",
+      "command_line": "F:\\sample.exe"
+    },
+    "os_version": {
+      "major": 10,
+      "minor": 0,
+      "build": 19044,
+      "platform_id": 2,
+      "suite_mask": 0,
+      "product_type": 1,
+      "service_pack_major": 0,
+      "service_pack_minor": 0,
+      "csd_version": "",
+      "product_name": "Windows 10 Pro",
+      "product_id": "00330-80000-00000-AAOEM",
+      "build_lab_ex": "19041.1.x86fre.vb_release.191206-1406"
+    },
+    "locale": {
+      "acp": 936,
+      "oemcp": 936,
+      "console_cp": 65001,
+      "console_output_cp": 65001,
+      "user_default_lcid": 2052,
+      "thread_locale": 1033,
+      "system_default_ui_language": 2052,
+      "user_default_ui_language": 2052
+    },
+    "display": {
+      "desktop_window_handle": 65552,
+      "active_window_handle": 65556,
+      "shell_window_handle": 65560,
+      "default_dc_handle": 1179648,
+      "screen_width": 1920,
+      "screen_height": 1080,
+      "cursor_x": 512,
+      "cursor_y": 384,
+      "message_x": 512,
+      "message_y": 384,
+      "message_step_x": 0,
+      "message_step_y": 0,
+      "double_click_time_ms": 500,
+      "caret_blink_time_ms": 530,
+      "remote_session": false,
+      "windows": [
+        {
+          "handle": 65552,
+          "class_name": "Shell_TrayWnd",
+          "title": "",
+          "parent_handle": 0,
+          "owner_thread_id": 0,
+          "instance": 0
+        },
+        {
+          "handle": 65556,
+          "class_name": "Progman",
+          "title": "Program Manager",
+          "parent_handle": 0,
+          "owner_thread_id": 0,
+          "instance": 0
+        },
+        {
+          "handle": 65560,
+          "class_name": "Edit",
+          "title": "Microsoft Windows",
+          "parent_handle": 0,
+          "owner_thread_id": 0,
+          "instance": 0
+        }
+      ]
+    },
+    "volume": {
+      "root_path": "C:\\",
+      "volume_name": "OSDisk",
+      "serial": 287454020,
+      "max_component_length": 255,
+      "flags": 459007,
+      "fs_name": "NTFS",
+      "drive_type": 3,
+      "physical_drive_count": 1,
+      "total_bytes": 512110190592,
+      "free_bytes": 214748364800,
+      "available_bytes": 171798691840,
+      "volume_guid": "\\\\?\\Volume{b2c3d4e5-6789-0123-cdef-234567890123}\\"
+    },
+    "shell_folders": {
+      "profile": "C:\\Users\\liming",
+      "desktop": "C:\\Users\\liming\\Desktop",
+      "app_data": "C:\\Users\\liming\\AppData\\Roaming",
+      "local_app_data": "C:\\Users\\liming\\AppData\\Local",
+      "program_data": "C:\\ProgramData",
+      "startup": "C:\\Users\\liming\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+      "personal": "C:\\Users\\liming\\Documents",
+      "public": "C:\\Users\\Public",
+      "program_files": "C:\\Program Files",
+      "program_files_x86": "C:\\Program Files (x86)",
+      "common_files": "C:\\Program Files\\Common Files",
+      "common_files_x86": "C:\\Program Files (x86)\\Common Files",
+      "common_startup": "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+      "common_desktop": "C:\\Users\\Public\\Desktop"
+    },
+    "network": {
+      "host_name": "DESKTOP-QA8F2N7",
+      "domain_name": "",
+      "dns_suffix": "",
+      "dns_servers": [
+        "192.168.0.1",
+        "223.5.5.5"
+      ],
+      "node_type": 1,
+      "scope_id": "",
+      "enable_routing": false,
+      "enable_proxy": false,
+      "enable_dns": true,
+      "adapters": [
+        {
+          "name": "{C3D4E5F6-A7B8-9012-CDEF-345678901234}",
+          "description": "Intel(R) Ethernet Connection (7) I219-V",
+          "friendly_name": "Ethernet",
+          "dns_suffix": "",
+          "if_index": 7,
+          "adapter_type": 6,
+          "mac_address": "40:8D:5C:3A:7B:9E",
+          "mtu": 1500,
+          "oper_status": 1,
+          "ipv4_addresses": [
+            {
+              "address": "192.168.0.108",
+              "netmask": "255.255.255.0"
+            }
+          ],
+          "gateways": [
+            "192.168.0.1"
+          ],
+          "dns_servers": [
+            "192.168.0.1",
+            "223.5.5.5"
+          ],
+          "dhcp_enabled": true,
+          "dhcp_server": "192.168.0.1"
+        }
+      ]
+    },
+    "environment_variables": [
+      {
+        "name": "APPDATA",
+        "value": "C:\\Users\\liming\\AppData\\Roaming"
+      },
+      {
+        "name": "COMSPEC",
+        "value": "C:\\Windows\\System32\\cmd.exe"
+      },
+      {
+        "name": "HOMEDRIVE",
+        "value": "C:"
+      },
+      {
+        "name": "HOMEPATH",
+        "value": "\\Users\\liming"
+      },
+      {
+        "name": "OS",
+        "value": "Windows_NT"
+      },
+      {
+        "name": "PATH",
+        "value": "C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+      },
+      {
+        "name": "PROCESSOR_ARCHITECTURE",
+        "value": "x86"
+      },
+      {
+        "name": "PROCESSOR_IDENTIFIER",
+        "value": "x86 Family 6 Model 158 Stepping 10, GenuineIntel"
+      },
+      {
+        "name": "PROCESSOR_LEVEL",
+        "value": "6"
+      },
+      {
+        "name": "PROCESSOR_REVISION",
+        "value": "9e0a"
+      },
+      {
+        "name": "SystemRoot",
+        "value": "C:\\Windows"
+      },
+      {
+        "name": "TEMP",
+        "value": "C:\\Users\\liming\\AppData\\Local\\Temp"
+      },
+      {
+        "name": "TMP",
+        "value": "C:\\Users\\liming\\AppData\\Local\\Temp"
+      },
+      {
+        "name": "USERNAME",
+        "value": "liming"
+      },
+      {
+        "name": "USERPROFILE",
+        "value": "C:\\Users\\liming"
+      }
+    ],
+    "processes": [
+      {
+        "pid": 4,
+        "parent_pid": 0,
+        "image_path": "C:\\Windows\\System32\\ntoskrnl.exe",
+        "command_line": "",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 512,
+        "parent_pid": 4,
+        "image_path": "C:\\Windows\\System32\\csrss.exe",
+        "command_line": "",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 648,
+        "parent_pid": 4,
+        "image_path": "C:\\Windows\\System32\\services.exe",
+        "command_line": "",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 712,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\svchost.exe",
+        "command_line": "svchost.exe -k DcomLaunch",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 780,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\svchost.exe",
+        "command_line": "svchost.exe -k RPCSS",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 864,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\svchost.exe",
+        "command_line": "svchost.exe -k netsvcs",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 1012,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\svchost.exe",
+        "command_line": "svchost.exe -k LocalService",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 1088,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\svchost.exe",
+        "command_line": "svchost.exe -k NetworkService",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 1560,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\sihost.exe",
+        "command_line": "",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 1724,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\taskhostw.exe",
+        "command_line": "",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 2480,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\dllhost.exe",
+        "command_line": "",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 3540,
+        "parent_pid": 864,
+        "image_path": "C:\\Program Files\\Windows Defender\\MsMpEng.exe",
+        "command_line": "",
+        "current_directory": "C:\\Program Files\\Windows Defender"
+      },
+      {
+        "pid": 4012,
+        "parent_pid": 648,
+        "image_path": "C:\\Windows\\System32\\SearchIndexer.exe",
+        "command_line": "",
+        "current_directory": "C:\\Windows\\System32"
+      },
+      {
+        "pid": 5248,
+        "parent_pid": 4624,
+        "image_path": "C:\\Windows\\explorer.exe",
+        "command_line": "explorer.exe",
+        "current_directory": "C:\\Users\\liming"
+      },
+      {
+        "pid": 7824,
+        "parent_pid": 5248,
+        "image_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "command_line": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\"",
+        "current_directory": "C:\\Users\\liming"
+      },
+      {
+        "pid": 8400,
+        "parent_pid": 7824,
+        "image_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "command_line": "chrome.exe --type=utility",
+        "current_directory": "C:\\Users\\liming"
+      }
+    ],
+    "users": [
+      {
+        "name": "liming",
+        "full_name": "Li Ming",
+        "comment": "Normal user",
+        "flags": 66049,
+        "privilege_level": 1,
+        "home_dir": "C:\\Users\\liming",
+        "rid": 1001
+      },
+      {
+        "name": "Administrator",
+        "full_name": "",
+        "comment": "Built-in account for administering the computer/domain",
+        "flags": 66049,
+        "privilege_level": 2,
+        "home_dir": "C:\\Users\\Administrator",
+        "rid": 500
+      },
+      {
+        "name": "DefaultAccount",
+        "full_name": "",
+        "comment": "A user account managed by the system.",
+        "flags": 66081,
+        "privilege_level": 0,
+        "home_dir": "C:\\Users\\Default",
+        "rid": 503
+      },
+      {
+        "name": "Guest",
+        "full_name": "",
+        "comment": "Built-in account for guest access",
+        "flags": 66081,
+        "privilege_level": 0,
+        "home_dir": "C:\\Users\\Guest",
+        "rid": 501
+      },
+      {
+        "name": "WDAGUtilityAccount",
+        "full_name": "",
+        "comment": "A user account managed and used by the system for Windows Defender Application Guard scenarios.",
+        "flags": 66081,
+        "privilege_level": 1,
+        "home_dir": "C:\\Users\\WDAGUtilityAccount",
+        "rid": 504
+      }
+    ],
+    "local_groups": [
+      {
+        "name": "Administrators",
+        "comment": "Administrators have complete and unrestricted access",
+        "domain": "BUILTIN",
+        "rid": 544,
+        "members": [
+          "liming",
+          "Administrator"
+        ]
+      },
+      {
+        "name": "Users",
+        "comment": "Users are prevented from making accidental or intentional system-wide changes",
+        "domain": "BUILTIN",
+        "rid": 545,
+        "members": [
+          "liming"
+        ]
+      },
+      {
+        "name": "Guests",
+        "comment": "Guests have the same access as members of the Users group",
+        "domain": "BUILTIN",
+        "rid": 546,
+        "members": [
+          "Guest"
+        ]
+      },
+      {
+        "name": "Remote Desktop Users",
+        "comment": "Members are granted the right to log on remotely",
+        "domain": "BUILTIN",
+        "rid": 555,
+        "members": [
+          "liming"
+        ]
+      }
+    ],
+    "shares": [],
+    "network_uses": [],
+    "workstation_users": [],
+    "network_sessions": [],
+    "open_files": [],
+    "services": [
+      {
+        "name": "BITS",
+        "display_name": "Background Intelligent Transfer Service",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 1088,
+        "binary_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+        "description": "Transfers files in the background using idle network bandwidth."
+      },
+      {
+        "name": "CryptSvc",
+        "display_name": "Cryptographic Services",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 1088,
+        "binary_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+        "description": "Provides management services for trusted root certificates."
+      },
+      {
+        "name": "Dnscache",
+        "display_name": "DNS Client",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 1088,
+        "binary_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+        "description": "Caches DNS names and registers the full computer name."
+      },
+      {
+        "name": "EventLog",
+        "display_name": "Windows Event Log",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 1012,
+        "binary_path": "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted",
+        "description": "Manages events and event logs."
+      },
+      {
+        "name": "LanmanServer",
+        "display_name": "Server",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 864,
+        "binary_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+        "description": "Supports file, print, and named-pipe sharing."
+      },
+      {
+        "name": "LanmanWorkstation",
+        "display_name": "Workstation",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 1088,
+        "binary_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+        "description": "Creates and maintains client network connections."
+      },
+      {
+        "name": "Spooler",
+        "display_name": "Print Spooler",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 2480,
+        "binary_path": "%SystemRoot%\\System32\\spoolsv.exe",
+        "description": "Manages all local and network print queues."
+      },
+      {
+        "name": "WinDefend",
+        "display_name": "Microsoft Defender Antivirus Service",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 3540,
+        "binary_path": "%ProgramFiles%\\Windows Defender\\MsMpEng.exe",
+        "description": "Helps protect users from malware and other potentially unwanted software.",
+        "required_privileges": [
+          "SeChangeNotifyPrivilege",
+          "SeImpersonatePrivilege"
+        ]
+      },
+      {
+        "name": "wuauserv",
+        "display_name": "Windows Update",
+        "service_type": 32,
+        "start_type": 2,
+        "current_state": 4,
+        "process_id": 864,
+        "binary_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+        "description": "Enables the detection, download, and installation of updates.",
+        "delayed_auto_start": true
+      }
+    ],
+    "registry": {
+      "keys": [
+        {
+          "path": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+          "values": [
+            {
+              "name": "ProductName",
+              "value_type": 1,
+              "string": "Windows 10 Pro"
+            },
+            {
+              "name": "CurrentBuild",
+              "value_type": 1,
+              "string": "19044"
+            },
+            {
+              "name": "CurrentVersion",
+              "value_type": 1,
+              "string": "10.0"
+            },
+            {
+              "name": "ProductId",
+              "value_type": 1,
+              "string": "00330-80000-00000-AAOEM"
+            },
+            {
+              "name": "BuildLabEx",
+              "value_type": 1,
+              "string": "19041.1.x86fre.vb_release.191206-1406"
+            },
+            {
+              "name": "EditionID",
+              "value_type": 1,
+              "string": "Professional"
+            },
+            {
+              "name": "InstallationType",
+              "value_type": 1,
+              "string": "Client"
+            },
+            {
+              "name": "UBR",
+              "value_type": 4,
+              "dword": 2006
+            }
+          ]
+        },
+        {
+          "path": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography",
+          "values": [
+            {
+              "name": "MachineGuid",
+              "value_type": 1,
+              "string": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+            }
+          ]
+        },
+        {
+          "path": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName",
+          "values": [
+            {
+              "name": "ComputerName",
+              "value_type": 1,
+              "string": "DESKTOP-QA8F2N7"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "module_directory_x64": null,
+  "exit_on_unsupported_hook": true
+}

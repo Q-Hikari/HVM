@@ -1,255 +1,49 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "wldap32.dll",
-        "ldap_openA",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_openW",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_initA",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_initW",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_sslinitA",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_sslinitW",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_connect",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_bindA",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_bindW",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_bind_sA",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_bind_sW",
-        4,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_simple_bind_sA",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_simple_bind_sW",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_searchA",
-        6,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_searchW",
-        6,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_search_sA",
-        7,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_search_sW",
-        7,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_result",
-        5,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_first_entry",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_next_entry",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_count_entries",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_get_dnA",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_get_dnW",
-        2,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_get_valuesA",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_get_valuesW",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_get_values_lenA",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_get_values_lenW",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_count_valuesA",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_count_valuesW",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_count_values_len",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_value_freeA",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_value_freeW",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_value_free_len",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_msgfree",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_memfree",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_get_option",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_set_option",
-        3,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_unbind",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
-    (
-        "wldap32.dll",
-        "ldap_unbind_s",
-        1,
-        crate::hooks::base::CallConv::Cdecl,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("ldap_openA", LogicalAbi::Cdecl),
+    ("ldap_openW", LogicalAbi::Cdecl),
+    ("ldap_initA", LogicalAbi::Cdecl),
+    ("ldap_initW", LogicalAbi::Cdecl),
+    ("ldap_sslinitA", LogicalAbi::Cdecl),
+    ("ldap_sslinitW", LogicalAbi::Cdecl),
+    ("ldap_connect", LogicalAbi::Cdecl),
+    ("ldap_bindA", LogicalAbi::Cdecl),
+    ("ldap_bindW", LogicalAbi::Cdecl),
+    ("ldap_bind_sA", LogicalAbi::Cdecl),
+    ("ldap_bind_sW", LogicalAbi::Cdecl),
+    ("ldap_simple_bind_sA", LogicalAbi::Cdecl),
+    ("ldap_simple_bind_sW", LogicalAbi::Cdecl),
+    ("ldap_searchA", LogicalAbi::Cdecl),
+    ("ldap_searchW", LogicalAbi::Cdecl),
+    ("ldap_search_sA", LogicalAbi::Cdecl),
+    ("ldap_search_sW", LogicalAbi::Cdecl),
+    ("ldap_result", LogicalAbi::Cdecl),
+    ("ldap_first_entry", LogicalAbi::Cdecl),
+    ("ldap_next_entry", LogicalAbi::Cdecl),
+    ("ldap_count_entries", LogicalAbi::Cdecl),
+    ("ldap_get_dnA", LogicalAbi::Cdecl),
+    ("ldap_get_dnW", LogicalAbi::Cdecl),
+    ("ldap_get_valuesA", LogicalAbi::Cdecl),
+    ("ldap_get_valuesW", LogicalAbi::Cdecl),
+    ("ldap_get_values_lenA", LogicalAbi::Cdecl),
+    ("ldap_get_values_lenW", LogicalAbi::Cdecl),
+    ("ldap_count_valuesA", LogicalAbi::Cdecl),
+    ("ldap_count_valuesW", LogicalAbi::Cdecl),
+    ("ldap_count_values_len", LogicalAbi::Cdecl),
+    ("ldap_value_freeA", LogicalAbi::Cdecl),
+    ("ldap_value_freeW", LogicalAbi::Cdecl),
+    ("ldap_value_free_len", LogicalAbi::Cdecl),
+    ("ldap_msgfree", LogicalAbi::Cdecl),
+    ("ldap_memfree", LogicalAbi::Cdecl),
+    ("ldap_get_option", LogicalAbi::Cdecl),
+    ("ldap_set_option", LogicalAbi::Cdecl),
+    ("ldap_unbind", LogicalAbi::Cdecl),
+    ("ldap_unbind_s", LogicalAbi::Cdecl),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Wldap32HookLibrary;
-
-impl HookLibrary for Wldap32HookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_wldap32_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&Wldap32HookLibrary);
+    registry.register_function_stubs("wldap32.dll", &FUNCTIONS);
 }

@@ -1,7 +1,7 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 use crate::managers::handle_table::HandleTable;
-use crate::runtime::thread_context::ThreadContext;
+use crate::runtime::thread_context::{RegisterFile, ThreadContext};
 use crate::runtime::windows_env::WindowsProcessEnvironment;
 
 /// Returned when a waited object is signaled.
@@ -42,10 +42,11 @@ pub struct ThreadRecord {
     pub state: &'static str,
     pub exit_code: Option<u32>,
     pub exit_address: u64,
-    pub registers: BTreeMap<String, u64>,
+    pub registers: RegisterFile,
     pub instruction_count: u64,
     pub wake_tick: u64,
     pub wait_result: Option<u32>,
+    pub store_wait_result: bool,
     pub wait_handles: Vec<u32>,
     pub wait_all: bool,
     pub alertable_wait: bool,
@@ -74,8 +75,8 @@ pub struct ThreadScheduler {
     next_tid: u32,
     handles: HandleTable,
     ready_queue: VecDeque<u32>,
-    threads: BTreeMap<u32, ThreadRecord>,
-    objects: BTreeMap<u32, DispatcherObject>,
+    threads: HashMap<u32, ThreadRecord>,
+    objects: HashMap<u32, DispatcherObject>,
     main_tid: Option<u32>,
     current_tid: Option<u32>,
     time_slice_instructions: u64,
@@ -83,14 +84,14 @@ pub struct ThreadScheduler {
 }
 
 impl ThreadScheduler {
-    /// Builds a test-only scheduler with the same base IDs as the Python runtime.
+    /// Builds a test-only scheduler with default base IDs.
     pub fn for_tests() -> Self {
         Self {
             next_tid: 0x1001,
             handles: HandleTable::new(0x8000),
             ready_queue: VecDeque::new(),
-            threads: BTreeMap::new(),
-            objects: BTreeMap::new(),
+            threads: HashMap::new(),
+            objects: HashMap::new(),
             main_tid: None,
             current_tid: None,
             time_slice_instructions: 4_000,
@@ -121,10 +122,11 @@ impl ThreadScheduler {
             state,
             exit_code: None,
             exit_address: 0,
-            registers: BTreeMap::new(),
+            registers: RegisterFile::new(),
             instruction_count: 0,
             wake_tick: 0,
             wait_result: None,
+            store_wait_result: false,
             wait_handles: Vec::new(),
             wait_all: false,
             alertable_wait: false,
@@ -178,6 +180,26 @@ impl ThreadScheduler {
         self.threads.get(&tid).cloned()
     }
 
+    /// Returns a reference to a thread record without cloning.
+    pub fn thread_ref(&self, tid: u32) -> Option<&ThreadRecord> {
+        self.threads.get(&tid)
+    }
+
+    /// Returns a mutable reference to a thread record.
+    pub fn thread_ref_mut(&mut self, tid: u32) -> Option<&mut ThreadRecord> {
+        self.threads.get_mut(&tid)
+    }
+
+    /// Returns the start address for a thread without cloning the full record.
+    pub fn thread_start_address(&self, tid: u32) -> Option<u64> {
+        self.threads.get(&tid).map(|t| t.start_address)
+    }
+
+    /// Returns a copy of the register file for a thread without cloning the rest.
+    pub fn thread_registers(&self, tid: u32) -> Option<RegisterFile> {
+        self.threads.get(&tid).map(|t| t.registers)
+    }
+
     /// Returns cloned snapshots for all currently tracked threads.
     pub fn thread_snapshots(&self) -> Vec<ThreadRecord> {
         self.threads.values().cloned().collect()
@@ -223,6 +245,30 @@ impl ThreadScheduler {
             .any(|thread| thread.state != "terminated")
     }
 
+    /// Returns whether at least one runnable thread is already queued.
+    pub fn has_ready_threads(&self) -> bool {
+        self.ready_queue.iter().any(|tid| {
+            self.threads
+                .get(tid)
+                .map(|thread| thread.state == "ready")
+                .unwrap_or(false)
+        })
+    }
+
+    /// Returns runnable thread identifiers currently queued in scheduler order.
+    pub fn ready_thread_ids(&self) -> Vec<u32> {
+        self.ready_queue
+            .iter()
+            .copied()
+            .filter(|tid| {
+                self.threads
+                    .get(tid)
+                    .map(|thread| thread.state == "ready")
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
+
     /// Dequeues the next runnable thread and marks it as current.
     pub fn next_ready_thread(&mut self) -> Option<ThreadRecord> {
         while let Some(tid) = self.ready_queue.pop_front() {
@@ -233,6 +279,20 @@ impl ThreadScheduler {
             thread.state = "running";
             self.current_tid = Some(tid);
             return Some(thread.clone());
+        }
+        None
+    }
+
+    /// Dequeues the next runnable thread and returns only its TID, avoiding a full clone.
+    pub fn next_ready_tid(&mut self) -> Option<u32> {
+        while let Some(tid) = self.ready_queue.pop_front() {
+            let thread = self.threads.get_mut(&tid)?;
+            if thread.state != "ready" {
+                continue;
+            }
+            thread.state = "running";
+            self.current_tid = Some(tid);
+            return Some(tid);
         }
         None
     }
@@ -264,11 +324,12 @@ impl ThreadScheduler {
         thread.stack_limit = thread_context.stack_limit;
         thread.stack_top = stack_top;
         thread.exit_address = exit_address;
-        thread.registers = BTreeMap::from([
-            ("eip".to_string(), thread.start_address),
-            ("esp".to_string(), stack_pointer),
-            ("eflags".to_string(), 0x202),
-        ]);
+        thread.registers = RegisterFile {
+            eip: thread.start_address,
+            esp: stack_pointer,
+            eflags: 0x202,
+            ..RegisterFile::new()
+        };
         Some(())
     }
 
@@ -287,26 +348,13 @@ impl ThreadScheduler {
         thread.stack_limit = thread_context.stack_limit;
         thread.stack_top = stack_top;
         thread.exit_address = exit_address;
-        thread.registers = BTreeMap::from([
-            ("rax".to_string(), 0),
-            ("rbx".to_string(), 0),
-            ("rcx".to_string(), thread.parameter),
-            ("rdx".to_string(), 0),
-            ("rsi".to_string(), 0),
-            ("rdi".to_string(), 0),
-            ("rbp".to_string(), 0),
-            ("rsp".to_string(), stack_pointer),
-            ("rip".to_string(), thread.start_address),
-            ("r8".to_string(), 0),
-            ("r9".to_string(), 0),
-            ("r10".to_string(), 0),
-            ("r11".to_string(), 0),
-            ("r12".to_string(), 0),
-            ("r13".to_string(), 0),
-            ("r14".to_string(), 0),
-            ("r15".to_string(), 0),
-            ("rflags".to_string(), 0x202),
-        ]);
+        thread.registers = RegisterFile {
+            rcx: thread.parameter,
+            rsp: stack_pointer,
+            rip: thread.start_address,
+            rflags: 0x202,
+            ..RegisterFile::new()
+        };
         Some(())
     }
 
@@ -331,12 +379,15 @@ impl ThreadScheduler {
         Some(())
     }
 
+    /// Updates the saved stack-limit metadata for one tracked thread.
+    pub fn set_thread_stack_limit(&mut self, tid: u32, stack_limit: u64) -> Option<()> {
+        let thread = self.threads.get_mut(&tid)?;
+        thread.stack_limit = stack_limit;
+        Some(())
+    }
+
     /// Replaces the saved CPU register frame for one tracked thread.
-    pub fn set_thread_registers(
-        &mut self,
-        tid: u32,
-        registers: BTreeMap<String, u64>,
-    ) -> Option<()> {
+    pub fn set_thread_registers(&mut self, tid: u32, registers: RegisterFile) -> Option<()> {
         let thread = self.threads.get_mut(&tid)?;
         thread.registers = registers;
         Some(())
@@ -351,6 +402,18 @@ impl ThreadScheduler {
         }
         thread.state = "ready";
         self.ready_queue.push_back(tid);
+        Some(())
+    }
+
+    /// Marks one runnable thread as actively running without re-queuing it.
+    pub fn mark_thread_running(&mut self, tid: u32) -> Option<()> {
+        self.remove_ready_thread(tid);
+        let thread = self.threads.get_mut(&tid)?;
+        if !matches!(thread.state, "ready" | "running") {
+            return Some(());
+        }
+        thread.state = "running";
+        self.current_tid = Some(tid);
         Some(())
     }
 
@@ -371,6 +434,11 @@ impl ThreadScheduler {
     /// Marks the current thread as terminated and signals any waiters on its thread handle.
     pub fn exit_current_thread(&mut self, exit_code: u32) -> Option<()> {
         let tid = self.current_tid?;
+        self.terminate_thread(tid, exit_code)
+    }
+
+    /// Marks one specific thread as terminated and signals any waiters on its thread handle.
+    pub fn terminate_thread(&mut self, tid: u32, exit_code: u32) -> Option<()> {
         let handle = {
             let thread = self.threads.get_mut(&tid)?;
             thread.state = "terminated";
@@ -378,6 +446,7 @@ impl ThreadScheduler {
             thread.wake_tick = 0;
             thread.wait_handles.clear();
             thread.wait_result = None;
+            thread.store_wait_result = false;
             thread.wait_all = false;
             thread.alertable_wait = false;
             thread.apc_pending = false;
@@ -386,7 +455,10 @@ impl ThreadScheduler {
         if let Some(object) = self.objects.get_mut(&handle) {
             object.signaled = true;
         }
-        self.current_tid = None;
+        self.remove_ready_thread(tid);
+        if self.current_tid == Some(tid) {
+            self.current_tid = None;
+        }
         self.notify_waitable_state(handle);
         Some(())
     }
@@ -491,6 +563,7 @@ impl ThreadScheduler {
         };
         thread.wait_handles = handles.to_vec();
         thread.wait_result = None;
+        thread.store_wait_result = true;
         thread.wait_all = wait_all;
         thread.alertable_wait = alertable;
         WaitOutcome(WAIT_TIMEOUT)
@@ -502,6 +575,7 @@ impl ThreadScheduler {
         now_tick: u64,
         milliseconds: u32,
         alertable: bool,
+        store_wait_result: bool,
     ) -> Option<()> {
         let tid = self.current_tid?;
         self.remove_ready_thread(tid);
@@ -510,6 +584,7 @@ impl ThreadScheduler {
         thread.wake_tick = now_tick.saturating_add(milliseconds as u64);
         thread.wait_handles.clear();
         thread.wait_result = None;
+        thread.store_wait_result = store_wait_result;
         thread.wait_all = false;
         thread.alertable_wait = alertable;
         Some(())
@@ -532,6 +607,7 @@ impl ThreadScheduler {
         let thread = self.threads.get_mut(&tid)?;
         let result = thread.wait_result.take()?;
         thread.wake_tick = 0;
+        thread.store_wait_result = false;
         thread.wait_handles.clear();
         Some(result)
     }
@@ -663,6 +739,7 @@ impl ThreadScheduler {
         let thread = self.threads.get_mut(&tid)?;
         let result = thread.wait_result.take()?;
         thread.wake_tick = 0;
+        thread.store_wait_result = false;
         thread.wait_handles.clear();
         Some(result)
     }
@@ -743,7 +820,8 @@ impl ThreadScheduler {
         };
         thread.state = "ready";
         thread.wake_tick = 0;
-        thread.wait_result = Some(result);
+        thread.wait_result = thread.store_wait_result.then_some(result);
+        thread.store_wait_result = false;
         thread.wait_handles.clear();
         thread.wait_all = false;
         thread.alertable_wait = false;

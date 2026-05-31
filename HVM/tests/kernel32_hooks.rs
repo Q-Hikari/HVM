@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -32,6 +33,7 @@ const MEM_MAPPED: u32 = 0x40000;
 const MEM_IMAGE: u32 = 0x0100_0000;
 const MEM_RELEASE: u64 = 0x0000_8000;
 const ERROR_INVALID_ADDRESS: u32 = 487;
+const ERROR_MOD_NOT_FOUND: u32 = 126;
 
 fn runtime_sample() -> hvm::samples::SampleDescriptor {
     first_runnable_sample()
@@ -54,6 +56,12 @@ fn runtime_sample_for_arch(arch: &str) -> hvm::samples::SampleDescriptor {
 fn sample_config() -> hvm::config::EngineConfig {
     let config_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
+    load_config(config_path).unwrap()
+}
+
+fn sample_config_for(sample: &str) -> hvm::config::EngineConfig {
+    let config_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("../configs/sample_{sample}_trace.json"));
     load_config(config_path).unwrap()
 }
 
@@ -192,6 +200,35 @@ fn read_wide_multi_sz(
     entries
 }
 
+#[test]
+fn get_tick_count64_tracks_emulated_time_and_api_set_synch_contract_dispatches() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let tick32 = engine.bind_hook_for_test("kernel32.dll", "GetTickCount");
+    let tick64 = engine.bind_hook_for_test("kernel32.dll", "GetTickCount64");
+    let init_cv = engine.bind_hook_for_test(
+        "api-ms-win-core-synch-l1-2-0.dll",
+        "InitializeConditionVariable",
+    );
+    let page = engine.allocate_executable_test_page(0x6500_0000).unwrap();
+
+    assert_eq!(
+        engine.dispatch_bound_stub(tick64, &[]).unwrap(),
+        engine.dispatch_bound_stub(tick32, &[]).unwrap()
+    );
+    assert_eq!(engine.dispatch_bound_stub(init_cv, &[page]).unwrap(), 0);
+}
+
+#[test]
+fn verify_version_info_a_returns_true() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let stub = engine.bind_hook_for_test("kernel32.dll", "VerifyVersionInfoA");
+    assert_eq!(engine.dispatch_bound_stub(stub, &[0, 0, 0]).unwrap(), 1);
+}
+
 fn page_protect_from_region_perms(perms: u32) -> u32 {
     match perms & (PROT_READ | PROT_WRITE | PROT_EXEC) {
         bits if bits & PROT_EXEC != 0 && bits & PROT_WRITE != 0 => 0x40,
@@ -247,13 +284,19 @@ fn read_wide_process_entry(
     (pid, parent_pid, thread_count, image_name)
 }
 
+fn write_c_string(engine: &mut VirtualExecutionEngine, address: u64, value: &str) {
+    let mut bytes = value.as_bytes().to_vec();
+    bytes.push(0);
+    engine.write_test_bytes(address, &bytes).unwrap();
+}
+
 #[test]
 fn create_thread_hook_registers_ready_thread_and_returns_tid() {
     let mut engine = build_loaded_engine();
 
     assert!(engine
         .registry()
-        .definition("kernel32.dll", "CreateThread")
+        .signature("kernel32.dll", "CreateThread")
         .is_some());
 
     let (handle, tid) = engine
@@ -335,6 +378,190 @@ fn startup_baseline_preloads_common_system_modules_and_keeps_them_loaded() {
         1
     );
     assert!(engine.modules().get_by_base(handle).is_some());
+}
+
+#[test]
+fn get_module_handle_and_proc_address_accept_visible_module_bases() {
+    let mut config = sample_config();
+    config.environment_overrides = Some(EnvironmentOverrides {
+        module_visible_bases: Some(BTreeMap::from([(
+            String::from("kernel32.dll"),
+            0x7A57_0000,
+        )])),
+        ..EnvironmentOverrides::default()
+    });
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+
+    let get_module_handle = engine.bind_hook_for_test("kernel32.dll", "GetModuleHandleW");
+    let get_proc_address = engine.bind_hook_for_test("kernel32.dll", "GetProcAddress");
+    let name_buffer = engine.allocate_executable_test_page(0x6300_0B00).unwrap();
+    let proc_name = engine.allocate_executable_test_page(0x6300_0C00).unwrap();
+    engine
+        .write_test_bytes(
+            name_buffer,
+            &"kernel32.dll\0"
+                .encode_utf16()
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    write_c_string(&mut engine, proc_name, "CloseHandle");
+
+    let module = engine
+        .modules()
+        .loaded_modules()
+        .into_iter()
+        .find(|module| module.name.eq_ignore_ascii_case("kernel32.dll"))
+        .unwrap();
+    let handle = engine
+        .dispatch_bound_stub(get_module_handle, &[name_buffer])
+        .unwrap();
+    assert_eq!(handle, module.visible_base);
+
+    let visible_proc = engine
+        .dispatch_bound_stub(get_proc_address, &[handle, proc_name])
+        .unwrap();
+    let mapped_proc = engine
+        .dispatch_bound_stub(get_proc_address, &[module.base, proc_name])
+        .unwrap();
+    assert_ne!(visible_proc, 0);
+    assert_eq!(visible_proc, mapped_proc);
+}
+
+#[test]
+fn visible_module_base_exposes_readable_image_header() {
+    let mut config = sample_config();
+    config.environment_overrides = Some(EnvironmentOverrides {
+        module_visible_bases: Some(BTreeMap::from([(
+            String::from("kernel32.dll"),
+            0x7A57_0800,
+        )])),
+        ..EnvironmentOverrides::default()
+    });
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+
+    let module = engine
+        .modules()
+        .loaded_modules()
+        .into_iter()
+        .find(|module| module.name.eq_ignore_ascii_case("kernel32.dll"))
+        .unwrap();
+
+    assert_eq!(module.visible_base, 0x7A57_0800);
+    assert_eq!(
+        engine
+            .modules()
+            .memory()
+            .read(module.visible_base, 2)
+            .unwrap(),
+        b"MZ"
+    );
+    assert_eq!(
+        engine
+            .modules()
+            .get_by_address(module.visible_base + 0x10)
+            .unwrap()
+            .base,
+        module.base
+    );
+}
+
+#[test]
+fn get_module_handle_exw_reports_module_not_found_for_missing_module() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let get_module_handle_ex = engine.bind_hook_for_test("kernel32.dll", "GetModuleHandleExW");
+    let name_buffer = engine.allocate_executable_test_page(0x6300_0900).unwrap();
+    let handle_buffer = engine.allocate_executable_test_page(0x6300_0A00).unwrap();
+    engine
+        .write_test_bytes(
+            name_buffer,
+            &"missing.dll\0"
+                .encode_utf16()
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    engine.write_test_bytes(handle_buffer, &[0u8; 4]).unwrap();
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(get_module_handle_ex, &[0, name_buffer, handle_buffer])
+            .unwrap(),
+        0
+    );
+    assert_eq!(engine.last_error(), ERROR_MOD_NOT_FOUND);
+}
+
+#[test]
+fn find_resource_a_loads_named_resource_data_from_tracked_sample() {
+    let mut engine =
+        VirtualExecutionEngine::new(sample_config_for("5ccecdd7a28ebb0401cc98e7fd89ba71")).unwrap();
+    engine.load().unwrap();
+
+    let strings = engine.allocate_executable_test_page(0x6300_1000).unwrap();
+    let type_name = strings;
+    let resource_name = strings + 0x100;
+    write_c_string(&mut engine, type_name, "PNG");
+    write_c_string(&mut engine, resource_name, "AQUA_IDB_OFFICE2007_GRIPPER");
+
+    let find_resource = engine.bind_hook_for_test("kernel32.dll", "FindResourceA");
+    let load_resource = engine.bind_hook_for_test("kernel32.dll", "LoadResource");
+    let lock_resource = engine.bind_hook_for_test("kernel32.dll", "LockResource");
+    let sizeof_resource = engine.bind_hook_for_test("kernel32.dll", "SizeofResource");
+
+    let resource = engine
+        .dispatch_bound_stub(find_resource, &[0, resource_name, type_name])
+        .unwrap();
+    assert_ne!(resource, 0);
+
+    let loaded = engine
+        .dispatch_bound_stub(load_resource, &[0, resource])
+        .unwrap();
+    assert_eq!(loaded, resource);
+
+    let data = engine
+        .dispatch_bound_stub(lock_resource, &[loaded])
+        .unwrap();
+    let size = engine
+        .dispatch_bound_stub(sizeof_resource, &[0, resource])
+        .unwrap();
+    assert_eq!(size, 0x77);
+    assert_eq!(
+        engine.modules().memory().read(data, 8).unwrap(),
+        [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
+    );
+}
+
+#[test]
+fn find_resource_exw_loads_integer_version_resource_from_tracked_sample() {
+    let mut engine =
+        VirtualExecutionEngine::new(sample_config_for("0a678fc36c23026032a297e48335233d")).unwrap();
+    engine.load().unwrap();
+
+    let find_resource_ex = engine.bind_hook_for_test("kernel32.dll", "FindResourceExW");
+    let lock_resource = engine.bind_hook_for_test("kernel32.dll", "LockResource");
+    let sizeof_resource = engine.bind_hook_for_test("kernel32.dll", "SizeofResource");
+
+    let resource = engine
+        .dispatch_bound_stub(find_resource_ex, &[0, 1, 16, 1033])
+        .unwrap();
+    assert_ne!(resource, 0);
+
+    let data = engine
+        .dispatch_bound_stub(lock_resource, &[resource])
+        .unwrap();
+    let size = engine
+        .dispatch_bound_stub(sizeof_resource, &[0, resource])
+        .unwrap();
+    assert_eq!(size, 0x39c);
+    assert!(
+        data >= engine.main_module().unwrap().base
+            && data < engine.main_module().unwrap().base + engine.main_module().unwrap().size
+    );
 }
 
 #[test]
@@ -1033,6 +1260,116 @@ fn create_mutex_wait_tracks_reentrant_owner_and_release() {
     );
     assert_eq!(engine.dispatch_bound_stub(release, &[mutex]).unwrap(), 1);
     assert_eq!(engine.dispatch_bound_stub(release, &[mutex]).unwrap(), 0);
+}
+
+#[test]
+fn create_mutex_ex_w_honors_initial_owner_flag() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let create_mutex = engine.bind_hook_for_test("kernel32.dll", "CreateMutexExW");
+    let wait = engine.bind_hook_for_test("kernel32.dll", "WaitForSingleObject");
+    let release = engine.bind_hook_for_test("kernel32.dll", "ReleaseMutex");
+
+    let mutex = engine
+        .dispatch_bound_stub(create_mutex, &[0, 0, 1, 0])
+        .unwrap();
+
+    assert_ne!(mutex, 0);
+    assert_eq!(
+        engine.dispatch_bound_stub(wait, &[mutex, 0]).unwrap(),
+        WAIT_OBJECT_0 as u64
+    );
+    assert_eq!(engine.dispatch_bound_stub(release, &[mutex]).unwrap(), 1);
+}
+
+#[test]
+fn create_semaphore_ex_w_sets_already_exists_for_repeated_named_handles() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let name = engine.allocate_executable_test_page(0x6308_8000).unwrap();
+    engine
+        .write_test_bytes(
+            name,
+            &"Global\\RustSemaphore\0"
+                .encode_utf16()
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+
+    let create = engine.bind_hook_for_test("kernel32.dll", "CreateSemaphoreExW");
+
+    let first = engine
+        .dispatch_bound_stub(create, &[0, 1, 1, name, 0, 0x1F_0003])
+        .unwrap();
+    let first_error = engine.last_error();
+    let second = engine
+        .dispatch_bound_stub(create, &[0, 1, 1, name, 0, 0x1F_0003])
+        .unwrap();
+
+    assert_ne!(first, 0);
+    assert_eq!(first_error, 0);
+    assert_ne!(second, 0);
+    assert_ne!(second, first);
+    assert_eq!(engine.last_error(), 183);
+}
+
+#[test]
+fn release_semaphore_tracks_previous_count_and_remaining_capacity() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let create = engine.bind_hook_for_test("kernel32.dll", "CreateSemaphoreW");
+    let release = engine.bind_hook_for_test("kernel32.dll", "ReleaseSemaphore");
+    let wait = engine.bind_hook_for_test("kernel32.dll", "WaitForSingleObject");
+    let previous = engine.allocate_executable_test_page(0x6308_9000).unwrap();
+
+    let semaphore = engine.dispatch_bound_stub(create, &[0, 0, 2, 0]).unwrap();
+
+    assert_ne!(semaphore, 0);
+    assert_eq!(
+        engine.dispatch_bound_stub(wait, &[semaphore, 0]).unwrap(),
+        WAIT_TIMEOUT as u64
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(release, &[semaphore, 2, previous])
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(previous, 4)
+                .unwrap()
+                .try_into()
+                .unwrap()
+        ),
+        0
+    );
+    assert_eq!(
+        engine.dispatch_bound_stub(wait, &[semaphore, 0]).unwrap(),
+        WAIT_OBJECT_0 as u64
+    );
+    assert_eq!(
+        engine.dispatch_bound_stub(wait, &[semaphore, 0]).unwrap(),
+        WAIT_OBJECT_0 as u64
+    );
+    assert_eq!(
+        engine.dispatch_bound_stub(wait, &[semaphore, 0]).unwrap(),
+        WAIT_TIMEOUT as u64
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(release, &[semaphore, 3, 0])
+            .unwrap(),
+        0
+    );
+    assert_eq!(engine.last_error(), 298);
 }
 
 #[test]
@@ -2599,6 +2936,104 @@ fn native_unicorn_guard_page_access_fails_once_then_clears_guard() {
 }
 
 #[test]
+fn native_unicorn_stack_growth_commits_skipped_stack_pages() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+    if !engine.has_native_unicorn() || runtime_pointer_size(&engine) != 4 {
+        return;
+    }
+
+    let main_tid = engine.main_thread_tid().unwrap();
+    let before = engine.scheduler().thread_snapshot(main_tid).unwrap();
+    let code = engine.allocate_executable_test_page(0x6320_1000).unwrap();
+    let bytes = [
+        0x31, 0xDB, // xor ebx, ebx
+        0x89, 0xE2, // mov edx, esp
+        0x66, 0x8B, 0xE3, // mov sp, bx
+        0x68, 0x78, 0x56, 0x34, 0x12, // push 0x12345678
+        0x58, // pop eax
+        0x8B, 0xE2, // mov esp, edx
+        0xC3, // ret
+    ];
+    engine.write_test_bytes(code, &bytes).unwrap();
+
+    assert_eq!(engine.call_native_for_test(code, &[]).unwrap(), 0x1234_5678);
+
+    let after = engine.scheduler().thread_snapshot(main_tid).unwrap();
+    assert_eq!(after.stack_limit, before.stack_limit - 0xF000);
+
+    let virtual_query = engine.bind_hook_for_test("kernel32.dll", "VirtualQuery");
+    let info = engine.allocate_executable_test_page(0x6320_2000).unwrap();
+    let guard_base = after.stack_limit - 0x1000;
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(virtual_query, &[after.stack_limit, info, 28])
+            .unwrap(),
+        28
+    );
+    assert_eq!(read_runtime_pointer(&engine, info), after.stack_limit);
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(info + 20, 4)
+                .unwrap()
+                .try_into()
+                .unwrap()
+        ) as u64,
+        PAGE_READWRITE
+    );
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(virtual_query, &[guard_base, info, 28])
+            .unwrap(),
+        28
+    );
+    assert_eq!(read_runtime_pointer(&engine, info), guard_base);
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(info + 20, 4)
+                .unwrap()
+                .try_into()
+                .unwrap()
+        ) as u64,
+        PAGE_READWRITE | PAGE_GUARD
+    );
+}
+
+#[test]
+fn native_unicorn_stack_growth_handles_guard_page_touch() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+    if !engine.has_native_unicorn() || runtime_pointer_size(&engine) != 4 {
+        return;
+    }
+
+    let main_tid = engine.main_thread_tid().unwrap();
+    let before = engine.scheduler().thread_snapshot(main_tid).unwrap();
+    let code = engine.allocate_executable_test_page(0x6320_3000).unwrap();
+    let bytes = [
+        0x81, 0xEC, 0x00, 0x10, 0x00, 0x00, // sub esp, 0x1000
+        0x68, 0x78, 0x56, 0x34, 0x12, // push 0x12345678
+        0x58, // pop eax
+        0x81, 0xC4, 0x00, 0x10, 0x00, 0x00, // add esp, 0x1000
+        0xC3, // ret
+    ];
+    engine.write_test_bytes(code, &bytes).unwrap();
+
+    assert_eq!(engine.call_native_for_test(code, &[]).unwrap(), 0x1234_5678);
+
+    let after = engine.scheduler().thread_snapshot(main_tid).unwrap();
+    assert_eq!(after.stack_limit, before.stack_limit - 0x1000);
+}
+
+#[test]
 fn virtual_query_reports_image_and_mapped_memory_types() {
     let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
     engine.load().unwrap();
@@ -2877,7 +3312,59 @@ fn virtual_alloc_tracks_reserved_and_committed_regions() {
 }
 
 #[test]
-fn virtual_alloc_commit_without_reserved_range_reports_invalid_address() {
+fn virtual_alloc_commit_with_null_base_reserves_and_commits_region() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let virtual_alloc = engine.bind_hook_for_test("kernel32.dll", "VirtualAlloc");
+    let virtual_query = engine.bind_hook_for_test("kernel32.dll", "VirtualQuery");
+    let info = engine.allocate_executable_test_page(0x6312_5000).unwrap();
+
+    let committed = engine
+        .dispatch_bound_stub(
+            virtual_alloc,
+            &[0, 0x400, MEM_COMMIT as u64, PAGE_EXECUTE_READWRITE],
+        )
+        .unwrap();
+    assert_ne!(committed, 0);
+    assert_eq!(engine.last_error(), 0);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(virtual_query, &[committed, info, 28])
+            .unwrap(),
+        28
+    );
+    assert_eq!(read_runtime_pointer(&engine, info), committed);
+    assert_eq!(read_runtime_pointer(&engine, info + 4), committed);
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(info + 16, 4)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+        MEM_COMMIT
+    );
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(info + 20, 4)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ) as u64,
+        PAGE_EXECUTE_READWRITE
+    );
+}
+
+#[test]
+fn virtual_alloc_commit_without_reserved_non_null_base_reports_invalid_address() {
     let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
     engine.load().unwrap();
 
@@ -2887,12 +3374,147 @@ fn virtual_alloc_commit_without_reserved_range_reports_invalid_address() {
         engine
             .dispatch_bound_stub(
                 virtual_alloc,
-                &[0, 0x400, MEM_COMMIT as u64, PAGE_EXECUTE_READWRITE]
+                &[
+                    0x4141_0000,
+                    0x400,
+                    MEM_COMMIT as u64,
+                    PAGE_EXECUTE_READWRITE
+                ]
             )
             .unwrap(),
         0
     );
     assert_eq!(engine.last_error(), ERROR_INVALID_ADDRESS);
+}
+
+#[test]
+fn virtual_alloc_ex_commit_with_null_base_reserves_and_commits_remote_region() {
+    let mut engine = VirtualExecutionEngine::new(sample_config_with_parent()).unwrap();
+    engine.load().unwrap();
+
+    let open_process = engine.bind_hook_for_test("kernel32.dll", "OpenProcess");
+    let virtual_alloc_ex = engine.bind_hook_for_test("kernel32.dll", "VirtualAllocEx");
+    let virtual_query_ex = engine.bind_hook_for_test("kernel32.dll", "VirtualQueryEx");
+    let close = engine.bind_hook_for_test("kernel32.dll", "CloseHandle");
+    let info = engine.allocate_executable_test_page(0x6312_5800).unwrap();
+
+    let process = engine
+        .dispatch_bound_stub(open_process, &[0x1F0FFF, 0, 0x4321])
+        .unwrap();
+    assert_ne!(process, 0);
+
+    let committed = engine
+        .dispatch_bound_stub(
+            virtual_alloc_ex,
+            &[
+                process,
+                0,
+                0x18502,
+                MEM_COMMIT as u64,
+                PAGE_EXECUTE_READWRITE,
+            ],
+        )
+        .unwrap();
+    assert_ne!(committed, 0);
+    assert_eq!(engine.last_error(), 0);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(virtual_query_ex, &[process, committed, info, 28])
+            .unwrap(),
+        28
+    );
+    assert_eq!(read_runtime_pointer(&engine, info), committed);
+    assert_eq!(read_runtime_pointer(&engine, info + 4), committed);
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(info + 16, 4)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+        MEM_COMMIT
+    );
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(info + 20, 4)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ) as u64,
+        PAGE_EXECUTE_READWRITE
+    );
+    assert_eq!(engine.dispatch_bound_stub(close, &[process]).unwrap(), 1);
+}
+
+#[test]
+fn create_process_handle_virtual_alloc_ex_commit_with_null_base_succeeds() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let create_process = engine.bind_hook_for_test("kernel32.dll", "CreateProcessA");
+    let virtual_alloc_ex = engine.bind_hook_for_test("kernel32.dll", "VirtualAllocEx");
+    let virtual_query_ex = engine.bind_hook_for_test("kernel32.dll", "VirtualQueryEx");
+
+    let command_line = engine.allocate_executable_test_page(0x6312_6000).unwrap();
+    let process_info = engine.allocate_executable_test_page(0x6312_7000).unwrap();
+    let info = engine.allocate_executable_test_page(0x6312_8000).unwrap();
+    engine
+        .write_test_bytes(command_line, b"C:\\Windows\\System32\\findstr.exe\0")
+        .unwrap();
+    engine.write_test_bytes(process_info, &[0u8; 16]).unwrap();
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(
+                create_process,
+                &[0, command_line, 0, 0, 0, 0x4, 0, 0, 0, process_info],
+            )
+            .unwrap(),
+        1
+    );
+    let process = read_runtime_pointer(&engine, process_info);
+    assert_ne!(process, 0);
+
+    let committed = engine
+        .dispatch_bound_stub(
+            virtual_alloc_ex,
+            &[
+                process,
+                0,
+                0x18502,
+                MEM_COMMIT as u64,
+                PAGE_EXECUTE_READWRITE,
+            ],
+        )
+        .unwrap();
+    assert_ne!(committed, 0);
+    assert_eq!(engine.last_error(), 0);
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(virtual_query_ex, &[process, committed, info, 28])
+            .unwrap(),
+        28
+    );
+    assert_eq!(read_runtime_pointer(&engine, info), committed);
+    assert_eq!(
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(info + 16, 4)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+        MEM_COMMIT
+    );
 }
 
 #[test]
@@ -3255,7 +3877,7 @@ fn virtual_query_reports_pe_section_level_image_permissions() {
         .modules()
         .memory()
         .regions
-        .iter()
+        .values()
         .filter(|region| module.base < region.end() && region.base < module_end)
         .cloned()
         .collect::<Vec<_>>();
@@ -3439,6 +4061,24 @@ fn read_process_memory_consumes_guard_pages_once() {
     assert_eq!(read_runtime_pointer(&engine, count), 5);
     assert_eq!(engine.modules().memory().read(output, 5).unwrap(), b"GUARD");
     assert_eq!(engine.dispatch_bound_stub(close, &[process]).unwrap(), 1);
+}
+
+#[test]
+fn win_exec_returns_success_without_real_execution() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let win_exec = engine.bind_hook_for_test("kernel32.dll", "WinExec");
+    let command_line = engine.allocate_executable_test_page(0x6312_9000).unwrap();
+    engine
+        .write_test_bytes(command_line, b"cmd.exe /c echo hi\0")
+        .unwrap();
+
+    let retval = engine
+        .dispatch_bound_stub(win_exec, &[command_line, 1])
+        .unwrap();
+    assert!(retval > 31);
+    assert_eq!(engine.last_error(), 0);
 }
 
 #[test]
@@ -3930,8 +4570,8 @@ fn create_thread_and_resume_thread_initialize_virtual_thread_context() {
     assert_eq!(snapshot.state, "suspended");
     assert_ne!(snapshot.teb_base, 0);
     assert!(snapshot.stack_limit < snapshot.stack_top);
-    assert_eq!(snapshot.registers.get("eip"), Some(&0x401000));
-    let esp = *snapshot.registers.get("esp").unwrap();
+    assert_eq!(snapshot.registers.eip, 0x401000);
+    let esp = snapshot.registers.esp;
     let frame = engine.modules().memory().read(esp, 8).unwrap();
     assert_eq!(
         u32::from_le_bytes(frame[0..4].try_into().unwrap()) as u64,
@@ -4079,4 +4719,72 @@ fn get_temp_file_name_w_returns_guest_visible_temp_path() {
     let output = read_wide_c_string(&engine, output_ptr, 260);
     assert!(output.starts_with("C:\\"));
     assert!(output.ends_with(r"\TMP1234.tmp"));
+}
+
+#[test]
+fn get_system_time_precise_as_file_time_matches_runtime_filetime_source() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let regular_ptr = engine.allocate_executable_test_page(0x6310_F000).unwrap();
+    let precise_ptr = engine.allocate_executable_test_page(0x6311_0000).unwrap();
+    engine.write_test_bytes(regular_ptr, &[0u8; 8]).unwrap();
+    engine.write_test_bytes(precise_ptr, &[0u8; 8]).unwrap();
+
+    let regular = engine.bind_hook_for_test("kernel32.dll", "GetSystemTimeAsFileTime");
+    let precise = engine.bind_hook_for_test("kernel32.dll", "GetSystemTimePreciseAsFileTime");
+
+    assert_eq!(
+        engine.dispatch_bound_stub(regular, &[regular_ptr]).unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.dispatch_bound_stub(precise, &[precise_ptr]).unwrap(),
+        0
+    );
+
+    let regular_bytes = engine.modules().memory().read(regular_ptr, 8).unwrap();
+    let precise_bytes = engine.modules().memory().read(precise_ptr, 8).unwrap();
+    assert_eq!(regular_bytes, precise_bytes);
+    assert_ne!(u64::from_le_bytes(regular_bytes.try_into().unwrap()), 0);
+}
+
+#[test]
+fn get_thread_times_writes_expected_filetimes_and_succeeds() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let current_thread = engine.bind_hook_for_test("kernel32.dll", "GetCurrentThread");
+    let get_thread_times = engine.bind_hook_for_test("kernel32.dll", "GetThreadTimes");
+    let page = engine.allocate_executable_test_page(0x6311_1000).unwrap();
+    let creation = page;
+    let exit = page + 8;
+    let kernel = page + 16;
+    let user = page + 24;
+    let thread = engine.dispatch_bound_stub(current_thread, &[]).unwrap();
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(get_thread_times, &[thread, creation, exit, kernel, user])
+            .unwrap(),
+        1
+    );
+    assert_ne!(
+        u64::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(creation, 8)
+                .unwrap()
+                .try_into()
+                .unwrap()
+        ),
+        0
+    );
+    assert_eq!(engine.modules().memory().read(exit, 8).unwrap(), vec![0; 8]);
+    assert_eq!(
+        engine.modules().memory().read(kernel, 8).unwrap(),
+        vec![0; 8]
+    );
+    assert_eq!(engine.modules().memory().read(user, 8).unwrap(), vec![0; 8]);
 }

@@ -35,7 +35,7 @@ fn load_config_matches_python_relative_path_rules() {
         .iter()
         .any(|path| path.ends_with(Path::new("Sample"))));
     assert!(config.whitelist_modules.is_empty());
-    assert_eq!(config.max_instructions, 10_000_000);
+    assert_eq!(config.max_instructions, 50_000_000);
 }
 
 #[test]
@@ -101,6 +101,37 @@ fn load_config_keeps_native_trace_disabled_by_default_even_with_api_trace() {
     let config = load_config(&config_path).unwrap();
     assert!(config.trace_api_calls);
     assert!(!config.trace_native_events);
+
+    fs::remove_file(config_path).unwrap();
+}
+
+#[test]
+fn load_config_parses_optional_stack_reserve_override() {
+    let sample = runtime_sample();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let config_path = std::env::temp_dir().join(format!(
+        "hvm-hikari-virtual-engine-stack-config-{timestamp}.json"
+    ));
+
+    fs::write(
+        &config_path,
+        format!(
+            concat!(
+                "{{",
+                "\"main_module\":\"{}\",",
+                "\"stack_reserve_size\":16777216",
+                "}}"
+            ),
+            sample.path.to_string_lossy().replace('\\', "\\\\"),
+        ),
+    )
+    .unwrap();
+
+    let config = load_config(&config_path).unwrap();
+    assert_eq!(config.stack_reserve_size, Some(16 * 1024 * 1024));
 
     fs::remove_file(config_path).unwrap();
 }

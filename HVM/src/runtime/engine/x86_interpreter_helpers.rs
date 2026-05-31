@@ -1,4 +1,5 @@
 use super::*;
+use crate::hooks::types::LogicalAbi;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct X86State {
@@ -382,69 +383,133 @@ impl VirtualExecutionEngine {
     }
 
     fn apply_pending_x86_context_restore(&mut self, state: &mut X86State) -> bool {
-        let Some(restore) = self.pending_context_restore.take() else {
+        let Some(restore) = self.exception.pending_context_restore.take() else {
             return false;
         };
         let registers = &restore.registers;
-        state.eax = registers.get("eax").copied().unwrap_or(state.eax as u64) as u32;
-        state.ebx = registers.get("ebx").copied().unwrap_or(state.ebx as u64) as u32;
-        state.ecx = registers.get("ecx").copied().unwrap_or(state.ecx as u64) as u32;
-        state.edx = registers.get("edx").copied().unwrap_or(state.edx as u64) as u32;
-        state.esi = registers.get("esi").copied().unwrap_or(state.esi as u64) as u32;
-        state.edi = registers.get("edi").copied().unwrap_or(state.edi as u64) as u32;
-        state.ebp = registers.get("ebp").copied().unwrap_or(state.ebp as u64) as u32;
-        state.esp = registers.get("esp").copied().unwrap_or(state.esp as u64) as u32;
-        state.eip = registers.get("eip").copied().unwrap_or(state.eip as u64) as u32;
-        state._eflags = registers
-            .get("eflags")
-            .copied()
-            .unwrap_or(state._eflags as u64) as u32;
-        self.defer_api_return = false;
+        state.eax = registers.eax as u32;
+        state.ebx = registers.ebx as u32;
+        state.ecx = registers.ecx as u32;
+        state.edx = registers.edx as u32;
+        state.esi = registers.esi as u32;
+        state.edi = registers.edi as u32;
+        state.ebp = registers.ebp as u32;
+        state.esp = registers.esp as u32;
+        state.eip = registers.eip as u32;
+        state._eflags = registers.eflags as u32;
+        self.dispatch.reset_api_flow_control();
         true
     }
 
     pub(super) fn step_x86_interpreter(&mut self, state: &mut X86State) -> Result<(), VmError> {
-        if let Some(definition) = self.hooks.definition_for_address(state.eip as u64).cloned() {
-            let return_address = self.read_u32(state.esp as u64)? as u64;
-            let args = self.capture_stack_args(state.esp as u64 + 4, definition.argc)?;
-            let retval = self.dispatch_bound_stub_with_definition(
-                &definition,
+        if let Some(bound) = self.core.hooks.bound_lookup(state.eip as u64) {
+            let bound_module = bound.module.to_string();
+            let bound_function = bound.function.to_string();
+            if let Some(signature) = bound.signature.cloned() {
+                let argc = signature.params.len();
+                let return_address = self.read_u32(state.esp as u64)? as u64;
+                let args = self.capture_stack_args(state.esp as u64 + 4, argc)?;
+                self.dispatch.api_log_context_override = if self.core.config.api_log_include_context
+                {
+                    let stack_words = (0..self.core.config.api_log_stack_words)
+                        .map(|index| {
+                            let address = state.esp as u64 + (index as u64 * 4);
+                            let value = self.read_u32(address).ok().map(|value| value as u64);
+                            ApiStackWord {
+                                address,
+                                value,
+                                value_ref: value
+                                    .filter(|value| *value != 0)
+                                    .map(|value| self.address_ref(value)),
+                                read_error: value.is_none().then(|| "read_u32(stack)".to_string()),
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    Some(ApiExecutionContext {
+                        ip: state.eip as u64,
+                        sp: state.esp as u64,
+                        bp: state.ebp as u64,
+                        ax: state.eax as u64,
+                        bx: state.ebx as u64,
+                        cx: state.ecx as u64,
+                        dx: state.edx as u64,
+                        si: state.esi as u64,
+                        di: state.edi as u64,
+                        flags: state._eflags as u64,
+                        direction_flag: (((state._eflags as u64) >> 10) & 1) != 0,
+                        stack_words,
+                    })
+                } else {
+                    None
+                };
+                let retval = self.dispatch_bound_stub_with_signature(
+                    &signature,
+                    state.eip as u64,
+                    Some(return_address),
+                    &args,
+                )?;
+                self.dispatch.api_log_context_override = None;
+                if self.apply_pending_x86_context_restore(state) {
+                    let _ = self.dispatch.take_hook_return_override();
+                    return Ok(());
+                }
+                if self.dispatch.api_return_deferred() {
+                    let _ = self.dispatch.take_hook_return_override();
+                    return Ok(());
+                }
+                let current_thread_state = self
+                    .core
+                    .scheduler
+                    .current_tid()
+                    .and_then(|tid| self.core.scheduler.thread_state(tid));
+                let yielded_blocking_thread = current_thread_state != Some("running");
+                if self.dispatch.preserve_blocked_api_frame
+                    && self.dispatch.thread_yield_requested()
+                    && yielded_blocking_thread
+                {
+                    let _ = self.dispatch.take_hook_return_override();
+                    return Ok(());
+                }
+                let hook_return_override = self.dispatch.take_hook_return_override();
+                state.eax = hook_return_override
+                    .map(|override_value| override_value.raw_retval as u32)
+                    .unwrap_or_else(|| retval.into_raw(&self.core.arch) as u32);
+                if let Some(override_value) = hook_return_override {
+                    state._eflags = ((state._eflags as u64 & !override_value.flags_mask)
+                        | override_value.flags_value) as u32;
+                }
+                match signature.abi {
+                    LogicalAbi::WinApi | LogicalAbi::ComMethod => {
+                        // stdcall callee-cleanup: pop return address + args
+                        state.esp = state.esp.wrapping_add(4 + (argc as u32).saturating_mul(4));
+                    }
+                    LogicalAbi::Cdecl
+                    | LogicalAbi::VariadicCdecl
+                    | LogicalAbi::Win64Only
+                    | LogicalAbi::Callback
+                    | LogicalAbi::Custom(_) => {
+                        // caller-cleanup: pop only return address
+                        state.esp = state.esp.wrapping_add(4);
+                    }
+                }
+                if self.dispatch.force_native_return {
+                    self.dispatch.force_native_return = false;
+                    state.eip = self.core.native_return_sentinel as u32;
+                } else {
+                    state.eip = return_address as u32;
+                }
+                return Ok(());
+            }
+
+            let _ = self.log_unsupported_bound_stub(
                 state.eip as u64,
-                Some(return_address),
-                &args,
-            )?;
-            if self.apply_pending_x86_context_restore(state) {
-                return Ok(());
-            }
-            if self.defer_api_return {
-                return Ok(());
-            }
-            state.eax = retval as u32;
-            match definition.call_conv {
-                CallConv::Stdcall => {
-                    state.esp = state
-                        .esp
-                        .wrapping_add(4 + (definition.argc as u32).saturating_mul(4));
-                }
-                CallConv::Cdecl => {
-                    state.esp = state.esp.wrapping_add(4);
-                }
-                CallConv::Win64 => {
-                    return Err(VmError::NativeExecution {
-                        op: "dispatch",
-                        detail: format!(
-                            "win64 hook dispatch is not supported for {}!{}",
-                            definition.module, definition.function
-                        ),
-                    });
-                }
-            }
-            if self.force_native_return {
-                self.force_native_return = false;
-                state.eip = self.native_return_sentinel as u32;
-            } else {
-                state.eip = return_address as u32;
-            }
+                &bound_module,
+                &bound_function,
+                "missing hook definition",
+            );
+            state.eax = 0;
+            state.eip = self.read_u32(state.esp as u64)?;
+            state.esp = state.esp.wrapping_add(4);
             return Ok(());
         }
 
@@ -500,34 +565,46 @@ impl VirtualExecutionEngine {
         tid: u32,
         instruction_budget: u64,
     ) -> Result<(), VmError> {
-        let thread = self
+        let registers = self
+            .core
             .scheduler
-            .thread_snapshot(tid)
+            .thread_registers(tid)
             .ok_or(VmError::RuntimeInvariant("thread snapshot missing"))?;
+        let stack_top = self
+            .core
+            .scheduler
+            .thread_ref(tid)
+            .map(|t| t.stack_top)
+            .unwrap_or(0);
+        let start_address = self.core.scheduler.thread_start_address(tid).unwrap_or(0);
         let mut state = X86State {
-            eax: thread.registers.get("eax").copied().unwrap_or(0) as u32,
-            ecx: thread.registers.get("ecx").copied().unwrap_or(0) as u32,
-            edx: thread.registers.get("edx").copied().unwrap_or(0) as u32,
-            ebx: thread.registers.get("ebx").copied().unwrap_or(0) as u32,
-            esp: thread
-                .registers
-                .get("esp")
-                .copied()
-                .unwrap_or(thread.stack_top) as u32,
-            ebp: thread.registers.get("ebp").copied().unwrap_or(0) as u32,
-            esi: thread.registers.get("esi").copied().unwrap_or(0) as u32,
-            edi: thread.registers.get("edi").copied().unwrap_or(0) as u32,
-            eip: thread
-                .registers
-                .get("eip")
-                .copied()
-                .unwrap_or(thread.start_address) as u32,
-            _eflags: thread.registers.get("eflags").copied().unwrap_or(0x202) as u32,
+            eax: registers.eax as u32,
+            ecx: registers.ecx as u32,
+            edx: registers.edx as u32,
+            ebx: registers.ebx as u32,
+            esp: if registers.esp != 0 {
+                registers.esp
+            } else {
+                stack_top
+            } as u32,
+            ebp: registers.ebp as u32,
+            esi: registers.esi as u32,
+            edi: registers.edi as u32,
+            eip: if registers.eip != 0 {
+                registers.eip
+            } else {
+                start_address
+            } as u32,
+            _eflags: if registers.eflags != 0 {
+                registers.eflags
+            } else {
+                0x202
+            } as u32,
         };
         let mut failure = None;
 
         for _ in 0..instruction_budget.max(1) {
-            if state.eip as u64 == self.native_return_sentinel {
+            if state.eip as u64 == self.core.native_return_sentinel {
                 break;
             }
             self.record_instruction_retired();
@@ -535,47 +612,49 @@ impl VirtualExecutionEngine {
                 failure = Some(error);
                 break;
             }
-            if self.thread_yield_requested {
+            if self.dispatch.thread_yield_requested() {
                 break;
             }
         }
 
-        let registers = BTreeMap::from([
-            ("eax".to_string(), state.eax as u64),
-            ("ebx".to_string(), state.ebx as u64),
-            ("ecx".to_string(), state.ecx as u64),
-            ("edx".to_string(), state.edx as u64),
-            ("esi".to_string(), state.esi as u64),
-            ("edi".to_string(), state.edi as u64),
-            ("ebp".to_string(), state.ebp as u64),
-            ("esp".to_string(), state.esp as u64),
-            ("eip".to_string(), state.eip as u64),
-            ("eflags".to_string(), state._eflags as u64),
-        ]);
-        self.scheduler
-            .set_thread_registers(tid, registers.clone())
+        let registers = RegisterFile {
+            eax: state.eax as u64,
+            ebx: state.ebx as u64,
+            ecx: state.ecx as u64,
+            edx: state.edx as u64,
+            esi: state.esi as u64,
+            edi: state.edi as u64,
+            ebp: state.ebp as u64,
+            esp: state.esp as u64,
+            eip: state.eip as u64,
+            eflags: state._eflags as u64,
+            ..RegisterFile::new()
+        };
+        self.core
+            .scheduler
+            .set_thread_registers(tid, registers)
             .ok_or(VmError::RuntimeInvariant(
                 "failed to capture thread registers",
             ))?;
 
         let exit_pc = state.eip as u64;
         let return_value = state.eax;
-        if exit_pc == self.native_return_sentinel {
+        if exit_pc == self.core.native_return_sentinel {
             let _ = self.terminate_current_thread(return_value);
-            if Some(tid) == self.main_thread_tid && self.exit_code.is_none() {
-                self.exit_code = Some(return_value);
+            if Some(tid) == self.core.main_thread_tid && self.core.exit_code.is_none() {
+                self.core.exit_code = Some(return_value);
             }
-        } else if self.scheduler.thread_state(tid) == Some("running") {
-            self.scheduler
+        } else if self.core.scheduler.thread_state(tid) == Some("running") {
+            self.core
+                .scheduler
                 .mark_thread_ready(tid)
                 .ok_or(VmError::RuntimeInvariant(
                     "failed to ready scheduler thread",
                 ))?;
         }
 
-        if self.thread_yield_requested {
-            self.thread_yield_requested = false;
-            self.defer_api_return = false;
+        if self.dispatch.thread_yield_requested() {
+            self.dispatch.reset_api_flow_control();
         }
 
         if let Some(error) = failure {

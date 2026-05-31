@@ -1,6 +1,84 @@
 use super::*;
+use crate::error::MemoryError;
 
 impl VirtualExecutionEngine {
+    const X86_ZERO_FLAG_MASK: u64 = 1 << 6;
+
+    fn region_end_for_guest_read(&self, address: u64) -> Result<u64, VmError> {
+        if let Some(region) = self.core.modules.memory().find_region(address, 1) {
+            return Ok(region.end());
+        }
+        if self.try_raise_guest_memory_read_fault(address, 1)? {
+            return Err(VmError::HookAbortedForGuestException);
+        }
+        Err(VmError::Memory(MemoryError::MissingRegion {
+            address,
+            size: 1,
+        }))
+    }
+
+    fn try_raise_guest_memory_read_fault(
+        &self,
+        _address: u64,
+        _size: usize,
+    ) -> Result<bool, VmError> {
+        let Some(_hook) = self.dispatch.active_hook_context else {
+            return Ok(false);
+        };
+        let active_state_ptr = ACTIVE_UNICORN_CONTEXT.with(|slot| slot.get());
+        let engine: &mut VirtualExecutionEngine = if !active_state_ptr.is_null() {
+            let state = unsafe { &mut *active_state_ptr };
+            unsafe { &mut *state.engine }
+        } else if let Some(context) = ACTIVE_HOOK_UNICORN_CONTEXT.with(|slot| slot.get()) {
+            unsafe { &mut *context.engine }
+        } else {
+            return Ok(false);
+        };
+        // Note: We intentionally DO NOT dispatch to the guest's SEH chain for
+        // memory read faults inside hook implementations.  The fault PC recorded
+        // by Unicorn is the bound-stub address, not a guest instruction.  If a
+        // real SEH handler returns ExceptionContinueExecution without advancing
+        // EIP, execution resumes at the bound stub, re-dispatches the same hook,
+        // and enters an infinite loop.
+        //
+        // Instead, degrade the fault into a zero/empty API return with ZF=1 so
+        // the caller can continue from the post-call path with stable flags.
+        // This matches real Windows behaviour where lstrlenA and similar probing
+        // functions return 0 with ZF=1 on inaccessible pointers.
+        engine.dispatch.set_hook_return_override(
+            0,
+            Self::X86_ZERO_FLAG_MASK,
+            Self::X86_ZERO_FLAG_MASK,
+        );
+        Ok(true)
+    }
+
+    pub(in crate::runtime::engine) fn read_bytes_with_guest_fault(
+        &self,
+        address: u64,
+        size: usize,
+    ) -> Result<Vec<u8>, VmError> {
+        if self.dispatch.guest_exception_recovered_in_active_hook()
+            || self.dispatch.hook_return_override().is_some()
+        {
+            return Err(VmError::HookAbortedForGuestException);
+        }
+        match self.core.modules.memory().read(address, size) {
+            Ok(bytes) => Ok(bytes),
+            Err(MemoryError::MissingRegion { .. }) => {
+                if self.try_raise_guest_memory_read_fault(address, size)? {
+                    Err(VmError::HookAbortedForGuestException)
+                } else {
+                    Err(VmError::Memory(MemoryError::MissingRegion {
+                        address,
+                        size: size as u64,
+                    }))
+                }
+            }
+            Err(error) => Err(VmError::from(error)),
+        }
+    }
+
     pub(in crate::runtime::engine) fn capture_stack_args(
         &self,
         first_arg: u64,
@@ -32,26 +110,34 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(String::new());
         }
-        let mut bytes = Vec::new();
+        let mut bytes = SmallVec::<[u8; 512]>::new();
         let mut offset = 0u64;
         let mut remaining = 0x1000usize;
+        // Cache the region end to avoid repeated binary search when the string
+        // spans multiple chunks within the same region.
+        let mut cached_region_end: Option<u64> = None;
         while remaining >= 2 {
             let cursor = address + offset;
-            let region_end = self
-                .modules
-                .memory()
-                .find_region(cursor, 1)
-                .ok_or(crate::error::MemoryError::MissingRegion {
-                    address: cursor,
-                    size: 1,
-                })?
-                .end();
+            let region_end = if let Some(end) = cached_region_end {
+                if cursor < end {
+                    end
+                } else {
+                    // Crossed into a new region — refresh the cache.
+                    let new_end = self.region_end_for_guest_read(cursor)?;
+                    cached_region_end = Some(new_end);
+                    new_end
+                }
+            } else {
+                let new_end = self.region_end_for_guest_read(cursor)?;
+                cached_region_end = Some(new_end);
+                new_end
+            };
             let available = (region_end - cursor) as usize;
             let chunk_size = remaining.min(available).min(0x400) & !1usize;
             if chunk_size == 0 {
                 break;
             }
-            let chunk = self.read_bytes_from_memory(cursor, chunk_size)?;
+            let chunk = self.read_bytes_with_guest_fault(cursor, chunk_size)?;
             let mut terminator = None;
             for index in (0..chunk.len()).step_by(2) {
                 if chunk[index..index + 2] == [0, 0] {
@@ -82,27 +168,32 @@ impl VirtualExecutionEngine {
     pub(in crate::runtime::engine) fn read_c_string_bytes_from_memory(
         &self,
         address: u64,
-    ) -> Result<Vec<u8>, VmError> {
+    ) -> Result<SmallVec<[u8; 256]>, VmError> {
         if address == 0 {
-            return Ok(Vec::new());
+            return Ok(SmallVec::new());
         }
-        let mut bytes = Vec::new();
+        let mut bytes = SmallVec::<[u8; 256]>::new();
         let mut offset = 0u64;
         let mut remaining = 0x1000usize;
+        let mut cached_region_end: Option<u64> = None;
         while remaining > 0 {
             let cursor = address + offset;
-            let region_end = self
-                .modules
-                .memory()
-                .find_region(cursor, 1)
-                .ok_or(crate::error::MemoryError::MissingRegion {
-                    address: cursor,
-                    size: 1,
-                })?
-                .end();
+            let region_end = if let Some(end) = cached_region_end {
+                if cursor < end {
+                    end
+                } else {
+                    let new_end = self.region_end_for_guest_read(cursor)?;
+                    cached_region_end = Some(new_end);
+                    new_end
+                }
+            } else {
+                let new_end = self.region_end_for_guest_read(cursor)?;
+                cached_region_end = Some(new_end);
+                new_end
+            };
             let available = (region_end - cursor) as usize;
             let chunk_size = remaining.min(available).min(0x400);
-            let chunk = self.read_bytes_from_memory(cursor, chunk_size)?;
+            let chunk = self.read_bytes_with_guest_fault(cursor, chunk_size)?;
             if let Some(index) = chunk.iter().position(|byte| *byte == 0) {
                 bytes.extend_from_slice(&chunk[..index]);
                 break;
@@ -119,10 +210,7 @@ impl VirtualExecutionEngine {
         address: u64,
         size: usize,
     ) -> Result<Vec<u8>, VmError> {
-        self.modules
-            .memory()
-            .read(address, size)
-            .map_err(VmError::from)
+        self.read_bytes_with_guest_fault(address, size)
     }
 
     pub(in crate::runtime::engine) fn read_wide_counted_string_from_memory(
@@ -133,7 +221,7 @@ impl VirtualExecutionEngine {
         if address == 0 || char_count == 0 {
             return Ok(String::new());
         }
-        let bytes = self.read_bytes_from_memory(address, char_count * 2)?;
+        let bytes = self.read_bytes_with_guest_fault(address, char_count * 2)?;
         Ok(Self::decode_utf16le_bytes_ignoring_errors(&bytes))
     }
 
@@ -145,10 +233,15 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(Vec::new());
         }
-        if count == u32::MAX as u64 {
-            return self.read_c_string_bytes_from_memory(address);
+        // Windows string-length parameters are 32-bit; mask upper garbage bits
+        // that may remain in the register or stack slot.
+        let count32 = count as u32;
+        if count32 == u32::MAX {
+            return self
+                .read_c_string_bytes_from_memory(address)
+                .map(|sv| sv.into_vec());
         }
-        self.read_bytes_from_memory(address, count as usize)
+        self.read_bytes_with_guest_fault(address, count32 as usize)
     }
 
     pub(in crate::runtime::engine) fn read_wide_input_string(
@@ -159,10 +252,13 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(String::new());
         }
-        if count == u32::MAX as u64 {
+        // Windows string-length parameters are 32-bit; mask upper garbage bits
+        // that may remain in the register or stack slot.
+        let count32 = count as u32;
+        if count32 == u32::MAX {
             return self.read_wide_string_from_memory(address);
         }
-        self.read_wide_counted_string_from_memory(address, count as usize)
+        self.read_wide_counted_string_from_memory(address, count32 as usize)
     }
 
     pub(in crate::runtime::engine) fn read_provider_name(
@@ -183,9 +279,10 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn current_tls_thread_id(&self) -> u32 {
-        self.scheduler
+        self.core
+            .scheduler
             .current_tid()
-            .or(self.main_thread_tid)
+            .or(self.core.main_thread_tid)
             .unwrap_or(0)
     }
 
@@ -232,7 +329,7 @@ impl VirtualExecutionEngine {
 
             let trail_offset = if trail < 0x7F { 0x40 } else { 0x41 };
             let table_index = (u16::from(lead) - 0x81) * 190 + (u16::from(trail) - trail_offset);
-            if !python_gbk_pair_is_valid(table_index) {
+            if !gbk_pair_is_valid(table_index) {
                 index += 1;
                 continue;
             }
@@ -245,8 +342,7 @@ impl VirtualExecutionEngine {
                 }
             }
 
-            // Python's `gbk` decoder drops the invalid lead byte but still
-            // retries the trailing byte as a fresh input byte.
+            // Drop the invalid lead byte but retry the trailing byte as fresh input.
             index += 1;
         }
         text
@@ -338,8 +434,9 @@ impl VirtualExecutionEngine {
         }
         let writable = capacity.saturating_sub(1);
         let data = &value.as_bytes()[..value.len().min(writable)];
-        self.modules.memory_mut().write(address, data)?;
-        self.modules
+        self.core.modules.memory_mut().write(address, data)?;
+        self.core
+            .modules
             .memory_mut()
             .write(address + data.len() as u64, &[0])?;
         Ok(data.len() as u64)
@@ -355,7 +452,8 @@ impl VirtualExecutionEngine {
             return Ok(0);
         }
         let writable = capacity.min(value.len());
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(address, &value[..writable])?;
         Ok(writable as u64)
@@ -377,8 +475,9 @@ impl VirtualExecutionEngine {
             .iter()
             .flat_map(|word| word.to_le_bytes())
             .collect::<Vec<_>>();
-        self.modules.memory_mut().write(address, &bytes)?;
-        self.modules
+        self.core.modules.memory_mut().write(address, &bytes)?;
+        self.core
+            .modules
             .memory_mut()
             .write(address + bytes.len() as u64, &[0, 0])?;
         Ok(encoded.len() as u64)
@@ -418,9 +517,10 @@ impl VirtualExecutionEngine {
             .flat_map(|word| word.to_le_bytes())
             .collect::<Vec<_>>();
         if !bytes.is_empty() {
-            self.modules.memory_mut().write(base + 4, &bytes)?;
+            self.core.modules.memory_mut().write(base + 4, &bytes)?;
         }
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(base + 4 + byte_len as u64, &[0, 0])?;
         Ok(base + 4)
@@ -437,11 +537,13 @@ impl VirtualExecutionEngine {
         if bstr < 4 {
             return false;
         }
-        self.heaps.free(self.heaps.process_heap(), bstr - 4)
+        self.process_memory
+            .heaps
+            .free(self.process_memory.heaps.process_heap(), bstr - 4)
     }
 
     pub(in crate::runtime::engine) fn ensure_shell_imalloc(&mut self) -> Result<u64, VmError> {
-        if let Some(object) = self.shell_imalloc {
+        if let Some(object) = self.ui.shell_imalloc {
             return Ok(object);
         }
 
@@ -457,6 +559,7 @@ impl VirtualExecutionEngine {
             "IMalloc_HeapMinimize",
         ];
         let shell32_base = self
+            .core
             .modules
             .get_loaded("shell32.dll")
             .map(|module| module.base)
@@ -465,10 +568,10 @@ impl VirtualExecutionEngine {
             ))?;
         let vtable = self.alloc_process_heap_block((methods.len() * 4) as u64, "IMalloc:vtable")?;
         for (index, method) in methods.iter().enumerate() {
-            let stub = self.modules.resolve_export(
+            let stub = self.core.modules.resolve_export(
                 shell32_base,
-                &self.config,
-                &mut self.hooks,
+                &self.core.config,
+                &mut self.core.hooks,
                 Some(method),
                 None,
             );
@@ -478,7 +581,7 @@ impl VirtualExecutionEngine {
         let object = self.alloc_process_heap_block(8, "IMalloc:object")?;
         self.write_u32(object, vtable as u32)?;
         self.write_u32(object + 4, 1)?;
-        self.shell_imalloc = Some(object);
+        self.ui.shell_imalloc = Some(object);
         Ok(object)
     }
 
@@ -489,12 +592,17 @@ impl VirtualExecutionEngine {
     ) -> Result<u64, VmError> {
         let size = size.max(1);
         let address = self
+            .process_memory
             .heaps
-            .alloc(self.modules.memory_mut(), self.heaps.process_heap(), size)
+            .alloc(
+                self.core.modules.memory_mut(),
+                self.process_memory.heaps.process_heap(),
+                size,
+            )
             .ok_or(VmError::RuntimeInvariant("process heap allocation failed"))?;
         self.log_heap_event(
             "HEAP_ALLOC",
-            self.heaps.process_heap(),
+            self.process_memory.heaps.process_heap(),
             address,
             size,
             source,
@@ -503,11 +611,11 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn ensure_inet_ntoa_buffer(&mut self) -> Result<u64, VmError> {
-        if let Some(address) = self.inet_ntoa_buffer {
+        if let Some(address) = self.network_state.inet_ntoa_buffer {
             return Ok(address);
         }
         let address = self.alloc_process_heap_block(32, "inet_ntoa")?;
-        self.inet_ntoa_buffer = Some(address);
+        self.network_state.inet_ntoa_buffer = Some(address);
         Ok(address)
     }
 
@@ -551,12 +659,12 @@ impl VirtualExecutionEngine {
         payload.extend_from_slice(&port.to_be_bytes());
         payload.extend_from_slice(&ip);
         payload.extend_from_slice(&[0u8; 8]);
-        self.modules.memory_mut().write(address, &payload)?;
+        self.core.modules.memory_mut().write(address, &payload)?;
         Ok(())
     }
 
     pub(in crate::runtime::engine) fn fd_set_array_offset(&self) -> u64 {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             4
         } else {
             8
@@ -571,12 +679,12 @@ impl VirtualExecutionEngine {
             return Ok(Vec::new());
         }
         let count = self.read_u32(address)? as usize;
-        let ptr_size = self.arch.pointer_size as u64;
+        let ptr_size = self.core.arch.pointer_size as u64;
         let offset = self.fd_set_array_offset();
         let mut handles = Vec::new();
         for index in 0..count.min(64) {
             let slot = address + offset + index as u64 * ptr_size;
-            let value = if self.arch.is_x86() {
+            let value = if self.core.arch.is_x86() {
                 self.read_u32(slot)? as u64
             } else {
                 u64::from_le_bytes(self.read_bytes_from_memory(slot, 8)?.try_into().unwrap())
@@ -596,9 +704,12 @@ impl VirtualExecutionEngine {
         }
         self.write_u32(address, handles.len().min(64) as u32)?;
         if self.fd_set_array_offset() > 4 {
-            self.modules.memory_mut().write(address + 4, &[0u8; 4])?;
+            self.core
+                .modules
+                .memory_mut()
+                .write(address + 4, &[0u8; 4])?;
         }
-        let ptr_size = self.arch.pointer_size as u64;
+        let ptr_size = self.core.arch.pointer_size as u64;
         for (index, handle) in handles.iter().take(64).enumerate() {
             let slot = address + self.fd_set_array_offset() + index as u64 * ptr_size;
             self.write_pointer_value(slot, *handle as u64)?;
@@ -611,7 +722,7 @@ impl VirtualExecutionEngine {
         name: &str,
         ip: &str,
     ) -> Result<u64, VmError> {
-        let ptr_size = self.arch.pointer_size as u64;
+        let ptr_size = self.core.arch.pointer_size as u64;
         let host_name = if name.is_empty() { "localhost" } else { name };
         let name_bytes = format!("{host_name}\0").into_bytes();
         let ip_bytes = self
@@ -625,19 +736,24 @@ impl VirtualExecutionEngine {
         let aliases_ptr = self.alloc_process_heap_block(ptr_size, "gethostbyname:aliases")?;
         let addr_list_ptr =
             self.alloc_process_heap_block(ptr_size * 2, "gethostbyname:addr_list")?;
-        self.modules.memory_mut().write(name_ptr, &name_bytes)?;
-        self.modules.memory_mut().write(addr_ptr, &ip_bytes)?;
-        self.modules
+        self.core
+            .modules
+            .memory_mut()
+            .write(name_ptr, &name_bytes)?;
+        self.core.modules.memory_mut().write(addr_ptr, &ip_bytes)?;
+        self.core
+            .modules
             .memory_mut()
             .write(aliases_ptr, &vec![0u8; ptr_size as usize])?;
         self.write_pointer_value(addr_list_ptr, addr_ptr)?;
         self.write_pointer_value(addr_list_ptr + ptr_size, 0)?;
-        let struct_size = if self.arch.is_x86() { 16 } else { 32 };
+        let struct_size = if self.core.arch.is_x86() { 16 } else { 32 };
         let hostent_ptr = self.alloc_process_heap_block(struct_size, "gethostbyname:hostent")?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(hostent_ptr, &vec![0u8; struct_size as usize])?;
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             self.write_pointer_value(hostent_ptr, name_ptr)?;
             self.write_pointer_value(hostent_ptr + 4, aliases_ptr)?;
             self.write_u16(hostent_ptr + 8, AF_INET)?;
@@ -658,7 +774,13 @@ impl VirtualExecutionEngine {
         node_name: &str,
         service_name: &str,
     ) -> Result<u64, VmError> {
-        let host = self.synthetic_host_ipv4_text(node_name);
+        let host = if node_name.trim().is_empty() {
+            self.synthetic_host_ipv4_text(node_name)
+        } else if self.resolve_ipv4_like_winsock(node_name).is_some() {
+            self.synthetic_host_ipv4_text(node_name)
+        } else {
+            self.network_state.dns.resolve(node_name.trim())
+        };
         let port = service_name
             .parse::<u16>()
             .ok()
@@ -680,24 +802,27 @@ impl VirtualExecutionEngine {
         );
         let canon_name_ptr =
             self.alloc_process_heap_block(canon_name.len() as u64, "getaddrinfo:canon")?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(canon_name_ptr, canon_name.as_bytes())?;
-        let struct_size = if self.arch.is_x86() { 32 } else { 48 };
+        let struct_size = if self.core.arch.is_x86() { 32 } else { 48 };
         let addrinfo_ptr = self.alloc_process_heap_block(struct_size, "getaddrinfo:addrinfo")?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(addrinfo_ptr, &vec![0u8; struct_size as usize])?;
         self.write_u32(addrinfo_ptr + 4, AF_INET as u32)?;
         self.write_u32(addrinfo_ptr + 8, 1)?;
         self.write_u32(addrinfo_ptr + 12, 6)?;
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             self.write_u32(addrinfo_ptr + 16, 16)?;
             self.write_pointer_value(addrinfo_ptr + 20, canon_name_ptr)?;
             self.write_pointer_value(addrinfo_ptr + 24, sockaddr_ptr)?;
             self.write_pointer_value(addrinfo_ptr + 28, 0)?;
         } else {
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .write(addrinfo_ptr + 16, &16u64.to_le_bytes())?;
             self.write_pointer_value(addrinfo_ptr + 24, canon_name_ptr)?;
@@ -708,7 +833,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn wsabuf_pointer_offset(&self) -> u64 {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             4
         } else {
             8
@@ -716,7 +841,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn wsabuf_stride(&self) -> u64 {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             8
         } else {
             16
@@ -778,7 +903,8 @@ impl VirtualExecutionEngine {
                 continue;
             }
             let chunk_len = length.min(data.len() - written);
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .write(buffer, &data[written..written + chunk_len])?;
             written += chunk_len;
@@ -791,21 +917,26 @@ impl VirtualExecutionEngine {
         name: &str,
         protocol: i32,
     ) -> Result<u64, VmError> {
-        let ptr_size = self.arch.pointer_size as u64;
+        let ptr_size = self.core.arch.pointer_size as u64;
         let name_bytes = format!("{name}\0").into_bytes();
         let name_ptr = self.alloc_process_heap_block(name_bytes.len() as u64, "protoent:name")?;
         let aliases_ptr = self.alloc_process_heap_block(ptr_size, "protoent:aliases")?;
-        self.modules.memory_mut().write(name_ptr, &name_bytes)?;
-        self.modules
+        self.core
+            .modules
+            .memory_mut()
+            .write(name_ptr, &name_bytes)?;
+        self.core
+            .modules
             .memory_mut()
             .write(aliases_ptr, &vec![0u8; ptr_size as usize])?;
 
-        let struct_size = if self.arch.is_x86() { 12 } else { 24 };
+        let struct_size = if self.core.arch.is_x86() { 12 } else { 24 };
         let protoent_ptr = self.alloc_process_heap_block(struct_size, "protoent:struct")?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(protoent_ptr, &vec![0u8; struct_size as usize])?;
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             self.write_pointer_value(protoent_ptr, name_ptr)?;
             self.write_pointer_value(protoent_ptr + 4, aliases_ptr)?;
             self.write_u32(protoent_ptr + 8, protocol as u32)?;
@@ -823,27 +954,33 @@ impl VirtualExecutionEngine {
         protocol: &str,
         port: u16,
     ) -> Result<u64, VmError> {
-        let ptr_size = self.arch.pointer_size as u64;
+        let ptr_size = self.core.arch.pointer_size as u64;
         let name_bytes = format!("{name}\0").into_bytes();
         let protocol_bytes = format!("{protocol}\0").into_bytes();
         let name_ptr = self.alloc_process_heap_block(name_bytes.len() as u64, "servent:name")?;
         let aliases_ptr = self.alloc_process_heap_block(ptr_size, "servent:aliases")?;
         let protocol_ptr =
             self.alloc_process_heap_block(protocol_bytes.len() as u64, "servent:proto")?;
-        self.modules.memory_mut().write(name_ptr, &name_bytes)?;
-        self.modules
+        self.core
+            .modules
+            .memory_mut()
+            .write(name_ptr, &name_bytes)?;
+        self.core
+            .modules
             .memory_mut()
             .write(aliases_ptr, &vec![0u8; ptr_size as usize])?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(protocol_ptr, &protocol_bytes)?;
 
-        let struct_size = if self.arch.is_x86() { 16 } else { 32 };
+        let struct_size = if self.core.arch.is_x86() { 16 } else { 32 };
         let servent_ptr = self.alloc_process_heap_block(struct_size, "servent:struct")?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(servent_ptr, &vec![0u8; struct_size as usize])?;
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             self.write_pointer_value(servent_ptr, name_ptr)?;
             self.write_pointer_value(servent_ptr + 4, aliases_ptr)?;
             self.write_u16(servent_ptr + 8, port.to_be())?;
@@ -858,7 +995,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn safe_array_descriptor_size(&self) -> u64 {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             24
         } else {
             32
@@ -866,7 +1003,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn safe_array_bounds_offset(&self) -> u64 {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             16
         } else {
             24
@@ -874,7 +1011,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn safe_array_data_offset(&self) -> u64 {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             12
         } else {
             16
@@ -887,7 +1024,7 @@ impl VirtualExecutionEngine {
             3 | 4 | 10 | 19 | 22 | 23 => 4,
             5 | 6 | 7 | 14 | 20 | 21 => 8,
             16 | 17 => 1,
-            _ => self.arch.pointer_size as u32,
+            _ => self.core.arch.pointer_size as u32,
         }
     }
 
@@ -901,13 +1038,15 @@ impl VirtualExecutionEngine {
         let cb_elements = self.safe_array_element_size(vartype).max(1);
         let data_size = (count as u64).saturating_mul(cb_elements as u64).max(1);
         let data = self.alloc_process_heap_block(data_size, &format!("{source}:data"))?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(data, &vec![0u8; data_size as usize])?;
 
         let descriptor_size = self.safe_array_descriptor_size();
         let descriptor = self.alloc_process_heap_block(descriptor_size, source)?;
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(descriptor, &vec![0u8; descriptor_size as usize])?;
         self.write_u16(descriptor, 1)?;
@@ -940,20 +1079,22 @@ impl VirtualExecutionEngine {
     pub(in crate::runtime::engine) fn allocate_global_atom(&mut self, name: &str) -> u16 {
         let trimmed = name.trim();
         if let Some((&atom, _)) = self
+            .objects
             .global_atoms
             .iter()
             .find(|(_, value)| value.eq_ignore_ascii_case(trimmed))
         {
             return atom;
         }
-        let atom = self.next_atom.max(0xC000);
-        self.next_atom = self.next_atom.saturating_add(1);
-        self.global_atoms.insert(atom, trimmed.to_string());
+        let atom = self.objects.next_atom.max(0xC000);
+        self.objects.next_atom = self.objects.next_atom.saturating_add(1);
+        self.objects.global_atoms.insert(atom, trimmed.to_string());
         atom
     }
 
     pub(in crate::runtime::engine) fn find_global_atom(&self, name: &str) -> u16 {
-        self.global_atoms
+        self.objects
+            .global_atoms
             .iter()
             .find(|(_, value)| value.eq_ignore_ascii_case(name.trim()))
             .map(|(&atom, _)| atom)
@@ -1032,18 +1173,19 @@ impl VirtualExecutionEngine {
         ] {
             payload.extend_from_slice(&value.to_le_bytes());
         }
-        self.modules.memory_mut().write(address, &payload)?;
+        self.core.modules.memory_mut().write(address, &payload)?;
         Ok(())
     }
 
     pub(in crate::runtime::engine) fn next_guid_bytes_le(&mut self, version: u16) -> [u8; 16] {
-        let time_low = self.guid_rng.next_u32();
-        let time_mid = self.guid_rng.next_u32() as u16;
-        let time_hi_and_version = (self.guid_rng.next_u32() as u16 & 0x0FFF) | (version << 12);
-        let clock_seq_hi_and_reserved = (self.guid_rng.next_u32() as u8 & 0x3F) | 0x80;
-        let clock_seq_low = self.guid_rng.next_u32() as u8;
+        let time_low = self.dispatch.guid_rng.next_u32();
+        let time_mid = self.dispatch.guid_rng.next_u32() as u16;
+        let time_hi_and_version =
+            (self.dispatch.guid_rng.next_u32() as u16 & 0x0FFF) | (version << 12);
+        let clock_seq_hi_and_reserved = (self.dispatch.guid_rng.next_u32() as u8 & 0x3F) | 0x80;
+        let clock_seq_low = self.dispatch.guid_rng.next_u32() as u8;
         let mut node = [0u8; 6];
-        self.guid_rng.fill_bytes(&mut node);
+        self.dispatch.guid_rng.fill_bytes(&mut node);
 
         let mut bytes = [0u8; 16];
         bytes[0..4].copy_from_slice(&time_low.to_le_bytes());
@@ -1092,14 +1234,14 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(());
         }
-        let size = if self.arch.is_x86() {
+        let size = if self.core.arch.is_x86() {
             STARTUPINFO_SIZE_X86
         } else {
             STARTUPINFO_SIZE_X64
         };
         let mut bytes = vec![0u8; size as usize];
         bytes[0..4].copy_from_slice(&size.to_le_bytes());
-        self.modules.memory_mut().write(address, &bytes)?;
+        self.core.modules.memory_mut().write(address, &bytes)?;
         Ok(())
     }
 
@@ -1108,17 +1250,23 @@ impl VirtualExecutionEngine {
         thread_handle: u32,
         address: u64,
     ) -> Result<bool, VmError> {
-        let Some(tid) = self.scheduler.thread_tid_for_handle(thread_handle) else {
+        let Some(tid) = self.core.scheduler.thread_tid_for_handle(thread_handle) else {
             return Ok(false);
         };
         let Some(registers) = self
+            .core
             .scheduler
             .thread_snapshot(tid)
             .map(|thread| thread.registers)
         else {
             return Ok(false);
         };
-        serialize_register_context(self.modules.memory_mut(), self.arch, address, &registers)?;
+        serialize_register_context(
+            self.core.modules.memory_mut(),
+            self.core.arch,
+            address,
+            &registers,
+        )?;
         Ok(true)
     }
 
@@ -1127,11 +1275,13 @@ impl VirtualExecutionEngine {
         thread_handle: u32,
         address: u64,
     ) -> Result<bool, VmError> {
-        let Some(tid) = self.scheduler.thread_tid_for_handle(thread_handle) else {
+        let Some(tid) = self.core.scheduler.thread_tid_for_handle(thread_handle) else {
             return Ok(false);
         };
-        let registers = deserialize_register_context(self.modules.memory(), self.arch, address)?;
-        self.scheduler
+        let registers =
+            deserialize_register_context(self.core.modules.memory(), self.core.arch, address)?;
+        self.core
+            .scheduler
             .set_thread_registers(tid, registers)
             .ok_or(VmError::RuntimeInvariant(
                 "failed to store thread register context",
@@ -1147,7 +1297,7 @@ impl VirtualExecutionEngine {
     ) -> Result<u64, VmError> {
         if destination != 0 && source != 0 && size != 0 {
             let bytes = self.read_bytes_from_memory(source, size)?;
-            self.modules.memory_mut().write(destination, &bytes)?;
+            self.core.modules.memory_mut().write(destination, &bytes)?;
         }
         Ok(destination)
     }
@@ -1166,7 +1316,8 @@ impl VirtualExecutionEngine {
         let mut offset = 0u64;
         while offset < length {
             let writable = ((length - offset) as usize).min(chunk.len());
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .write(address + offset, &chunk[..writable])?;
             offset += writable as u64;
@@ -1182,7 +1333,8 @@ impl VirtualExecutionEngine {
         if address == 0 || size == 0 {
             return false;
         }
-        self.modules
+        self.core
+            .modules
             .memory()
             .find_region(address, size)
             .map(|region| region.perms & PROT_WRITE != 0)

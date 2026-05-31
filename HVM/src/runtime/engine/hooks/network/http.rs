@@ -56,7 +56,7 @@ impl VirtualExecutionEngine {
     }
 
     fn url_components_layout(&self) -> UrlComponentsLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             UrlComponentsLayout {
                 scheme_ptr: 4,
                 scheme_len: 8,
@@ -402,7 +402,7 @@ impl VirtualExecutionEngine {
         handle: u32,
         info_level: u32,
     ) -> Option<Vec<u8>> {
-        let request = self.network.get_request(handle)?;
+        let request = self.network_state.network.get_request(handle)?;
         let query = info_level & 0xFFFF;
         if info_level & WINHTTP_QUERY_FLAG_NUMBER != 0 {
             let numeric = match query {
@@ -442,35 +442,41 @@ impl VirtualExecutionEngine {
         &mut self,
         handle: u32,
     ) -> Result<(), VmError> {
-        let Some((host, path, verb)) = self.network.request_route(handle) else {
+        let Some((host, path, verb)) = self.network_state.network.request_route(handle) else {
             return Ok(());
         };
         let Some((rule_index, rule)) = self
+            .core
             .config
             .http_response_rule_with_index_for(&host, &path, &verb)
         else {
             return Ok(());
         };
         let match_count = self
+            .network_state
             .http_response_rule_hits
             .get(&rule_index)
             .copied()
             .unwrap_or(0);
         let response_index = (match_count as usize).min(rule.responses.len().saturating_sub(1));
         let response = rule.responses[response_index].clone();
-        self.http_response_rule_hits
+        self.network_state
+            .http_response_rule_hits
             .insert(rule_index, match_count.saturating_add(1));
         let status_code = response.status_code;
         let body = response.body;
         let response_headers =
             Self::build_http_response_headers(status_code, &response.headers, body.len());
         let body_len = body.len();
-        let _ = self.network.with_request_mut(handle, move |request| {
-            request.status_code = status_code;
-            request.response_body = body;
-            request.response_headers = response_headers;
-            request.read_offset = 0;
-        });
+        let _ = self
+            .network_state
+            .network
+            .with_request_mut(handle, move |request| {
+                request.status_code = status_code;
+                request.response_body = body;
+                request.response_headers = response_headers;
+                request.read_offset = 0;
+            });
         let mut fields = Map::new();
         fields.insert("handle".to_string(), json!(handle));
         fields.insert("host".to_string(), json!(host));

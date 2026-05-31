@@ -8,7 +8,6 @@ impl WindowsProcessEnvironment {
             Self::segment_descriptor(0, 0xFFFFF, 0x92, 0x0C),
             Self::segment_descriptor(teb_base, 0x1FFF, 0x92, 0x04),
         ];
-        self.write_zeroes(self.layout.gdt_base, GDT_REGION_SIZE as usize);
         for (index, entry) in entries.into_iter().enumerate() {
             self.write_bytes(self.layout.gdt_base + index as u64 * 8, &entry);
         }

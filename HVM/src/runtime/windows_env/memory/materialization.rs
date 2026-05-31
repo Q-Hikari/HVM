@@ -8,9 +8,16 @@ impl WindowsProcessEnvironment {
         memory: &MemoryManager,
     ) -> Result<(), MemoryError> {
         let teb_base = self.current_teb_base;
-        if memory.is_range_mapped(teb_base, TEB_REGION_SIZE) {
-            let bytes = memory.read(teb_base, TEB_REGION_SIZE as usize)?;
-            self.write_bytes_inner(teb_base, &bytes, false);
+        let teb_end = teb_base.saturating_add(TEB_REGION_SIZE);
+        let mut page_base = teb_base & !(PAGE_SIZE - 1);
+        while page_base < teb_end {
+            if !memory.is_range_mapped(page_base, PAGE_SIZE) {
+                page_base = page_base.saturating_add(PAGE_SIZE);
+                continue;
+            }
+            let bytes = memory.read(page_base, PAGE_SIZE as usize)?;
+            self.write_bytes_inner(page_base, &bytes, false);
+            page_base = page_base.saturating_add(PAGE_SIZE);
         }
         Ok(())
     }
@@ -21,6 +28,7 @@ impl WindowsProcessEnvironment {
             return Ok(());
         }
         let dirty_pages = std::mem::take(&mut self.dirty_pages);
+        let mut page_buffer = vec![0u8; PAGE_SIZE as usize];
         for page_base in dirty_pages {
             self.ensure_region(
                 memory,
@@ -28,7 +36,7 @@ impl WindowsProcessEnvironment {
                 PAGE_SIZE,
                 self.region_tag_for_page(page_base),
             )?;
-            self.copy_region(memory, page_base, PAGE_SIZE as usize)?;
+            self.copy_region_into(memory, page_base, &mut page_buffer)?;
         }
 
         self.dirty = false;
@@ -48,26 +56,34 @@ impl WindowsProcessEnvironment {
         Ok(())
     }
 
-    pub(super) fn copy_region(
+    pub(super) fn copy_region_into(
         &self,
         memory: &mut MemoryManager,
         base: u64,
-        size: usize,
+        buffer: &mut [u8],
     ) -> Result<(), MemoryError> {
-        let mut bytes = vec![0u8; size];
-        for (offset, byte) in bytes.iter_mut().enumerate() {
-            if let Some(value) = self.memory.get(&(base + offset as u64)) {
-                *byte = *value;
+        buffer.fill(0);
+        let mut cursor = base;
+        let end = base.saturating_add(buffer.len() as u64);
+        while cursor < end {
+            let page_base = cursor & !(PAGE_SIZE - 1);
+            let page_offset = (cursor - page_base) as usize;
+            let chunk_len = ((PAGE_SIZE as usize) - page_offset).min((end - cursor) as usize);
+            if let Some(page) = self.memory.get(&page_base) {
+                let buffer_offset = (cursor - base) as usize;
+                buffer[buffer_offset..buffer_offset + chunk_len]
+                    .copy_from_slice(&page[page_offset..page_offset + chunk_len]);
             }
+            cursor = cursor.saturating_add(chunk_len as u64);
         }
-        memory.write(base, &bytes)
+        memory.write(base, buffer)
     }
 
     fn region_tag_for_page(&self, page_base: u64) -> &'static str {
         if Self::page_in_range(page_base, self.layout.peb_base, PEB_REGION_SIZE) {
             return "env:peb";
         }
-        if Self::page_in_range(page_base, self.layout.ldr_base, LDR_REGION_SIZE) {
+        if Self::page_in_range(page_base, self.layout.ldr_base, self.loader_region_size()) {
             return "env:ldr";
         }
         if Self::page_in_range(
@@ -150,5 +166,31 @@ impl WindowsProcessEnvironment {
     fn page_in_range(page_base: u64, base: u64, size: u64) -> bool {
         let end = base.saturating_add(size);
         page_base >= base && page_base < end
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::manager::{MemoryManager, PROT_READ, PROT_WRITE};
+
+    #[test]
+    fn sync_current_thread_from_memory_refreshes_live_teb_pages() {
+        let mut env = WindowsProcessEnvironment::for_tests_x86();
+        env.dirty = false;
+        env.dirty_pages.clear();
+        let teb_base = env.current_teb();
+        let peb_base = env.current_peb();
+        let mut memory = MemoryManager::for_tests();
+        memory
+            .map_region(teb_base, TEB_REGION_SIZE, PROT_READ | PROT_WRITE, "teb")
+            .unwrap();
+
+        env.write_bytes_inner(teb_base, &[0x11], false);
+        memory.write(teb_base, &[0x22]).unwrap();
+        env.write_bytes(peb_base, &[0xAA]);
+
+        env.sync_current_thread_from_memory(&memory).unwrap();
+        assert_eq!(env.read_bytes(teb_base, 1).unwrap(), vec![0x22]);
     }
 }

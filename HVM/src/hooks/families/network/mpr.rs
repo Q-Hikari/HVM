@@ -1,231 +1,45 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "mpr.dll",
-        "MultinetGetConnectionPerformanceA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "MultinetGetConnectionPerformanceW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetAddConnectionA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetAddConnectionW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetAddConnection2A",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetAddConnection2W",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetAddConnection3A",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetAddConnection3W",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetUseConnectionA",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetUseConnectionW",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetCancelConnectionA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetCancelConnectionW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetCancelConnection2A",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetCancelConnection2W",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetOpenEnumA",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetOpenEnumW",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetEnumResourceA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetEnumResourceW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetCloseEnum",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetConnectionA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetConnectionW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetLastErrorA",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetLastErrorW",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetNetworkInformationA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetNetworkInformationW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetProviderNameA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetProviderNameW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetResourceInformationA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetResourceInformationW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetResourceParentA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetResourceParentW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetUniversalNameA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetUniversalNameW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetUserA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "mpr.dll",
-        "WNetGetUserW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("MultinetGetConnectionPerformanceA", LogicalAbi::WinApi),
+    ("MultinetGetConnectionPerformanceW", LogicalAbi::WinApi),
+    ("WNetAddConnectionA", LogicalAbi::WinApi),
+    ("WNetAddConnectionW", LogicalAbi::WinApi),
+    ("WNetAddConnection2A", LogicalAbi::WinApi),
+    ("WNetAddConnection2W", LogicalAbi::WinApi),
+    ("WNetAddConnection3A", LogicalAbi::WinApi),
+    ("WNetAddConnection3W", LogicalAbi::WinApi),
+    ("WNetUseConnectionA", LogicalAbi::WinApi),
+    ("WNetUseConnectionW", LogicalAbi::WinApi),
+    ("WNetCancelConnectionA", LogicalAbi::WinApi),
+    ("WNetCancelConnectionW", LogicalAbi::WinApi),
+    ("WNetCancelConnection2A", LogicalAbi::WinApi),
+    ("WNetCancelConnection2W", LogicalAbi::WinApi),
+    ("WNetOpenEnumA", LogicalAbi::WinApi),
+    ("WNetOpenEnumW", LogicalAbi::WinApi),
+    ("WNetEnumResourceA", LogicalAbi::WinApi),
+    ("WNetEnumResourceW", LogicalAbi::WinApi),
+    ("WNetCloseEnum", LogicalAbi::WinApi),
+    ("WNetGetConnectionA", LogicalAbi::WinApi),
+    ("WNetGetConnectionW", LogicalAbi::WinApi),
+    ("WNetGetLastErrorA", LogicalAbi::WinApi),
+    ("WNetGetLastErrorW", LogicalAbi::WinApi),
+    ("WNetGetNetworkInformationA", LogicalAbi::WinApi),
+    ("WNetGetNetworkInformationW", LogicalAbi::WinApi),
+    ("WNetGetProviderNameA", LogicalAbi::WinApi),
+    ("WNetGetProviderNameW", LogicalAbi::WinApi),
+    ("WNetGetResourceInformationA", LogicalAbi::WinApi),
+    ("WNetGetResourceInformationW", LogicalAbi::WinApi),
+    ("WNetGetResourceParentA", LogicalAbi::WinApi),
+    ("WNetGetResourceParentW", LogicalAbi::WinApi),
+    ("WNetGetUniversalNameA", LogicalAbi::WinApi),
+    ("WNetGetUniversalNameW", LogicalAbi::WinApi),
+    ("WNetGetUserA", LogicalAbi::WinApi),
+    ("WNetGetUserW", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct MprHookLibrary;
-
-impl HookLibrary for MprHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_mpr_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&MprHookLibrary);
+    registry.register_function_stubs("mpr.dll", &FUNCTIONS);
 }

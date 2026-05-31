@@ -70,7 +70,7 @@ impl LoadedTestEngine {
     pub fn bind_representative_hook_exports_for_test(&mut self) -> HookBindReport {
         let mut bound = 0usize;
         for (module, function) in representative_hook_exports() {
-            let supported = self.registry.definition(module, function).is_some();
+            let supported = self.registry.has_signature_for(module, function);
             let _ = self.registry.bind_stub(module, function);
             if supported {
                 bound += 1;
@@ -83,7 +83,7 @@ impl LoadedTestEngine {
         ];
         let mut unsupported_seen = 0usize;
         for (module, function) in unsupported_probes {
-            let supported = self.registry.definition(module, function).is_some();
+            let supported = self.registry.has_signature_for(module, function);
             let _ = self.registry.bind_stub(module, function);
             if !supported {
                 unsupported_seen += 1;

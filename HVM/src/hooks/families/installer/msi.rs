@@ -1,261 +1,50 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "msi.dll",
-        "DllCanUnloadNow",
-        0,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "DllGetClassObject",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiCloseHandle",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiCloseAllHandles",
-        0,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiOpenPackageA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiOpenPackageW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiOpenPackageExA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiOpenPackageExW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiOpenDatabaseA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiOpenDatabaseW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetPropertyA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetPropertyW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiSetPropertyA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiSetPropertyW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetMode",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiDoActionA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiDoActionW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiProcessMessage",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiQueryProductStateA",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiQueryProductStateW",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiEnumProductsA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiEnumProductsW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiEnumProductsExA",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiEnumProductsExW",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetProductInfoA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetProductInfoW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetProductInfoExA",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetProductInfoExW",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetFileVersionA",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetFileVersionW",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetComponentPathA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetComponentPathW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiLocateComponentA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiLocateComponentW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetProductCodeA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetProductCodeW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetSummaryInformationA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiGetSummaryInformationW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiSummaryInfoGetPropertyA",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "msi.dll",
-        "MsiSummaryInfoGetPropertyW",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("DllCanUnloadNow", LogicalAbi::WinApi),
+    ("DllGetClassObject", LogicalAbi::WinApi),
+    ("MsiCloseHandle", LogicalAbi::WinApi),
+    ("MsiCloseAllHandles", LogicalAbi::WinApi),
+    ("MsiOpenPackageA", LogicalAbi::WinApi),
+    ("MsiOpenPackageW", LogicalAbi::WinApi),
+    ("MsiOpenPackageExA", LogicalAbi::WinApi),
+    ("MsiOpenPackageExW", LogicalAbi::WinApi),
+    ("MsiOpenDatabaseA", LogicalAbi::WinApi),
+    ("MsiOpenDatabaseW", LogicalAbi::WinApi),
+    ("MsiGetPropertyA", LogicalAbi::WinApi),
+    ("MsiGetPropertyW", LogicalAbi::WinApi),
+    ("MsiSetPropertyA", LogicalAbi::WinApi),
+    ("MsiSetPropertyW", LogicalAbi::WinApi),
+    ("MsiGetMode", LogicalAbi::WinApi),
+    ("MsiDoActionA", LogicalAbi::WinApi),
+    ("MsiDoActionW", LogicalAbi::WinApi),
+    ("MsiProcessMessage", LogicalAbi::WinApi),
+    ("MsiQueryProductStateA", LogicalAbi::WinApi),
+    ("MsiQueryProductStateW", LogicalAbi::WinApi),
+    ("MsiEnumProductsA", LogicalAbi::WinApi),
+    ("MsiEnumProductsW", LogicalAbi::WinApi),
+    ("MsiEnumProductsExA", LogicalAbi::WinApi),
+    ("MsiEnumProductsExW", LogicalAbi::WinApi),
+    ("MsiGetProductInfoA", LogicalAbi::WinApi),
+    ("MsiGetProductInfoW", LogicalAbi::WinApi),
+    ("MsiGetProductInfoExA", LogicalAbi::WinApi),
+    ("MsiGetProductInfoExW", LogicalAbi::WinApi),
+    ("MsiGetFileVersionA", LogicalAbi::WinApi),
+    ("MsiGetFileVersionW", LogicalAbi::WinApi),
+    ("MsiGetComponentPathA", LogicalAbi::WinApi),
+    ("MsiGetComponentPathW", LogicalAbi::WinApi),
+    ("MsiLocateComponentA", LogicalAbi::WinApi),
+    ("MsiLocateComponentW", LogicalAbi::WinApi),
+    ("MsiGetProductCodeA", LogicalAbi::WinApi),
+    ("MsiGetProductCodeW", LogicalAbi::WinApi),
+    ("MsiGetSummaryInformationA", LogicalAbi::WinApi),
+    ("MsiGetSummaryInformationW", LogicalAbi::WinApi),
+    ("MsiSummaryInfoGetPropertyA", LogicalAbi::WinApi),
+    ("MsiSummaryInfoGetPropertyW", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct MsiHookLibrary;
-
-impl HookLibrary for MsiHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_msi_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&MsiHookLibrary);
+    registry.register_function_stubs("msi.dll", &FUNCTIONS);
 }

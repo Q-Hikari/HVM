@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use crate::managers::handle_table::HandleTable;
 
@@ -15,7 +15,7 @@ pub struct ProcessRecord {
 #[derive(Debug)]
 pub struct ProcessManager {
     handles: HandleTable,
-    processes: BTreeMap<u32, ProcessRecord>,
+    processes: HashMap<u32, ProcessRecord>,
 }
 
 impl ProcessManager {
@@ -23,7 +23,7 @@ impl ProcessManager {
     pub fn for_tests() -> Self {
         Self {
             handles: HandleTable::new(0x9000),
-            processes: BTreeMap::new(),
+            processes: HashMap::new(),
         }
     }
 
@@ -56,6 +56,6 @@ impl ProcessManager {
 
     /// Returns the most recently spawned child-process record if one exists.
     pub fn latest_process(&self) -> Option<&ProcessRecord> {
-        self.processes.values().next_back()
+        self.processes.values().last()
     }
 }

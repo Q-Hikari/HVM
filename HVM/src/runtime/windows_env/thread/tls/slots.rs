@@ -5,7 +5,12 @@ impl WindowsProcessEnvironment {
     pub fn allocate_tls_slot(&mut self) -> Result<usize, MemoryError> {
         let slot = self.next_tls_slot;
         if slot >= 64 {
-            return Err(MemoryError::OutOfMemory { size: 64 });
+            return Err(MemoryError::OutOfMemory {
+                size: 64,
+                tag: Some("tls:slot_bitmap".to_string()),
+                preferred: None,
+                avoid_history: None,
+            });
         }
         self.next_tls_slot = self.next_tls_slot.saturating_add(1);
         self.allocated_tls_slots.insert(slot);

@@ -1,117 +1,26 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "winhttp.dll",
-        "WinHttpOpen",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpConnect",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpOpenRequest",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpAddRequestHeaders",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpSendRequest",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpWriteData",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpReceiveResponse",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpReadData",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpQueryDataAvailable",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpQueryHeaders",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpSetOption",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpQueryOption",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpSetTimeouts",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpGetIEProxyConfigForCurrentUser",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpGetProxyForUrl",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winhttp.dll",
-        "WinHttpCloseHandle",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("WinHttpOpen", LogicalAbi::WinApi),
+    ("WinHttpConnect", LogicalAbi::WinApi),
+    ("WinHttpOpenRequest", LogicalAbi::WinApi),
+    ("WinHttpAddRequestHeaders", LogicalAbi::WinApi),
+    ("WinHttpSendRequest", LogicalAbi::WinApi),
+    ("WinHttpWriteData", LogicalAbi::WinApi),
+    ("WinHttpReceiveResponse", LogicalAbi::WinApi),
+    ("WinHttpReadData", LogicalAbi::WinApi),
+    ("WinHttpQueryDataAvailable", LogicalAbi::WinApi),
+    ("WinHttpQueryHeaders", LogicalAbi::WinApi),
+    ("WinHttpSetOption", LogicalAbi::WinApi),
+    ("WinHttpQueryOption", LogicalAbi::WinApi),
+    ("WinHttpSetTimeouts", LogicalAbi::WinApi),
+    ("WinHttpGetIEProxyConfigForCurrentUser", LogicalAbi::WinApi),
+    ("WinHttpGetProxyForUrl", LogicalAbi::WinApi),
+    ("WinHttpCloseHandle", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct WinhttpHookLibrary;
-
-impl HookLibrary for WinhttpHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_winhttp_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&WinhttpHookLibrary);
+    registry.register_function_stubs("winhttp.dll", &FUNCTIONS);
 }

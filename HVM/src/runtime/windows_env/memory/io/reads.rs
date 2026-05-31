@@ -62,12 +62,21 @@ impl WindowsProcessEnvironment {
         size: usize,
     ) -> Result<Vec<u8>, MemoryError> {
         let mut bytes = Vec::with_capacity(size);
-        for offset in 0..size {
-            let target = address + offset as u64;
-            bytes.push(*self.memory.get(&target).ok_or(MemoryError::MissingRegion {
-                address,
-                size: size as u64,
-            })?);
+        let mut cursor = address;
+        let end = address.saturating_add(size as u64);
+        while cursor < end {
+            let page_base = cursor & !(PAGE_SIZE - 1);
+            let offset = (cursor - page_base) as usize;
+            let chunk_len = ((PAGE_SIZE as usize) - offset).min((end - cursor) as usize);
+            let page = self
+                .memory
+                .get(&page_base)
+                .ok_or(MemoryError::MissingRegion {
+                    address,
+                    size: size as u64,
+                })?;
+            bytes.extend_from_slice(&page[offset..offset + chunk_len]);
+            cursor = cursor.saturating_add(chunk_len as u64);
         }
         Ok(bytes)
     }

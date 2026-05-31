@@ -14,24 +14,33 @@ pub struct EmulatedTime {
 pub struct TimeManager {
     base_filetime: u64,
     start_mono: Instant,
+    tick_ms_base: u64,
     virtual_sleep_ms: u64,
 }
 
 impl Default for TimeManager {
     fn default() -> Self {
-        Self {
-            base_filetime: current_filetime(),
-            start_mono: Instant::now(),
-            virtual_sleep_ms: 0,
-        }
+        Self::with_tick_ms_base(0)
     }
 }
 
 impl TimeManager {
+    pub fn with_tick_ms_base(tick_ms_base: u64) -> Self {
+        Self {
+            base_filetime: current_filetime(),
+            start_mono: Instant::now(),
+            tick_ms_base,
+            virtual_sleep_ms: 0,
+        }
+    }
+
     /// Returns the current emulated time snapshot.
     pub fn current(&self) -> EmulatedTime {
         let elapsed_real_ms = self.start_mono.elapsed().as_millis() as u64;
-        let total_ms = elapsed_real_ms.saturating_add(self.virtual_sleep_ms);
+        let total_ms = self
+            .tick_ms_base
+            .saturating_add(elapsed_real_ms)
+            .saturating_add(self.virtual_sleep_ms);
         EmulatedTime {
             tick_ms: total_ms & 0xFFFF_FFFF,
             filetime: self

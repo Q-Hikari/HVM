@@ -1,3 +1,4 @@
+pub mod api_set;
 pub mod arch;
 pub mod cli;
 pub mod config;
@@ -10,4 +11,5 @@ pub mod models;
 pub mod pe;
 pub mod runtime;
 pub mod samples;
+pub mod sandbox_result;
 pub mod tests_support;
