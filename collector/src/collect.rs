@@ -62,7 +62,9 @@ fn collect_os_version() -> OsVersion {
         use windows::Win32::System::SystemInformation::*;
         let mut info: OSVERSIONINFOEXW = unsafe { mem::zeroed() };
         info.dwOSVersionInfoSize = mem::size_of::<OSVERSIONINFOEXW>() as u32;
-        unsafe { let _ = RtlGetVersion(&mut info); }
+        unsafe {
+            let _ = RtlGetVersion(&mut info);
+        }
         v.major = info.dwMajorVersion;
         v.minor = info.dwMinorVersion;
         v.build = info.dwBuildNumber;
@@ -76,14 +78,23 @@ fn collect_os_version() -> OsVersion {
     }
 
     v.product_name = reg_read_string(
-        "HKLM", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName",
-    ).unwrap_or_default();
+        "HKLM",
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+        "ProductName",
+    )
+    .unwrap_or_default();
     v.product_id = reg_read_string(
-        "HKLM", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductId",
-    ).unwrap_or_default();
+        "HKLM",
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+        "ProductId",
+    )
+    .unwrap_or_default();
     v.build_lab_ex = reg_read_string(
-        "HKLM", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "BuildLabEx",
-    ).unwrap_or_default();
+        "HKLM",
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+        "BuildLabEx",
+    )
+    .unwrap_or_default();
 
     v
 }
@@ -212,7 +223,10 @@ fn collect_volume() -> VolumeProfile {
 
 fn collect_shell_folders() -> ShellFolderProfile {
     let up = get_env_or("USERPROFILE", r"C:\Users\Default");
-    let app_data = get_env_or("APPDATA", format!("{}\\AppData\\Roaming", up.trim_end_matches('\\')));
+    let app_data = get_env_or(
+        "APPDATA",
+        format!("{}\\AppData\\Roaming", up.trim_end_matches('\\')),
+    );
     let prog_data = get_env_or("PROGRAMDATA", r"C:\ProgramData".to_string());
     let pf = get_env_or("PROGRAMFILES", r"C:\Program Files".to_string());
     let pfx = get_env_or("PROGRAMFILES(X86)", r"C:\Program Files (x86)".to_string());
@@ -221,16 +235,25 @@ fn collect_shell_folders() -> ShellFolderProfile {
         profile: up.clone(),
         desktop: format!("{}\\Desktop", up.trim_end_matches('\\')),
         app_data: app_data.clone(),
-        local_app_data: get_env_or("LOCALAPPDATA", format!("{}\\AppData\\Local", up.trim_end_matches('\\'))),
+        local_app_data: get_env_or(
+            "LOCALAPPDATA",
+            format!("{}\\AppData\\Local", up.trim_end_matches('\\')),
+        ),
         program_data: prog_data.clone(),
-        startup: format!("{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", app_data.trim_end_matches('\\')),
+        startup: format!(
+            "{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+            app_data.trim_end_matches('\\')
+        ),
         personal: format!("{}\\Documents", up.trim_end_matches('\\')),
         public: get_env_or("PUBLIC", r"C:\Users\Public".to_string()),
         program_files: pf.clone(),
         program_files_x86: pfx.clone(),
         common_files: format!("{}\\Common Files", pf.trim_end_matches('\\')),
         common_files_x86: format!("{}\\Common Files", pfx.trim_end_matches('\\')),
-        common_startup: format!("{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", prog_data.trim_end_matches('\\')),
+        common_startup: format!(
+            "{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+            prog_data.trim_end_matches('\\')
+        ),
         common_desktop: r"C:\Users\Public\Desktop".to_string(),
     }
 }
@@ -250,11 +273,13 @@ fn collect_network() -> NetworkProfile {
     {
         use windows::Win32::NetworkManagement::IpHelper::*;
         let mut buf_len = 0u32;
-        unsafe { let _ = GetAdaptersInfo(None, &mut buf_len); }
+        unsafe {
+            let _ = GetAdaptersInfo(None, &mut buf_len);
+        }
         if buf_len > 0 {
             let mut buffer = vec![0u8; buf_len as usize];
             let ptr = buffer.as_mut_ptr() as *mut IP_ADAPTER_INFO;
-            if unsafe { GetAdaptersInfo(Some(&mut ptr), &mut buf_len) }.is_ok() {
+            if unsafe { GetAdaptersInfo(Some(ptr), &mut buf_len) } == 0 {
                 let mut cur = ptr;
                 while !cur.is_null() {
                     let a = unsafe { &*cur };
@@ -262,8 +287,12 @@ fn collect_network() -> NetworkProfile {
                     let name = cstr_to_string(a.AdapterName.as_ptr() as *const i8);
                     let mac = format!(
                         "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                        a.Address[0], a.Address[1], a.Address[2],
-                        a.Address[3], a.Address[4], a.Address[5],
+                        a.Address[0],
+                        a.Address[1],
+                        a.Address[2],
+                        a.Address[3],
+                        a.Address[4],
+                        a.Address[5],
                     );
                     let ip = cstr_to_string(a.IpAddressList.IpAddress.String.as_ptr() as *const i8);
                     let mask = cstr_to_string(a.IpAddressList.IpMask.String.as_ptr() as *const i8);
@@ -278,7 +307,10 @@ fn collect_network() -> NetworkProfile {
                             mac_address: mac,
                             dhcp_enabled: a.DhcpEnabled != 0,
                             dhcp_server: dhcp,
-                            ipv4_addresses: vec![IpAddress { address: ip, netmask: mask }],
+                            ipv4_addresses: vec![IpAddress {
+                                address: ip,
+                                netmask: mask,
+                            }],
                             gateways: if gw.is_empty() { vec![] } else { vec![gw] },
                             ..NetworkAdapter::default()
                         });
@@ -298,16 +330,40 @@ fn collect_network() -> NetworkProfile {
 
 fn collect_environment_variables() -> Vec<EnvironmentVariable> {
     const NAMES: &[&str] = &[
-        "APPDATA", "COMSPEC", "HOMEDRIVE", "HOMEPATH", "OS",
-        "PATH", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER",
-        "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "SystemRoot",
-        "TEMP", "TMP", "USERNAME", "USERPROFILE", "COMPUTERNAME",
-        "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",
-        "PUBLIC", "LOCALAPPDATA", "WINDIR", "PATHEXT",
-        "SYSTEMDRIVE", "NUMBER_OF_PROCESSORS",
+        "APPDATA",
+        "COMSPEC",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "OS",
+        "PATH",
+        "PROCESSOR_ARCHITECTURE",
+        "PROCESSOR_IDENTIFIER",
+        "PROCESSOR_LEVEL",
+        "PROCESSOR_REVISION",
+        "SystemRoot",
+        "TEMP",
+        "TMP",
+        "USERNAME",
+        "USERPROFILE",
+        "COMPUTERNAME",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMDATA",
+        "PUBLIC",
+        "LOCALAPPDATA",
+        "WINDIR",
+        "PATHEXT",
+        "SYSTEMDRIVE",
+        "NUMBER_OF_PROCESSORS",
     ];
-    NAMES.iter()
-        .filter_map(|&n| std::env::var(n).ok().map(|v| EnvironmentVariable { name: n.to_string(), value: v }))
+    NAMES
+        .iter()
+        .filter_map(|&n| {
+            std::env::var(n).ok().map(|v| EnvironmentVariable {
+                name: n.to_string(),
+                value: v,
+            })
+        })
         .collect()
 }
 
@@ -320,10 +376,11 @@ fn collect_processes() -> Vec<ProcessEntry> {
 
     #[cfg(target_os = "windows")]
     {
+        use std::mem;
+        use windows::core::PWSTR;
+        use windows::Win32::Foundation::*;
         use windows::Win32::System::Diagnostics::ToolHelp::*;
         use windows::Win32::System::Threading::*;
-        use windows::Win32::Foundation::*;
-        use std::mem;
 
         unsafe {
             if let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) {
@@ -334,21 +391,38 @@ fn collect_processes() -> Vec<ProcessEntry> {
                         let exe = wide_to_string(&entry.szExeFile);
                         let pid = entry.th32ProcessID;
                         let ppid = entry.th32ParentProcessID;
-                        let img = if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+                        let img = if let Ok(h) =
+                            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+                        {
                             let mut buf = [0u16; 512];
                             let mut sz = buf.len() as u32;
-                            let r = if windows::Win32::System::Threading::QueryFullProcessImageNameW(h, 0, &mut buf, &mut sz).is_ok() {
-                                wide_to_string(&buf[..sz as usize])
-                            } else {
-                                exe.clone()
-                            };
+                            let r =
+                                if windows::Win32::System::Threading::QueryFullProcessImageNameW(
+                                    h,
+                                    PROCESS_NAME_FORMAT(0),
+                                    PWSTR(buf.as_mut_ptr()),
+                                    &mut sz,
+                                )
+                                .is_ok()
+                                {
+                                    wide_to_string(&buf[..sz as usize])
+                                } else {
+                                    exe.clone()
+                                };
                             let _ = CloseHandle(h);
                             r
                         } else {
                             exe.clone()
                         };
-                        procs.push(ProcessEntry { pid, parent_pid: ppid, image_path: img, ..ProcessEntry::default() });
-                        if Process32NextW(snap, &mut entry).is_err() { break; }
+                        procs.push(ProcessEntry {
+                            pid,
+                            parent_pid: ppid,
+                            image_path: img,
+                            ..ProcessEntry::default()
+                        });
+                        if Process32NextW(snap, &mut entry).is_err() {
+                            break;
+                        }
                     }
                 }
                 let _ = CloseHandle(snap);
@@ -374,7 +448,9 @@ fn collect_users() -> Vec<UserAccount> {
                 || name.eq_ignore_ascii_case("Default User")
                 || name.eq_ignore_ascii_case("All Users")
                 || name.eq_ignore_ascii_case("Public")
-            { continue; }
+            {
+                continue;
+            }
             users.push(UserAccount {
                 name: name.clone(),
                 home_dir: format!(r"C:\Users\{name}"),
@@ -382,8 +458,19 @@ fn collect_users() -> Vec<UserAccount> {
             });
         }
     }
-    users.push(UserAccount { name: "Administrator".to_string(), privilege_level: 2, rid: 500, ..UserAccount::default() });
-    users.push(UserAccount { name: "Guest".to_string(), flags: 0x0083, privilege_level: 0, rid: 501, ..UserAccount::default() });
+    users.push(UserAccount {
+        name: "Administrator".to_string(),
+        privilege_level: 2,
+        rid: 500,
+        ..UserAccount::default()
+    });
+    users.push(UserAccount {
+        name: "Guest".to_string(),
+        flags: 0x0083,
+        privilege_level: 0,
+        rid: 501,
+        ..UserAccount::default()
+    });
     users
 }
 
@@ -393,9 +480,29 @@ fn collect_users() -> Vec<UserAccount> {
 
 fn collect_local_groups() -> Vec<LocalGroup> {
     vec![
-        LocalGroup { name: "Administrators".into(), comment: "Administrators have complete and unrestricted access".into(), domain: "BUILTIN".into(), rid: 544, members: vec![] },
-        LocalGroup { name: "Users".into(), comment: "Users are prevented from making accidental or intentional system-wide changes".into(), domain: "BUILTIN".into(), rid: 545, members: vec![] },
-        LocalGroup { name: "Guests".into(), comment: "Guests have the same access as members of the Users group".into(), domain: "BUILTIN".into(), rid: 546, members: vec![] },
+        LocalGroup {
+            name: "Administrators".into(),
+            comment: "Administrators have complete and unrestricted access".into(),
+            domain: "BUILTIN".into(),
+            rid: 544,
+            members: vec![],
+        },
+        LocalGroup {
+            name: "Users".into(),
+            comment:
+                "Users are prevented from making accidental or intentional system-wide changes"
+                    .into(),
+            domain: "BUILTIN".into(),
+            rid: 545,
+            members: vec![],
+        },
+        LocalGroup {
+            name: "Guests".into(),
+            comment: "Guests have the same access as members of the Users group".into(),
+            domain: "BUILTIN".into(),
+            rid: 546,
+            members: vec![],
+        },
     ]
 }
 
@@ -408,9 +515,9 @@ fn collect_services() -> Vec<ServiceEntry> {
 
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::System::ServiceProcess::*;
-        use windows::core::*;
         use std::mem;
+        use windows::core::*;
+        use windows::Win32::System::Services::*;
 
         unsafe {
             if let Ok(mgr) = OpenSCManagerW(None, None, SC_MANAGER_ENUMERATE_SERVICE) {
@@ -419,8 +526,14 @@ fn collect_services() -> Vec<ServiceEntry> {
                 let mut resume = 0u32;
 
                 let _ = EnumServicesStatusW(
-                    mgr, SERVICE_TYPE(SERVICE_WIN32.0), SERVICE_STATE(SERVICE_STATE_ALL.0),
-                    None, &mut needed, &mut returned, Some(&mut resume), None,
+                    mgr,
+                    SERVICE_TYPE(SERVICE_WIN32.0),
+                    SERVICE_STATE(SERVICE_STATE_ALL.0),
+                    None,
+                    0,
+                    &mut needed,
+                    &mut returned,
+                    Some(&mut resume),
                 );
 
                 let buf_size = needed as usize + 4096;
@@ -429,16 +542,24 @@ fn collect_services() -> Vec<ServiceEntry> {
                 let ptr = buf.as_mut_ptr() as *mut ENUM_SERVICE_STATUSW;
 
                 if EnumServicesStatusW(
-                    mgr, SERVICE_TYPE(SERVICE_WIN32.0), SERVICE_STATE(SERVICE_STATE_ALL.0),
-                    Some(std::slice::from_raw_parts_mut(ptr, count)),
-                    &mut needed, &mut returned, None, None,
-                ).is_ok() {
+                    mgr,
+                    SERVICE_TYPE(SERVICE_WIN32.0),
+                    SERVICE_STATE(SERVICE_STATE_ALL.0),
+                    Some(ptr),
+                    buf_size as u32,
+                    &mut needed,
+                    &mut returned,
+                    None,
+                )
+                .is_ok()
+                {
                     for i in 0..returned as usize {
                         let svc = &*ptr.add(i);
                         let name = wide_to_string(&*svc.lpServiceName);
                         let display = wide_to_string(&*svc.lpDisplayName);
                         let mut entry = ServiceEntry {
-                            name, display_name: display,
+                            name,
+                            display_name: display,
                             current_state: svc.ServiceStatus.dwCurrentState,
                             process_id: svc.ServiceStatus.dwProcessId,
                             service_type: svc.ServiceStatus.dwServiceType,
@@ -449,23 +570,37 @@ fn collect_services() -> Vec<ServiceEntry> {
                         if let Ok(hsvc) = OpenServiceW(mgr, &svc_hstr, SERVICE_QUERY_CONFIG) {
                             // Binary path + start type.
                             let mut cb = 0u32;
-                            let _ = QueryServiceConfigW(hsvc, None, &mut cb);
+                            let _ = QueryServiceConfigW(hsvc, None, 0, &mut cb);
                             if cb > 0 {
                                 let mut cfg_buf = vec![0u8; cb as usize];
-                                if QueryServiceConfigW(hsvc, Some(cfg_buf.as_mut_slice()), &mut cb).is_ok() {
+                                let cfg_ptr = cfg_buf.as_mut_ptr() as *mut QUERY_SERVICE_CONFIGW;
+                                if QueryServiceConfigW(hsvc, Some(cfg_ptr), cb, &mut cb).is_ok() {
                                     let cfg = cfg_buf.as_ptr() as *const QUERY_SERVICE_CONFIGW;
                                     entry.start_type = (*cfg).dwStartType;
                                     if !(*cfg).lpBinaryPathName.is_null() {
-                                        entry.binary_path = wide_to_string(&*(*cfg).lpBinaryPathName);
+                                        entry.binary_path =
+                                            wide_to_string(&*(*cfg).lpBinaryPathName);
                                     }
                                 }
                             }
                             // Description.
                             let mut cb2 = 0u32;
-                            let _ = QueryServiceConfig2W(hsvc, SERVICE_CONFIG_DESCRIPTION, None, &mut cb2);
+                            let _ = QueryServiceConfig2W(
+                                hsvc,
+                                SERVICE_CONFIG_DESCRIPTION,
+                                None,
+                                &mut cb2,
+                            );
                             if cb2 > 0 {
                                 let mut desc_buf = vec![0u8; cb2 as usize];
-                                if QueryServiceConfig2W(hsvc, SERVICE_CONFIG_DESCRIPTION, Some(desc_buf.as_mut_slice()), &mut cb2).is_ok() {
+                                if QueryServiceConfig2W(
+                                    hsvc,
+                                    SERVICE_CONFIG_DESCRIPTION,
+                                    Some(desc_buf.as_mut_slice()),
+                                    &mut cb2,
+                                )
+                                .is_ok()
+                                {
                                     let desc = desc_buf.as_ptr() as *const SERVICE_DESCRIPTIONW;
                                     if !(*desc).lpDescription.is_null() {
                                         entry.description = wide_to_string(&*(*desc).lpDescription);
@@ -500,7 +635,9 @@ fn collect_registry() -> RegistrySnapshot {
         r"SOFTWARE\Microsoft\Windows Defender",
     ];
     for path in hklm_paths {
-        if let Some(key) = collect_reg_key("HKLM", path) { snap.keys.push(key); }
+        if let Some(key) = collect_reg_key("HKLM", path) {
+            snap.keys.push(key);
+        }
     }
 
     let hkcu_paths: &[&str] = &[
@@ -508,7 +645,9 @@ fn collect_registry() -> RegistrySnapshot {
         r"Environment",
     ];
     for path in hkcu_paths {
-        if let Some(key) = collect_reg_key("HKCU", path) { snap.keys.push(key); }
+        if let Some(key) = collect_reg_key("HKCU", path) {
+            snap.keys.push(key);
+        }
     }
 
     snap
@@ -517,30 +656,50 @@ fn collect_registry() -> RegistrySnapshot {
 fn collect_reg_key(_root: &str, _relative: &str) -> Option<RegistryKey> {
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::System::Registry::*;
         use windows::core::*;
+        use windows::Win32::Foundation::ERROR_SUCCESS;
+        use windows::Win32::System::Registry::*;
 
-        let root_key = if _root == "HKLM" { HKEY_LOCAL_MACHINE } else { HKEY_CURRENT_USER };
-        let root_name = if _root == "HKLM" { "HKEY_LOCAL_MACHINE" } else { "HKEY_CURRENT_USER" };
+        let root_key = if _root == "HKLM" {
+            HKEY_LOCAL_MACHINE
+        } else {
+            HKEY_CURRENT_USER
+        };
+        let root_name = if _root == "HKLM" {
+            "HKEY_LOCAL_MACHINE"
+        } else {
+            "HKEY_CURRENT_USER"
+        };
         let full_path = format!("{root_name}\\{_relative}");
 
         let wpath = HSTRING::from(_relative);
         let mut handle: HKEY = HKEY::default();
-        if unsafe { RegOpenKeyExW(root_key, PCWSTR(wpath.as_ptr()), 0, KEY_READ.0, &mut handle) } != 0 {
+        if unsafe { RegOpenKeyExW(root_key, PCWSTR(wpath.as_ptr()), 0, KEY_READ, &mut handle) }
+            != ERROR_SUCCESS
+        {
             return None;
         }
 
         let values = enum_reg_values(handle);
-        unsafe { let _ = RegCloseKey(handle); }
-        Some(RegistryKey { path: full_path, values })
+        unsafe {
+            let _ = RegCloseKey(handle);
+        }
+        Some(RegistryKey {
+            path: full_path,
+            values,
+        })
     }
 
     #[cfg(not(target_os = "windows"))]
-    { None }
+    {
+        None
+    }
 }
 
 #[cfg(target_os = "windows")]
 fn enum_reg_values(key: windows::Win32::System::Registry::HKEY) -> Vec<RegistryValue> {
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
     use windows::Win32::System::Registry::*;
     let mut values = Vec::new();
     let mut idx = 0u32;
@@ -549,17 +708,90 @@ fn enum_reg_values(key: windows::Win32::System::Registry::HKEY) -> Vec<RegistryV
         let mut name_len = name_buf.len() as u32;
         let mut vtype = 0u32;
         let mut data_len = 0u32;
-        if unsafe { RegEnumValueW(key, idx, Some(name_buf.as_mut_slice()), &mut name_len, None, Some(&mut vtype), None, Some(&mut data_len)) } != 0 { break; }
+        if unsafe {
+            RegEnumValueW(
+                key,
+                idx,
+                PWSTR(name_buf.as_mut_ptr()),
+                &mut name_len,
+                None,
+                Some(&mut vtype),
+                None,
+                Some(&mut data_len),
+            )
+        } != ERROR_SUCCESS
+        {
+            break;
+        }
         let name = wide_to_string(&name_buf[..name_len as usize]);
         let mut data = vec![0u8; data_len as usize];
-        let _ = unsafe { RegEnumValueW(key, idx, None, None, None, None, Some(data.as_mut_slice()), Some(&mut data_len)) };
+        let _ = unsafe {
+            RegEnumValueW(
+                key,
+                idx,
+                PWSTR::null(),
+                std::ptr::null_mut(),
+                None,
+                None,
+                Some(data.as_mut_ptr()),
+                Some(&mut data_len),
+            )
+        };
 
         let rv = match vtype {
-            1 | 2 => RegistryValue { name, value_type: vtype, string: Some(wide_bytes_to_string(&data)), dword: None, qword: None, multi_string: None, binary_hex: None },
-            4 => RegistryValue { name, value_type: vtype, string: None, dword: Some(if data.len()>=4 { u32::from_le_bytes([data[0],data[1],data[2],data[3]]) } else { 0 }), qword: None, multi_string: None, binary_hex: None },
-            11 => RegistryValue { name, value_type: vtype, string: None, dword: None, qword: Some(if data.len()>=8 { u64::from_le_bytes(data[..8].try_into().unwrap_or([0;8])) } else { 0 }), multi_string: None, binary_hex: None },
-            7 => RegistryValue { name, value_type: vtype, string: None, dword: None, qword: None, multi_string: Some(wide_bytes_to_multi_string(&data)), binary_hex: None },
-            _ => RegistryValue { name, value_type: vtype, string: None, dword: None, qword: None, multi_string: None, binary_hex: Some(data.iter().map(|b| format!("{b:02X}")).collect()) },
+            1 | 2 => RegistryValue {
+                name,
+                value_type: vtype,
+                string: Some(wide_bytes_to_string(&data)),
+                dword: None,
+                qword: None,
+                multi_string: None,
+                binary_hex: None,
+            },
+            4 => RegistryValue {
+                name,
+                value_type: vtype,
+                string: None,
+                dword: Some(if data.len() >= 4 {
+                    u32::from_le_bytes([data[0], data[1], data[2], data[3]])
+                } else {
+                    0
+                }),
+                qword: None,
+                multi_string: None,
+                binary_hex: None,
+            },
+            11 => RegistryValue {
+                name,
+                value_type: vtype,
+                string: None,
+                dword: None,
+                qword: Some(if data.len() >= 8 {
+                    u64::from_le_bytes(data[..8].try_into().unwrap_or([0; 8]))
+                } else {
+                    0
+                }),
+                multi_string: None,
+                binary_hex: None,
+            },
+            7 => RegistryValue {
+                name,
+                value_type: vtype,
+                string: None,
+                dword: None,
+                qword: None,
+                multi_string: Some(wide_bytes_to_multi_string(&data)),
+                binary_hex: None,
+            },
+            _ => RegistryValue {
+                name,
+                value_type: vtype,
+                string: None,
+                dword: None,
+                qword: None,
+                multi_string: None,
+                binary_hex: Some(data.iter().map(|b| format!("{b:02X}")).collect()),
+            },
         };
         values.push(rv);
         idx += 1;
@@ -598,29 +830,59 @@ fn get_env_or(name: &str, default: impl Into<String>) -> String {
 fn reg_read_string(_root: &str, _path: &str, _name: &str) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::System::Registry::*;
         use windows::core::*;
-        let root_key = if _root == "HKLM" { HKEY_LOCAL_MACHINE } else { HKEY_CURRENT_USER };
+        use windows::Win32::Foundation::ERROR_SUCCESS;
+        use windows::Win32::System::Registry::*;
+        let root_key = if _root == "HKLM" {
+            HKEY_LOCAL_MACHINE
+        } else {
+            HKEY_CURRENT_USER
+        };
         let wpath = HSTRING::from(_path);
         let wname = HSTRING::from(_name);
         let mut handle: HKEY = HKEY::default();
         unsafe {
-            if RegOpenKeyExW(root_key, PCWSTR(wpath.as_ptr()), 0, KEY_READ.0, &mut handle) != 0 {
+            if RegOpenKeyExW(root_key, PCWSTR(wpath.as_ptr()), 0, KEY_READ, &mut handle)
+                != ERROR_SUCCESS
+            {
                 return None;
             }
             let mut buf_len = 0u32;
-            let mut vtype = 0u32;
-            let _ = RegQueryValueExW(handle, PCWSTR(wname.as_ptr()), None, Some(&mut vtype), None, Some(&mut buf_len));
-            if buf_len == 0 { let _ = RegCloseKey(handle); return Some(String::new()); }
+            let mut vtype = REG_VALUE_TYPE(0);
+            let _ = RegQueryValueExW(
+                handle,
+                PCWSTR(wname.as_ptr()),
+                None,
+                Some(&mut vtype),
+                None,
+                Some(&mut buf_len),
+            );
+            if buf_len == 0 {
+                let _ = RegCloseKey(handle);
+                return Some(String::new());
+            }
             let mut buf = vec![0u8; buf_len as usize];
-            let ok = RegQueryValueExW(handle, PCWSTR(wname.as_ptr()), None, None, Some(buf.as_mut_slice()), Some(&mut buf_len));
+            let ok = RegQueryValueExW(
+                handle,
+                PCWSTR(wname.as_ptr()),
+                None,
+                None,
+                Some(buf.as_mut_ptr()),
+                Some(&mut buf_len),
+            );
             let _ = RegCloseKey(handle);
-            if ok == 0 { Some(wide_bytes_to_string(&buf)) } else { None }
+            if ok == ERROR_SUCCESS {
+                Some(wide_bytes_to_string(&buf))
+            } else {
+                None
+            }
         }
     }
 
     #[cfg(not(target_os = "windows"))]
-    { None }
+    {
+        None
+    }
 }
 
 fn wide_to_string(buf: &[u16]) -> String {
@@ -630,12 +892,15 @@ fn wide_to_string(buf: &[u16]) -> String {
 
 #[cfg(target_os = "windows")]
 fn cstr_to_string(ptr: *const i8) -> String {
-    if ptr.is_null() { return String::new(); }
+    if ptr.is_null() {
+        return String::new();
+    }
     unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string() }
 }
 
 fn wide_bytes_to_string(bytes: &[u8]) -> String {
-    let units: Vec<u16> = bytes.chunks_exact(2)
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
         .map(|c| u16::from_le_bytes([c[0], c[1]]))
         .take_while(|&u| u != 0)
         .collect();
@@ -643,14 +908,17 @@ fn wide_bytes_to_string(bytes: &[u8]) -> String {
 }
 
 fn wide_bytes_to_multi_string(bytes: &[u8]) -> Vec<String> {
-    let units: Vec<u16> = bytes.chunks_exact(2)
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
         .map(|c| u16::from_le_bytes([c[0], c[1]]))
         .collect();
     let mut strings = Vec::new();
     let mut start = 0;
     for (i, &u) in units.iter().enumerate() {
         if u == 0 {
-            if start < i { strings.push(String::from_utf16_lossy(&units[start..i])); }
+            if start < i {
+                strings.push(String::from_utf16_lossy(&units[start..i]));
+            }
             start = i + 1;
         }
     }

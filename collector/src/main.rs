@@ -13,8 +13,8 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-mod profile;
 mod collect;
+mod profile;
 
 use profile::EnvironmentProfile;
 
@@ -33,14 +33,15 @@ fn main() {
     eprintln!(
         "[hvm-collector] Profile written to {} ({} bytes)",
         output_path,
-        fs::metadata(&output_path)
-            .map(|m| m.len())
-            .unwrap_or(0)
+        fs::metadata(&output_path).map(|m| m.len()).unwrap_or(0)
     );
 
     // Print summary.
     eprintln!("[hvm-collector] Summary:");
-    eprintln!("  OS: {} (build {})", profile.os_version.product_name, profile.os_version.build);
+    eprintln!(
+        "  OS: {} (build {})",
+        profile.os_version.product_name, profile.os_version.build
+    );
     eprintln!("  Computer: {}", profile.machine.computer_name);
     eprintln!("  User: {}", profile.machine.user_name);
     eprintln!("  Registry keys: {}", profile.registry.keys.len());
@@ -48,6 +49,9 @@ fn main() {
     eprintln!("  Processes: {}", profile.processes.len());
     eprintln!("  Users: {}", profile.users.len());
     eprintln!("  Network adapters: {}", profile.network.adapters.len());
-    eprintln!("  Environment variables: {}", profile.environment_variables.len());
+    eprintln!(
+        "  Environment variables: {}",
+        profile.environment_variables.len()
+    );
     eprintln!("  System32 files: {}", profile.system32_files.len());
 }
