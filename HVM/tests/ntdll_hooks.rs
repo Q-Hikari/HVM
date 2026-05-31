@@ -128,6 +128,37 @@ fn write_runtime_unicode_string(
     }
 }
 
+fn write_runtime_ansi_string(
+    engine: &mut VirtualExecutionEngine,
+    ansi_string: u64,
+    buffer: u64,
+    text: &str,
+) {
+    let mut bytes = text.as_bytes().to_vec();
+    bytes.push(0);
+    engine.write_test_bytes(buffer, &bytes).unwrap();
+
+    engine
+        .write_test_bytes(ansi_string, &(text.len() as u16).to_le_bytes())
+        .unwrap();
+    engine
+        .write_test_bytes(
+            ansi_string + 2,
+            &((text.len() as u16).saturating_add(1)).to_le_bytes(),
+        )
+        .unwrap();
+    if runtime_pointer_size(engine) == 8 {
+        engine.write_test_bytes(ansi_string + 4, &[0u8; 4]).unwrap();
+        engine
+            .write_test_bytes(ansi_string + 8, &buffer.to_le_bytes())
+            .unwrap();
+    } else {
+        engine
+            .write_test_bytes(ansi_string + 4, &(buffer as u32).to_le_bytes())
+            .unwrap();
+    }
+}
+
 fn write_runtime_object_attributes(
     engine: &mut VirtualExecutionEngine,
     object_attributes: u64,
@@ -481,6 +512,235 @@ fn interpreter_progress_advances_emulated_tick_count() {
 }
 
 #[test]
+fn ldr_load_dll_and_get_procedure_address_resolve_kernel32_export() {
+    let mut engine = loaded_runtime_engine();
+    let ldr_load_dll = engine.bind_hook_for_test("ntdll.dll", "LdrLoadDll");
+    let ldr_get_procedure_address =
+        engine.bind_hook_for_test("ntdll.dll", "LdrGetProcedureAddress");
+    let expected_get_tick_count = engine.bind_hook_for_test("kernel32.dll", "GetTickCount");
+    let module_buffer = engine.allocate_executable_test_page(0x6324_0000).unwrap();
+    let unicode_string = engine.allocate_executable_test_page(0x6325_0000).unwrap();
+    let module_handle = engine.allocate_executable_test_page(0x6326_0000).unwrap();
+    let name_buffer = engine.allocate_executable_test_page(0x6327_0000).unwrap();
+    let ansi_string = engine.allocate_executable_test_page(0x6328_0000).unwrap();
+    let function_out = engine.allocate_executable_test_page(0x6329_0000).unwrap();
+
+    write_runtime_unicode_string(&mut engine, unicode_string, module_buffer, "kernel32.dll");
+    write_runtime_pointer(&mut engine, module_handle, 0);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(ldr_load_dll, &[0, 0, unicode_string, module_handle])
+            .unwrap(),
+        0
+    );
+    let loaded_base = read_runtime_pointer(&engine, module_handle);
+    assert_eq!(
+        loaded_base,
+        engine.modules().get_loaded("kernel32.dll").unwrap().base
+    );
+
+    write_runtime_ansi_string(&mut engine, ansi_string, name_buffer, "GetTickCount");
+    write_runtime_pointer(&mut engine, function_out, 0);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(
+                ldr_get_procedure_address,
+                &[loaded_base, ansi_string, 0, function_out]
+            )
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        read_runtime_pointer(&engine, function_out),
+        expected_get_tick_count
+    );
+}
+
+#[test]
+fn rtl_create_unicode_string_from_asciiz_allocates_wide_buffer() {
+    let mut engine = loaded_runtime_engine();
+    let rtl_create_unicode =
+        engine.bind_hook_for_test("ntdll.dll", "RtlCreateUnicodeStringFromAsciiz");
+    let unicode_string = engine.allocate_executable_test_page(0x632A_0000).unwrap();
+    let ascii_buffer = engine.allocate_executable_test_page(0x632B_0000).unwrap();
+
+    engine.write_test_bytes(ascii_buffer, b"VmWide\0").unwrap();
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(rtl_create_unicode, &[unicode_string, ascii_buffer])
+            .unwrap(),
+        1
+    );
+
+    let length = u16::from_le_bytes(
+        engine
+            .modules()
+            .memory()
+            .read(unicode_string, 2)
+            .unwrap()
+            .try_into()
+            .unwrap(),
+    );
+    let maximum_length = u16::from_le_bytes(
+        engine
+            .modules()
+            .memory()
+            .read(unicode_string + 2, 2)
+            .unwrap()
+            .try_into()
+            .unwrap(),
+    );
+    let buffer = read_runtime_pointer(
+        &engine,
+        unicode_string
+            + if runtime_pointer_size(&engine) == 8 {
+                8
+            } else {
+                4
+            },
+    );
+
+    assert_eq!(length, "VmWide".encode_utf16().count() as u16 * 2);
+    assert_eq!(maximum_length, length + 2);
+    assert_ne!(buffer, 0);
+    assert_eq!(read_wide_c_string(&engine, buffer, 16), "VmWide");
+}
+
+#[test]
+fn rtl_free_unicode_string_releases_heap_backed_buffer() {
+    let mut engine = loaded_runtime_engine();
+    let rtl_create_unicode =
+        engine.bind_hook_for_test("ntdll.dll", "RtlCreateUnicodeStringFromAsciiz");
+    let rtl_free_unicode = engine.bind_hook_for_test("ntdll.dll", "RtlFreeUnicodeString");
+    let unicode_string = engine.allocate_executable_test_page(0x6330_0000).unwrap();
+    let ascii_buffer = engine.allocate_executable_test_page(0x6331_0000).unwrap();
+
+    engine.write_test_bytes(ascii_buffer, b"VmWide\0").unwrap();
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(rtl_create_unicode, &[unicode_string, ascii_buffer])
+            .unwrap(),
+        1
+    );
+
+    let buffer = read_runtime_pointer(
+        &engine,
+        unicode_string
+            + if runtime_pointer_size(&engine) == 8 {
+                8
+            } else {
+                4
+            },
+    );
+    assert_ne!(buffer, 0);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(rtl_free_unicode, &[unicode_string])
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        u16::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(unicode_string, 2)
+                .unwrap()
+                .try_into()
+                .unwrap()
+        ),
+        0
+    );
+    assert_eq!(
+        read_runtime_pointer(
+            &engine,
+            unicode_string
+                + if runtime_pointer_size(&engine) == 8 {
+                    8
+                } else {
+                    4
+                },
+        ),
+        0
+    );
+}
+
+#[test]
+fn rtl_integer_to_char_writes_requested_base() {
+    let mut engine = loaded_runtime_engine();
+    let rtl_integer_to_char = engine.bind_hook_for_test("ntdll.dll", "RtlIntegerToChar");
+    let buffer = engine.allocate_executable_test_page(0x6332_0000).unwrap();
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(rtl_integer_to_char, &[0x1234, 16, 16, buffer])
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        engine.modules().memory().read(buffer, 5).unwrap(),
+        b"1234\0"
+    );
+}
+
+#[test]
+fn rtl_int64_to_unicode_string_formats_value_into_existing_buffer() {
+    let mut engine = loaded_runtime_engine();
+    let rtl_int64_to_unicode = engine.bind_hook_for_test("ntdll.dll", "RtlInt64ToUnicodeString");
+    let unicode_string = engine.allocate_executable_test_page(0x6333_0000).unwrap();
+    let wide_buffer = engine.allocate_executable_test_page(0x6334_0000).unwrap();
+    let pointer_field = unicode_string
+        + if runtime_pointer_size(&engine) == 8 {
+            8
+        } else {
+            4
+        };
+
+    engine.write_test_bytes(wide_buffer, &[0u8; 32]).unwrap();
+    engine
+        .write_test_bytes(unicode_string, &0u16.to_le_bytes())
+        .unwrap();
+    engine
+        .write_test_bytes(unicode_string + 2, &32u16.to_le_bytes())
+        .unwrap();
+    write_runtime_pointer(&mut engine, pointer_field, wide_buffer);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(rtl_int64_to_unicode, &[0x1234, 16, unicode_string])
+            .unwrap(),
+        0
+    );
+    assert_eq!(read_wide_c_string(&engine, wide_buffer, 16), "1234");
+    assert_eq!(
+        u16::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(unicode_string, 2)
+                .unwrap()
+                .try_into()
+                .unwrap()
+        ),
+        8
+    );
+}
+
+#[test]
+fn rtl_peb_lock_hooks_return_without_error() {
+    let mut engine = loaded_runtime_engine();
+    let acquire = engine.bind_hook_for_test("ntdll.dll", "RtlAcquirePebLock");
+    let release = engine.bind_hook_for_test("ntdll.dll", "RtlReleasePebLock");
+
+    assert_eq!(engine.dispatch_bound_stub(acquire, &[]).unwrap(), 0);
+    assert_eq!(engine.dispatch_bound_stub(release, &[]).unwrap(), 0);
+}
+
+#[test]
 fn nt_map_view_of_section_maps_current_process_and_preserves_section_content() {
     let config_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
@@ -776,6 +1036,42 @@ fn rtl_fill_memory_and_zero_memory_write_requested_pattern() {
             0x41, 0x41, 0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0x41,
             0x41, 0x41
         ]
+    );
+}
+
+#[test]
+fn rtl_move_memory_copies_requested_buffer() {
+    let config_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
+    let config = load_config(config_path).unwrap();
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+
+    let source = engine.allocate_executable_test_page(0x6333_0000).unwrap();
+    let destination = engine.allocate_executable_test_page(0x6334_0000).unwrap();
+    engine.write_test_bytes(source, b"shellcode-copy").unwrap();
+    engine
+        .write_test_bytes(destination, &[0u8; "shellcode-copy".len()])
+        .unwrap();
+
+    let rtl_move = engine.bind_hook_for_test("ntdll.dll", "RtlMoveMemory");
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(
+                rtl_move,
+                &[destination, source, "shellcode-copy".len() as u64]
+            )
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        engine
+            .modules()
+            .memory()
+            .read(destination, "shellcode-copy".len())
+            .unwrap(),
+        b"shellcode-copy"
     );
 }
 

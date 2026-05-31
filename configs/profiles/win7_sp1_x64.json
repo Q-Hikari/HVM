@@ -1,0 +1,206 @@
+{
+  "machine": {
+    "computer_name": "OFFICE-PC",
+    "user_name": "zhangwei",
+    "user_domain": "WORKGROUP",
+    "process_id": 3124,
+    "image_path": "C:\\Users\\zhangwei\\Desktop\\sample.exe",
+    "parent_process_id": 4892,
+    "parent_image_path": "C:\\Windows\\explorer.exe",
+    "parent_command_line": "C:\\Windows\\explorer.exe",
+    "system_root": "C:\\Windows",
+    "system32": "C:\\Windows\\System32",
+    "temp_dir": "C:\\Users\\zhangwei\\AppData\\Local\\Temp",
+    "current_directory": "C:\\Users\\zhangwei\\Desktop",
+    "command_line": "C:\\Users\\zhangwei\\Desktop\\sample.exe",
+    "machine_guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  "os_version": {
+    "major": 6,
+    "minor": 1,
+    "build": 7601,
+    "platform_id": 2,
+    "suite_mask": 256,
+    "product_type": 1,
+    "service_pack_major": 1,
+    "service_pack_minor": 0,
+    "csd_version": "Service Pack 1",
+    "product_name": "Windows 7 Professional",
+    "product_id": "00426-OEM-8992662-00006",
+    "build_lab_ex": "7601.24231.amd64fre.win7sp1_ldr.180121-0600"
+  },
+  "locale": {
+    "acp": 936,
+    "oemcp": 936,
+    "console_cp": 936,
+    "console_output_cp": 936,
+    "user_default_lcid": 2052,
+    "thread_locale": 2052,
+    "system_default_ui_language": 2052,
+    "user_default_ui_language": 2052
+  },
+  "display": {
+    "desktop_window_handle": 65536,
+    "active_window_handle": 65552,
+    "shell_window_handle": 65568,
+    "default_dc_handle": 131072,
+    "screen_width": 1366,
+    "screen_height": 768,
+    "cursor_x": 523,
+    "cursor_y": 384,
+    "message_x": 523,
+    "message_y": 384,
+    "message_step_x": 0,
+    "message_step_y": 0,
+    "remote_session": false
+  },
+  "volume": {
+    "root_path": "C:\\",
+    "volume_name": "SYS",
+    "serial": 192837465,
+    "max_component_length": 255,
+    "flags": 459007,
+    "fs_name": "NTFS",
+    "physical_drive_count": 1,
+    "total_bytes": 214748364800,
+    "free_bytes": 85899345920,
+    "available_bytes": 64424509440,
+    "volume_guid": "\\\\?\\Volume{a1b2c3d4-5678-9012-abcd-ef1234567890}\\"
+  },
+  "shell_folders": {
+    "profile": "C:\\Users\\zhangwei",
+    "desktop": "C:\\Users\\zhangwei\\Desktop",
+    "app_data": "C:\\Users\\zhangwei\\AppData\\Roaming",
+    "local_app_data": "C:\\Users\\zhangwei\\AppData\\Local",
+    "program_data": "C:\\ProgramData",
+    "startup": "C:\\Users\\zhangwei\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+    "personal": "C:\\Users\\zhangwei\\Documents",
+    "public": "C:\\Users\\Public",
+    "program_files": "C:\\Program Files",
+    "program_files_x86": "C:\\Program Files (x86)",
+    "common_files": "C:\\Program Files\\Common Files",
+    "common_files_x86": "C:\\Program Files (x86)\\Common Files",
+    "common_startup": "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+    "common_desktop": "C:\\Users\\Public\\Desktop"
+  },
+  "network": {
+    "host_name": "OFFICE-PC",
+    "domain_name": "",
+    "dns_suffix": "",
+    "dns_servers": ["192.168.1.1", "114.114.114.114"],
+    "node_type": 1,
+    "scope_id": "",
+    "enable_routing": false,
+    "enable_proxy": false,
+    "enable_dns": true,
+    "adapters": [
+      {
+        "name": "{BC2C3D4E-5F6A-7890-BCDE-F12345678901}",
+        "description": "Realtek PCIe GBE Family Controller",
+        "friendly_name": "Local Area Connection",
+        "dns_suffix": "",
+        "if_index": 11,
+        "adapter_type": 6,
+        "mac_address": "4C:ED:FB:C5:12:34",
+        "mtu": 1500,
+        "oper_status": 1,
+        "ipv4_addresses": [{"address": "192.168.1.105", "netmask": "255.255.255.0"}],
+        "gateways": ["192.168.1.1"],
+        "dns_servers": ["192.168.1.1", "114.114.114.114"],
+        "dhcp_enabled": true,
+        "dhcp_server": "192.168.1.1"
+      }
+    ]
+  },
+  "environment_variables": [
+    {"name": "APPDATA", "value": "C:\\Users\\zhangwei\\AppData\\Roaming"},
+    {"name": "COMSPEC", "value": "C:\\Windows\\System32\\cmd.exe"},
+    {"name": "HOMEDRIVE", "value": "C:"},
+    {"name": "HOMEPATH", "value": "\\Users\\zhangwei"},
+    {"name": "OS", "value": "Windows_NT"},
+    {"name": "PATH", "value": "C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Program Files\\Common Files\\lenovo"},
+    {"name": "PROCESSOR_ARCHITECTURE", "value": "AMD64"},
+    {"name": "SystemRoot", "value": "C:\\Windows"},
+    {"name": "TEMP", "value": "C:\\Users\\zhangwei\\AppData\\Local\\Temp"},
+    {"name": "TMP", "value": "C:\\Users\\zhangwei\\AppData\\Local\\Temp"},
+    {"name": "USERNAME", "value": "zhangwei"},
+    {"name": "USERPROFILE", "value": "C:\\Users\\zhangwei"}
+  ],
+  "processes": [
+    {"pid": 4, "parent_pid": 0, "image_path": "C:\\Windows\\System32\\ntoskrnl.exe", "command_line": "", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 544, "parent_pid": 4, "image_path": "C:\\Windows\\System32\\csrss.exe", "command_line": "", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 632, "parent_pid": 4, "image_path": "C:\\Windows\\System32\\services.exe", "command_line": "", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 680, "parent_pid": 632, "image_path": "C:\\Windows\\System32\\svchost.exe", "command_line": "C:\\Windows\\System32\\svchost.exe -k netsvcs", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 792, "parent_pid": 632, "image_path": "C:\\Windows\\System32\\svchost.exe", "command_line": "C:\\Windows\\System32\\svchost.exe -k LocalService", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 980, "parent_pid": 632, "image_path": "C:\\Windows\\System32\\svchost.exe", "command_line": "C:\\Windows\\System32\\svchost.exe -k NetworkService", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 1204, "parent_pid": 632, "image_path": "C:\\Windows\\System32\\spoolsv.exe", "command_line": "", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 1456, "parent_pid": 632, "image_path": "C:\\Windows\\System32\\taskeng.exe", "command_line": "", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 2108, "parent_pid": 632, "image_path": "C:\\Windows\\System32\\SearchIndexer.exe", "command_line": "", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 4892, "parent_pid": 3200, "image_path": "C:\\Windows\\explorer.exe", "command_line": "C:\\Windows\\explorer.exe", "current_directory": "C:\\Users\\zhangwei"},
+    {"pid": 5216, "parent_pid": 680, "image_path": "C:\\Windows\\System32\\svchost.exe", "command_line": "C:\\Windows\\System32\\svchost.exe -k LocalSystemNetworkRestricted", "current_directory": "C:\\Windows\\System32"},
+    {"pid": 5720, "parent_pid": 4892, "image_path": "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe", "command_line": "\"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe\"", "current_directory": "C:\\Users\\zhangwei"},
+    {"pid": 3844, "parent_pid": 680, "image_path": "C:\\Windows\\System32\\msiexec.exe", "command_line": "C:\\Windows\\System32\\msiexec.exe /V", "current_directory": "C:\\Windows\\System32"}
+  ],
+  "users": [
+    {"name": "zhangwei", "full_name": "Zhang Wei", "comment": "Normal user account", "flags": 66049, "privilege_level": 1, "home_dir": "C:\\Users\\zhangwei", "rid": 1001},
+    {"name": "Administrator", "full_name": "", "comment": "Built-in account for administering the computer/domain", "flags": 66049, "privilege_level": 2, "home_dir": "C:\\Users\\Administrator", "rid": 500},
+    {"name": "Guest", "full_name": "", "comment": "Built-in account for guest access", "flags": 66081, "privilege_level": 0, "home_dir": "C:\\Users\\Guest", "rid": 501}
+  ],
+  "local_groups": [
+    {"name": "Administrators", "comment": "Administrators have complete and unrestricted access", "domain": "BUILTIN", "rid": 544, "members": ["zhangwei", "Administrator"]},
+    {"name": "Users", "comment": "Users are prevented from making accidental or intentional system-wide changes", "domain": "BUILTIN", "rid": 545, "members": ["zhangwei"]},
+    {"name": "Guests", "comment": "Guests have the same access as members of the Users group", "domain": "BUILTIN", "rid": 546, "members": ["Guest"]}
+  ],
+  "services": [
+    {"name": "BITS", "display_name": "Background Intelligent Transfer Service", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 980, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs", "description": "Transfers files in the background using idle network bandwidth."},
+    {"name": "Browser", "display_name": "Computer Browser", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 680, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs", "description": "Maintains an updated list of computers on the network."},
+    {"name": "CryptSvc", "display_name": "Cryptographic Services", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 792, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService", "description": "Provides management services for trusted root certificates."},
+    {"name": "Dnscache", "display_name": "DNS Client", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 980, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService", "description": "Caches DNS names and registers the full computer name."},
+    {"name": "EventLog", "display_name": "Windows Event Log", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 680, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted", "description": "Manages events and event logs."},
+    {"name": "LanmanServer", "display_name": "Server", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 680, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs", "description": "Supports file, print, and named-pipe sharing over the network."},
+    {"name": "LanmanWorkstation", "display_name": "Workstation", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 680, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService", "description": "Creates and maintains client network connections to remote servers."},
+    {"name": "Spooler", "display_name": "Print Spooler", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 1204, "binary_path": "%SystemRoot%\\System32\\spoolsv.exe", "description": "Manages all local and network print queues and controls all printing jobs."},
+    {"name": "WSearch", "display_name": "Windows Search", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 2108, "binary_path": "%SystemRoot%\\System32\\SearchIndexer.exe", "description": "Provides content indexing and file search."},
+    {"name": "wuauserv", "display_name": "Windows Update", "service_type": 32, "start_type": 2, "current_state": 4, "process_id": 980, "binary_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs", "description": "Enables the detection, download, and installation of updates.", "delayed_auto_start": true}
+  ],
+  "registry": {
+    "keys": [
+      {
+        "path": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "values": [
+          {"name": "RTHDVCPL", "value_type": 1, "string": "\"C:\\Program Files\\Realtek\\Audio\\HDA\\RtkNGUI64.exe\" -s"},
+          {"name": "LenovoRegistration", "value_type": 1, "string": "\"C:\\Program Files (x86)\\Lenovo\\Lenovo Registration\\LenovoReg.exe\" /startup"}
+        ]
+      },
+      {
+        "path": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+        "values": [
+          {"name": "ProductName", "value_type": 1, "string": "Windows 7 Professional"},
+          {"name": "CurrentBuild", "value_type": 1, "string": "7601"},
+          {"name": "CurrentVersion", "value_type": 1, "string": "6.1"},
+          {"name": "ProductId", "value_type": 1, "string": "00426-OEM-8992662-00006"},
+          {"name": "BuildLabEx", "value_type": 1, "string": "7601.24231.amd64fre.win7sp1_ldr.180121-0600"}
+        ]
+      },
+      {
+        "path": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography",
+        "values": [
+          {"name": "MachineGuid", "value_type": 1, "string": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
+        ]
+      },
+      {
+        "path": "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName",
+        "values": [
+          {"name": "ComputerName", "value_type": 1, "string": "OFFICE-PC"}
+        ]
+      },
+      {
+        "path": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Chrome",
+        "values": [
+          {"name": "DisplayName", "value_type": 1, "string": "Google Chrome"},
+          {"name": "DisplayVersion", "value_type": 1, "string": "109.0.5414.120"}
+        ]
+      }
+    ]
+  }
+}

@@ -7,7 +7,7 @@ use crate::arch::arch_name;
 use crate::error::VmError;
 use crate::models::{ImportDescriptorReport, PeInspectReport};
 
-/// Reads the PE metadata needed by the Python-compatible `inspect` command.
+/// Reads the PE metadata for the `inspect` command.
 pub fn inspect_pe(path: &Path) -> Result<PeInspectReport, VmError> {
     let resolved_path = std::path::absolute(path).map_err(|source| VmError::ReadFile {
         path: path.to_path_buf(),
@@ -50,7 +50,7 @@ pub fn inspect_pe(path: &Path) -> Result<PeInspectReport, VmError> {
     })
 }
 
-/// Renders inspect output using the same field names as the Python CLI.
+/// Renders inspect output.
 pub fn render_inspect(report: &PeInspectReport) -> String {
     let mut output = String::new();
     output.push_str(&format!("name: {}\n", report.name));

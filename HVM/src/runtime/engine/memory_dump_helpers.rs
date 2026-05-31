@@ -25,7 +25,8 @@ impl VirtualExecutionEngine {
         if process_key & SHELL_PROCESS_SPACE_KEY_BASE != 0 {
             return process_key & u32::MAX as u64;
         }
-        self.process_handles
+        self.process_memory
+            .process_handles
             .iter()
             .find_map(|(handle, pid)| (*pid as u64 == process_key).then_some(*handle as u64))
             .unwrap_or(process_key)
@@ -38,9 +39,10 @@ impl VirtualExecutionEngine {
         size: usize,
     ) -> Option<Result<Vec<u8>, crate::error::MemoryError>> {
         if process_key == self.current_process_space_key() {
-            Some(self.modules.memory().read(address, size))
+            Some(self.core.modules.memory().read(address, size))
         } else {
-            self.process_spaces
+            self.process_memory
+                .process_spaces
                 .get(&process_key)
                 .map(|space| space.memory.read(address, size))
         }
@@ -51,7 +53,7 @@ impl VirtualExecutionEngine {
     ) -> Vec<(u64, VirtualAllocationRecord, VirtualAllocationSegment)> {
         let mut candidates = Vec::new();
         let current_process_key = self.current_process_space_key();
-        for record in self.virtual_allocations.values() {
+        for record in self.process_memory.virtual_allocations.values() {
             if record.region_type == MEM_IMAGE {
                 continue;
             }
@@ -62,7 +64,7 @@ impl VirtualExecutionEngine {
                 }
             }
         }
-        for (&process_key, space) in &self.process_spaces {
+        for (&process_key, space) in &self.process_memory.process_spaces {
             for record in space.virtual_allocations.values() {
                 if record.region_type == MEM_IMAGE {
                     continue;
@@ -80,17 +82,18 @@ impl VirtualExecutionEngine {
     }
 
     pub(super) fn sample_dump_size_limit_bytes(&self) -> u64 {
-        self.main_module
+        self.core
+            .main_module
             .as_ref()
             .and_then(|module| module.path.as_ref())
             .and_then(|path| fs::metadata(path).ok())
             .map(|metadata| metadata.len())
             .or_else(|| {
-                fs::metadata(&self.config.main_module)
+                fs::metadata(&self.core.config.main_module)
                     .ok()
                     .map(|metadata| metadata.len())
             })
-            .or_else(|| self.main_module.as_ref().map(|module| module.size))
+            .or_else(|| self.core.main_module.as_ref().map(|module| module.size))
             .unwrap_or(u64::MAX)
             .max(1)
     }
@@ -112,6 +115,9 @@ impl VirtualExecutionEngine {
             .as_ref()
             .and_then(|path| fs::metadata(path).ok())
             .map(|metadata| metadata.len())
+            // PE files can carry certificates or overlay data beyond the mapped
+            // in-memory image, so baseline capture must never exceed SizeOfImage.
+            .map(|file_len| file_len.min(module.size))
             .unwrap_or(module.size)
             .max(1)
     }
@@ -146,7 +152,7 @@ impl VirtualExecutionEngine {
             return Ok(());
         };
         let bytes = bytes.map_err(VmError::from)?;
-        self.image_hash_baselines.insert(
+        self.trace.image_hash_baselines.insert(
             (self.current_process_space_key(), module.base),
             ImageHashBaseline {
                 capture_size,
@@ -176,8 +182,9 @@ impl VirtualExecutionEngine {
         base: u64,
         bytes: &[u8],
     ) -> Result<PathBuf, VmError> {
-        self.memory_dump_sequence = self.memory_dump_sequence.saturating_add(1);
+        self.trace.memory_dump_sequence = self.trace.memory_dump_sequence.saturating_add(1);
         let path = self
+            .core
             .config
             .sandbox_output_dir
             .join("memory_dumps")
@@ -186,7 +193,7 @@ impl VirtualExecutionEngine {
                 marker.to_ascii_lowercase(),
                 self.current_process_id(),
                 self.current_log_tid(),
-                self.memory_dump_sequence,
+                self.trace.memory_dump_sequence,
                 base,
             ));
         if let Some(parent) = path.parent() {
@@ -298,7 +305,7 @@ impl VirtualExecutionEngine {
         info: MemoryBasicInfoSnapshot,
         mut fields: Map<String, serde_json::Value>,
     ) -> Result<Option<PathBuf>, VmError> {
-        if !self.api_logger.writes_marker(marker) {
+        if !self.core.api_logger.writes_marker(marker) {
             return Ok(None);
         }
         let dump_path = self.write_memory_dump_artifact(marker, dump_base, bytes)?;
@@ -326,7 +333,7 @@ impl VirtualExecutionEngine {
         non_image_only: bool,
         fields: Map<String, serde_json::Value>,
     ) -> Result<Option<PathBuf>, VmError> {
-        if !self.api_logger.writes_marker(marker) {
+        if !self.core.api_logger.writes_marker(marker) {
             return Ok(None);
         }
         let Some(info) = self.query_memory_basic_information_for_process(process_handle, address)
@@ -396,7 +403,7 @@ impl VirtualExecutionEngine {
         &mut self,
         activity: DynamicCodeRegionActivity,
     ) -> Result<(), VmError> {
-        if !self.api_logger.writes_marker("MEM_EXEC_CHAIN") {
+        if !self.core.api_logger.writes_marker("MEM_EXEC_CHAIN") {
             return Ok(());
         }
 
@@ -533,6 +540,7 @@ impl VirtualExecutionEngine {
             return Ok(());
         };
         let entry = self
+            .trace
             .dynamic_code_activities
             .entry((process_key, allocation_base))
             .or_insert_with(|| DynamicCodeRegionActivity {
@@ -582,6 +590,7 @@ impl VirtualExecutionEngine {
         let became_executable = Self::page_protect_is_executable(new_protect)
             && !Self::page_protect_is_executable(old_protect);
         let entry = self
+            .trace
             .dynamic_code_activities
             .entry((process_key, allocation_base))
             .or_insert_with(|| DynamicCodeRegionActivity {
@@ -631,6 +640,7 @@ impl VirtualExecutionEngine {
             return Ok(());
         };
         let entry = self
+            .trace
             .dynamic_code_activities
             .entry((process_key, allocation_base))
             .or_insert_with(|| DynamicCodeRegionActivity {
@@ -664,7 +674,7 @@ impl VirtualExecutionEngine {
 
 impl VirtualExecutionEngine {
     pub(super) fn log_modified_image_dumps(&mut self, reason: &str) -> Result<(), VmError> {
-        if !self.api_logger.writes_marker("IMAGE_MODIFIED_DUMP") {
+        if !self.core.api_logger.writes_marker("IMAGE_MODIFIED_DUMP") {
             return Ok(());
         }
 
@@ -676,6 +686,7 @@ impl VirtualExecutionEngine {
             .collect::<Vec<_>>();
         for module in modules {
             let Some(baseline) = self
+                .trace
                 .image_hash_baselines
                 .get(&(process_key, module.base))
                 .cloned()
@@ -742,7 +753,7 @@ impl VirtualExecutionEngine {
         &mut self,
         reason: &str,
     ) -> Result<(), VmError> {
-        if !self.api_logger.writes_marker("MEM_EXEC_EXIT_DUMP") {
+        if !self.core.api_logger.writes_marker("MEM_EXEC_EXIT_DUMP") {
             return Ok(());
         }
 
@@ -774,6 +785,7 @@ impl VirtualExecutionEngine {
             );
             fields.insert("segment_protect".to_string(), json!(segment.protect));
             if let Some(activity) = self
+                .trace
                 .dynamic_code_activities
                 .get(&(process_key, record.allocation_base))
             {

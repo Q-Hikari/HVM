@@ -11,7 +11,7 @@ pub struct ImportBinding {
     pub by_ordinal: bool,
 }
 
-/// Collects one normalized import binding per thunk entry using Python-compatible naming rules.
+/// Collects one normalized import binding per thunk entry with normalized naming.
 pub fn collect_import_bindings(pe: &PE<'_>) -> Vec<ImportBinding> {
     pe.imports
         .iter()

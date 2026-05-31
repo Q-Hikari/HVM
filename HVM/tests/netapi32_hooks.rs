@@ -807,6 +807,7 @@ fn netapi32_exposes_join_and_workstation_profiles() {
         engine.bind_hook_for_test("netapi32.dll", "DsRoleGetPrimaryDomainInformation");
     let ds_role_free_memory = engine.bind_hook_for_test("netapi32.dll", "DsRoleFreeMemory");
     let net_api_buffer_free = engine.bind_hook_for_test("netapi32.dll", "NetApiBufferFree");
+    let netutils_buffer_free = engine.bind_hook_for_test("netutils.dll", "NetApiBufferFree");
 
     let page = alloc_page(&mut engine, 0x6502_0000);
     let join_name_ptr = page;
@@ -827,6 +828,21 @@ fn netapi32_exposes_join_and_workstation_profiles() {
     assert_eq!(
         engine
             .dispatch_bound_stub(net_api_buffer_free, &[join_name])
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(
+                net_get_join_information,
+                &[0, join_name_ptr, join_status_ptr],
+            )
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(netutils_buffer_free, &[read_ptr(&engine, join_name_ptr)])
             .unwrap(),
         0
     );
@@ -1654,6 +1670,120 @@ fn netapi32_enumerates_and_queries_user_profiles() {
 }
 
 #[test]
+fn samcli_net_user_add_materializes_user_profile() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let net_user_add = engine.bind_hook_for_test("samcli.dll", "NetUserAdd");
+    let net_user_get_info = engine.bind_hook_for_test("samcli.dll", "NetUserGetInfo");
+    let net_api_buffer_free = engine.bind_hook_for_test("netapi32.dll", "NetApiBufferFree");
+    let page = alloc_page(&mut engine, 0x6508_0000);
+    let user_name = page + 0x100;
+    let full_name = page + 0x200;
+    let comment = page + 0x300;
+    let home_dir = page + 0x400;
+    let script_path = page + 0x500;
+    let parm_err = page + 0x600;
+    let buffer = page + 0x20;
+
+    write_wide_input(&mut engine, user_name, "SamCliUser42");
+    write_wide_input(&mut engine, full_name, "Sam CLI User");
+    write_wide_input(&mut engine, comment, "Inserted by NetUserAdd");
+    write_wide_input(&mut engine, home_dir, r"C:\Users\SamCliUser42");
+    write_wide_input(&mut engine, script_path, "logon.cmd");
+
+    let layout = user_info_1_layout(&engine);
+    write_ptr(&mut engine, buffer + layout.name_offset, user_name);
+    engine
+        .write_test_bytes(buffer + layout.privilege_offset, &2u32.to_le_bytes())
+        .unwrap();
+    write_ptr(&mut engine, buffer + layout.home_dir_offset, home_dir);
+    write_ptr(&mut engine, buffer + layout.comment_offset, comment);
+    engine
+        .write_test_bytes(buffer + layout.flags_offset, &0x1234u32.to_le_bytes())
+        .unwrap();
+    write_ptr(&mut engine, buffer + layout.script_path_offset, script_path);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_user_add, &[0, 1, buffer, parm_err])
+            .unwrap(),
+        0
+    );
+
+    let out = page + 0x700;
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_user_get_info, &[0, user_name, 1, out])
+            .unwrap(),
+        0
+    );
+    let info = read_ptr(&engine, out);
+    assert_eq!(
+        read_wide_string(&engine, read_ptr(&engine, info + layout.name_offset), 64),
+        "SamCliUser42"
+    );
+    assert_eq!(
+        read_wide_string(&engine, read_ptr(&engine, info + layout.comment_offset), 64),
+        "Inserted by NetUserAdd"
+    );
+    assert_eq!(read_u32(&engine, info + layout.flags_offset), 0x1234);
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_api_buffer_free, &[info])
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn samcli_net_user_add_tolerates_bad_name_pointer_and_uses_current_user() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let net_user_add = engine.bind_hook_for_test("samcli.dll", "NetUserAdd");
+    let net_user_get_info = engine.bind_hook_for_test("samcli.dll", "NetUserGetInfo");
+    let net_api_buffer_free = engine.bind_hook_for_test("netapi32.dll", "NetApiBufferFree");
+    let page = alloc_page(&mut engine, 0x6509_0000);
+    let user_name = page + 0x100;
+    let parm_err = page + 0x600;
+    let buffer = page + 0x20;
+    let layout = user_info_1_layout(&engine);
+
+    write_wide_input(&mut engine, user_name, "Admin");
+    write_ptr(&mut engine, buffer + layout.name_offset, 1);
+    engine
+        .write_test_bytes(buffer + layout.privilege_offset, &2u32.to_le_bytes())
+        .unwrap();
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_user_add, &[0, 1, buffer, parm_err])
+            .unwrap(),
+        0
+    );
+
+    let out = page + 0x700;
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_user_get_info, &[0, user_name, 1, out])
+            .unwrap(),
+        0
+    );
+    let info = read_ptr(&engine, out);
+    assert_eq!(
+        read_wide_string(&engine, read_ptr(&engine, info + layout.name_offset), 64),
+        "Admin"
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_api_buffer_free, &[info])
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
 fn netapi32_enumerates_local_groups_and_user_memberships() {
     let mut config = sample_config();
     config.environment_overrides = Some(EnvironmentOverrides {
@@ -1856,6 +1986,128 @@ fn netapi32_enumerates_local_groups_and_user_memberships() {
         u32::from_le_bytes(sid_bytes[24..28].try_into().unwrap()),
         1101
     );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_api_buffer_free, &[members])
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn samcli_net_local_group_member_mutations_round_trip() {
+    let mut config = sample_config();
+    config.environment_overrides = Some(EnvironmentOverrides {
+        users: Some(vec![
+            UserAccountProfile {
+                name: "Analyst".to_string(),
+                rid: 1101,
+                ..UserAccountProfile::default()
+            },
+            UserAccountProfile {
+                name: "Operator".to_string(),
+                rid: 1102,
+                ..UserAccountProfile::default()
+            },
+        ]),
+        local_groups: Some(vec![LocalGroupProfile {
+            name: "Administrators".to_string(),
+            comment: "Administrative operators".to_string(),
+            domain: "BUILTIN".to_string(),
+            rid: 544,
+            members: vec!["Analyst".to_string()],
+        }]),
+        ..EnvironmentOverrides::default()
+    });
+
+    let mut engine = VirtualExecutionEngine::new(config).unwrap();
+    engine.load().unwrap();
+
+    let add_members = engine.bind_hook_for_test("samcli.dll", "NetLocalGroupAddMembers");
+    let del_members = engine.bind_hook_for_test("samcli.dll", "NetLocalGroupDelMembers");
+    let get_members = engine.bind_hook_for_test("netapi32.dll", "NetLocalGroupGetMembers");
+    let net_api_buffer_free = engine.bind_hook_for_test("netapi32.dll", "NetApiBufferFree");
+    let page = alloc_page(&mut engine, 0x650A_0000);
+    let group_name = page + 0x100;
+    let member_name = page + 0x200;
+    let buffer = page + 0x20;
+    let out = page + 0x400;
+    let entries = page + 0x408;
+    let total = page + 0x40C;
+    let resume = page + 0x410;
+
+    write_wide_input(&mut engine, group_name, "Administrators");
+    write_wide_input(&mut engine, member_name, "Operator");
+    write_ptr(&mut engine, buffer, member_name);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(add_members, &[0, group_name, 3, buffer, 1])
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(
+                get_members,
+                &[
+                    0,
+                    group_name,
+                    3,
+                    out,
+                    u32::MAX as u64,
+                    entries,
+                    total,
+                    resume
+                ],
+            )
+            .unwrap(),
+        0
+    );
+    assert_eq!(read_u32(&engine, entries), 2);
+    let members = read_ptr(&engine, out);
+    let first_name = read_wide_string(&engine, read_ptr(&engine, members), 64);
+    let second_name = read_wide_string(
+        &engine,
+        read_ptr(&engine, members + pointer_size(&engine) as u64),
+        64,
+    );
+    assert!(first_name.ends_with("\\Analyst") || second_name.ends_with("\\Analyst"));
+    assert!(first_name.ends_with("\\Operator") || second_name.ends_with("\\Operator"));
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(net_api_buffer_free, &[members])
+            .unwrap(),
+        0
+    );
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(del_members, &[0, group_name, 3, buffer, 1])
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(
+                get_members,
+                &[
+                    0,
+                    group_name,
+                    3,
+                    out,
+                    u32::MAX as u64,
+                    entries,
+                    total,
+                    resume
+                ],
+            )
+            .unwrap(),
+        0
+    );
+    assert_eq!(read_u32(&engine, entries), 1);
+    let members = read_ptr(&engine, out);
+    assert!(read_wide_string(&engine, read_ptr(&engine, members), 64).ends_with("\\Analyst"));
     assert_eq!(
         engine
             .dispatch_bound_stub(net_api_buffer_free, &[members])

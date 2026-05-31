@@ -261,11 +261,16 @@ fn environment_profile_overrides_identity_gui_and_volume_hooks() {
     let get_user = engine.bind_hook_for_test("advapi32.dll", "GetUserNameA");
     let get_pid = engine.bind_hook_for_test("kernel32.dll", "GetCurrentProcessId");
     let get_desktop = engine.bind_hook_for_test("user32.dll", "GetDesktopWindow");
+    let get_foreground = engine.bind_hook_for_test("user32.dll", "GetForegroundWindow");
+    let get_cursor = engine.bind_hook_for_test("user32.dll", "GetCursor");
+    let get_kb_code_page = engine.bind_hook_for_test("user32.dll", "GetKBCodePage");
     let get_message_pos = engine.bind_hook_for_test("user32.dll", "GetMessagePos");
     let get_volume = engine.bind_hook_for_test("kernel32.dll", "GetVolumeInformationA");
     let get_temp = engine.bind_hook_for_test("kernel32.dll", "GetTempPathW");
     let get_console_cp = engine.bind_hook_for_test("kernel32.dll", "GetConsoleCP");
     let get_command_line = engine.bind_hook_for_test("kernel32.dll", "GetCommandLineW");
+    let get_system_default_langid =
+        engine.bind_hook_for_test("kernel32.dll", "GetSystemDefaultLangID");
     let query_image_name = engine.bind_hook_for_test("kernel32.dll", "QueryFullProcessImageNameW");
 
     let name_buffer = alloc_page(&mut engine, 0x7100_0000);
@@ -298,12 +303,27 @@ fn environment_profile_overrides_identity_gui_and_volume_hooks() {
         0x0010_0000
     );
     assert_eq!(
+        engine.dispatch_bound_stub(get_foreground, &[]).unwrap(),
+        0x0010_0010
+    );
+    assert_ne!(engine.dispatch_bound_stub(get_cursor, &[]).unwrap(), 0);
+    assert_eq!(
+        engine.dispatch_bound_stub(get_kb_code_page, &[]).unwrap(),
+        936
+    );
+    assert_eq!(
         engine.dispatch_bound_stub(get_message_pos, &[]).unwrap(),
         0x001F_013D
     );
     assert_eq!(
         engine.dispatch_bound_stub(get_console_cp, &[]).unwrap(),
         65001
+    );
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(get_system_default_langid, &[])
+            .unwrap(),
+        1033
     );
 
     let volume_name = alloc_page(&mut engine, 0x7100_4000);

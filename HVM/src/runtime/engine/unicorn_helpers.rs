@@ -1,5 +1,7 @@
 use super::*;
 
+const STATUS_ACCESS_VIOLATION_EXIT: u32 = 0xC000_0005;
+
 const X86_UNICORN_REG_WRITES: [(&str, i32, u64); 10] = [
     ("eax", UC_X86_REG_EAX, 0),
     ("ebx", UC_X86_REG_EBX, 0),
@@ -73,16 +75,17 @@ impl VirtualExecutionEngine {
         &mut self,
     ) -> Result<(*const UnicornApi, *mut UcEngine), VmError> {
         let unicorn_ptr = self
+            .unicorn_state
             .unicorn
             .as_deref()
             .map(std::ptr::from_ref)
             .ok_or(VmError::RuntimeInvariant("unicorn backend unavailable"))?;
-        if let Some(handle) = self.unicorn_handle {
+        if let Some(handle) = self.unicorn_state.unicorn_handle {
             return Ok((unicorn_ptr, handle));
         }
 
         let unicorn = unsafe { &*unicorn_ptr };
-        let uc = if self.arch.is_x86() {
+        let uc = if self.core.arch.is_x86() {
             unicorn.open_x86_raw()
         } else {
             unicorn.open_x64_raw()
@@ -91,24 +94,25 @@ impl VirtualExecutionEngine {
             op: "uc_open",
             detail,
         })?;
+        let bound = unsafe { unicorn.bind(uc) };
         let setup_result = (|| -> Result<(), VmError> {
-            for region in &self.modules.memory().regions {
-                unsafe {
-                    unicorn.mem_map_raw(uc, region.base, region.size, unicorn_prot(region.perms))
-                }
-                .map_err(|detail| VmError::NativeExecution {
-                    op: "uc_mem_map",
-                    detail: format!(
-                        "{detail}; base=0x{:X}; size=0x{:X}",
-                        region.base, region.size
-                    ),
-                })?;
+            for region in self.core.modules.memory().regions.values() {
+                bound
+                    .mem_map(region.base, region.size, unicorn_prot(region.perms))
+                    .map_err(|detail| VmError::NativeExecution {
+                        op: "uc_mem_map",
+                        detail: format!(
+                            "{detail}; base=0x{:X}; size=0x{:X}",
+                            region.base, region.size
+                        ),
+                    })?;
                 let data = self
+                    .core
                     .modules
                     .memory()
                     .read(region.base, region.size as usize)?;
                 if data.iter().any(|byte| *byte != 0) {
-                    unsafe { unicorn.mem_write_raw(uc, region.base, &data) }.map_err(|detail| {
+                    bound.mem_write(region.base, &data).map_err(|detail| {
                         VmError::NativeExecution {
                             op: "uc_mem_write",
                             detail: format!(
@@ -119,66 +123,74 @@ impl VirtualExecutionEngine {
                     })?;
                 }
             }
-            if self.arch.is_x86() {
+            if self.core.arch.is_x86() {
                 self.configure_unicorn_x86_segments_raw(unicorn, uc)?;
             } else {
-                unsafe {
-                    unicorn.reg_write_raw(uc, UC_X86_REG_GS_BASE, self.process_env.current_teb())
-                }
-                .map_err(|detail| VmError::NativeExecution {
-                    op: "uc_reg_write(gs_base)",
-                    detail,
-                })?;
+                bound
+                    .reg_write(UC_X86_REG_GS_BASE, self.core.process_env.current_teb())
+                    .map_err(|detail| VmError::NativeExecution {
+                        op: "uc_reg_write(gs_base)",
+                        detail,
+                    })?;
             }
-            if !self.unicorn_block_hook_installed {
-                unsafe { unicorn.hook_add_block_raw(uc, unicorn_block_hook, std::ptr::null_mut()) }
+            if !self.unicorn_state.unicorn_intr_hook_installed {
+                bound
+                    .add_intr_hook(unicorn_intr_hook, std::ptr::null_mut())
                     .map_err(|detail| VmError::NativeExecution {
                         op: "uc_hook_add",
                         detail,
                     })?;
             }
-            if !self.unicorn_code_hook_installed {
-                unsafe { unicorn.hook_add_code_raw(uc, unicorn_code_hook, std::ptr::null_mut()) }
+            if !self.unicorn_state.unicorn_block_hook_installed {
+                bound
+                    .add_block_hook(unicorn_block_hook, std::ptr::null_mut())
                     .map_err(|detail| VmError::NativeExecution {
-                    op: "uc_hook_add",
-                    detail,
-                })?;
+                        op: "uc_hook_add",
+                        detail,
+                    })?;
             }
-            if !self.unicorn_mem_write_hook_installed {
-                unsafe {
-                    unicorn.hook_add_mem_write_raw(uc, unicorn_mem_write_hook, std::ptr::null_mut())
-                }
-                .map_err(|detail| VmError::NativeExecution {
-                    op: "uc_hook_add",
-                    detail,
-                })?;
+            // UC_HOOK_CODE is disabled — UC_HOOK_BLOCK (above) handles
+            // instruction counting, bound-stub dispatch, return-sentinel
+            // detection, and MFC42u recoveries in a single callback.
+            // Non-executable-module enforcement is handled by the existing
+            // UC_HOOK_MEM_FETCH_PROT path.
+            if !self.unicorn_state.unicorn_mem_write_hook_installed {
+                bound
+                    .add_mem_write_hook(unicorn_mem_write_hook, std::ptr::null_mut())
+                    .map_err(|detail| VmError::NativeExecution {
+                        op: "uc_hook_add",
+                        detail,
+                    })?;
             }
-            if !self.unicorn_mem_prot_hook_installed {
-                unsafe {
-                    unicorn.hook_add_mem_prot_raw(uc, unicorn_mem_prot_hook, std::ptr::null_mut())
-                }
-                .map_err(|detail| VmError::NativeExecution {
-                    op: "uc_hook_add",
-                    detail,
-                })?;
+            if !self.unicorn_state.unicorn_mem_read_hook_installed {
+                bound
+                    .add_mem_read_hook(unicorn_mem_read_hook, std::ptr::null_mut())
+                    .map_err(|detail| VmError::NativeExecution {
+                        op: "uc_hook_add",
+                        detail,
+                    })?;
             }
-            if !self.unicorn_mem_unmapped_hook_installed {
-                unsafe {
-                    unicorn.hook_add_mem_unmapped_raw(
-                        uc,
-                        unicorn_mem_unmapped_hook,
-                        std::ptr::null_mut(),
-                    )
-                }
-                .map_err(|detail| VmError::NativeExecution {
-                    op: "uc_hook_add",
-                    detail,
-                })?;
+            if !self.unicorn_state.unicorn_mem_prot_hook_installed {
+                bound
+                    .add_mem_prot_hook(unicorn_mem_prot_hook, std::ptr::null_mut())
+                    .map_err(|detail| VmError::NativeExecution {
+                        op: "uc_hook_add",
+                        detail,
+                    })?;
             }
-            for record in self.virtual_allocations.values() {
+            if !self.unicorn_state.unicorn_mem_unmapped_hook_installed {
+                bound
+                    .add_mem_unmapped_hook(unicorn_mem_unmapped_hook, std::ptr::null_mut())
+                    .map_err(|detail| VmError::NativeExecution {
+                        op: "uc_hook_add",
+                        detail,
+                    })?;
+            }
+            for record in self.process_memory.virtual_allocations.values() {
                 for segment in &record.segments {
                     if segment.state == MEM_COMMIT && segment.protect & PAGE_GUARD != 0 {
-                        unsafe { unicorn.mem_protect_raw(uc, segment.base, segment.size, 0) }
+                        bound
+                            .mem_protect(segment.base, segment.size, 0)
                             .map_err(|detail| VmError::NativeExecution {
                                 op: "uc_mem_protect",
                                 detail,
@@ -193,27 +205,34 @@ impl VirtualExecutionEngine {
             return Err(error);
         }
 
-        self.modules.memory_mut().attach_native(unicorn_ptr, uc);
-        self.unicorn_handle = Some(uc);
-        self.unicorn_block_hook_installed = true;
-        self.unicorn_code_hook_installed = true;
-        self.unicorn_mem_write_hook_installed = true;
-        self.unicorn_mem_prot_hook_installed = true;
-        self.unicorn_mem_unmapped_hook_installed = true;
+        self.core
+            .modules
+            .memory_mut()
+            .attach_native(unicorn_ptr, uc);
+        self.unicorn_state.unicorn_handle = Some(uc);
+        self.unicorn_state.unicorn_intr_hook_installed = true;
+        self.unicorn_state.unicorn_block_hook_installed = true;
+        self.unicorn_state.unicorn_code_hook_installed = true;
+        self.unicorn_state.unicorn_mem_write_hook_installed = true;
+        self.unicorn_state.unicorn_mem_read_hook_installed = true;
+        self.unicorn_state.unicorn_mem_prot_hook_installed = true;
+        self.unicorn_state.unicorn_mem_unmapped_hook_installed = true;
         Ok((unicorn_ptr, uc))
     }
 
     pub(super) fn close_unicorn_session(&mut self) {
-        self.modules.memory_mut().detach_native();
-        self.unicorn_block_hook_installed = false;
-        self.unicorn_code_hook_installed = false;
-        self.unicorn_mem_write_hook_installed = false;
-        self.unicorn_mem_prot_hook_installed = false;
-        self.unicorn_mem_unmapped_hook_installed = false;
-        let Some(handle) = self.unicorn_handle.take() else {
+        self.core.modules.memory_mut().detach_native();
+        self.unicorn_state.unicorn_intr_hook_installed = false;
+        self.unicorn_state.unicorn_block_hook_installed = false;
+        self.unicorn_state.unicorn_code_hook_installed = false;
+        self.unicorn_state.unicorn_mem_write_hook_installed = false;
+        self.unicorn_state.unicorn_mem_read_hook_installed = false;
+        self.unicorn_state.unicorn_mem_prot_hook_installed = false;
+        self.unicorn_state.unicorn_mem_unmapped_hook_installed = false;
+        let Some(handle) = self.unicorn_state.unicorn_handle.take() else {
             return;
         };
-        if let Some(unicorn) = self.unicorn.as_deref() {
+        if let Some(unicorn) = self.unicorn_state.unicorn.as_deref() {
             let _ = unsafe { unicorn.close_raw(handle) };
         }
     }
@@ -223,18 +242,19 @@ impl VirtualExecutionEngine {
         api: &UnicornApi,
         uc: *mut UcEngine,
     ) -> Result<(), VmError> {
+        let unicorn = unsafe { api.bind(uc) };
         let gdtr = X86Mmr {
             selector: 0,
-            base: self.process_env.layout().gdt_base,
+            base: self.core.process_env.layout().gdt_base,
             limit: 31,
             flags: 0,
         };
-        unsafe { api.reg_write_mmr_raw(uc, UC_X86_REG_GDTR, &gdtr) }.map_err(|detail| {
-            VmError::NativeExecution {
+        unicorn
+            .reg_write_mmr(UC_X86_REG_GDTR, &gdtr)
+            .map_err(|detail| VmError::NativeExecution {
                 op: "uc_reg_write(gdtr)",
                 detail,
-            }
-        })?;
+            })?;
         for (regid, value, op) in [
             (UC_X86_REG_CS, 1 << 3, "uc_reg_write(cs)"),
             (UC_X86_REG_DS, 2 << 3, "uc_reg_write(ds)"),
@@ -243,7 +263,8 @@ impl VirtualExecutionEngine {
             (UC_X86_REG_GS, 2 << 3, "uc_reg_write(gs)"),
             (UC_X86_REG_FS, 3 << 3, "uc_reg_write(fs)"),
         ] {
-            unsafe { api.reg_write_raw(uc, regid, value) }
+            unicorn
+                .reg_write(regid, value)
                 .map_err(|detail| VmError::NativeExecution { op, detail })?;
         }
         Ok(())
@@ -254,21 +275,22 @@ impl VirtualExecutionEngine {
         &self,
         api: &UnicornApi,
         uc: *mut UcEngine,
-        registers: &BTreeMap<String, u64>,
+        registers: &RegisterFile,
     ) -> Result<(), VmError> {
-        let register_set = if self.arch.is_x86() {
+        let unicorn = unsafe { api.bind(uc) };
+        let register_set = if self.core.arch.is_x86() {
             &X86_UNICORN_REG_WRITES[..]
         } else {
             &X64_UNICORN_REG_WRITES[..]
         };
-        for &(name, regid, default) in register_set {
-            let value = registers.get(name).copied().unwrap_or(default);
-            unsafe { api.reg_write_raw(uc, regid, value) }.map_err(|detail| {
-                VmError::NativeExecution {
+        for &(name, regid, _default) in register_set {
+            let value = registers.get(name);
+            unicorn
+                .reg_write(regid, value)
+                .map_err(|detail| VmError::NativeExecution {
                     op: "uc_reg_write",
                     detail: format!("{detail}; register={name}"),
-                }
-            })?;
+                })?;
         }
         Ok(())
     }
@@ -278,21 +300,22 @@ impl VirtualExecutionEngine {
         &self,
         api: &UnicornApi,
         uc: *mut UcEngine,
-    ) -> Result<BTreeMap<String, u64>, VmError> {
-        let mut registers = BTreeMap::new();
-        let register_set = if self.arch.is_x86() {
+    ) -> Result<RegisterFile, VmError> {
+        let unicorn = unsafe { api.bind(uc) };
+        let mut registers = RegisterFile::new();
+        let register_set = if self.core.arch.is_x86() {
             &X86_UNICORN_REG_READS[..]
         } else {
             &X64_UNICORN_REG_READS[..]
         };
         for &(name, regid) in register_set {
-            let value = unsafe { api.reg_read_raw(uc, regid) }.map_err(|detail| {
-                VmError::NativeExecution {
+            let value = unicorn
+                .reg_read(regid)
+                .map_err(|detail| VmError::NativeExecution {
                     op: "uc_reg_read",
                     detail: format!("{detail}; register={name}"),
-                }
-            })?;
-            registers.insert(name.to_string(), value);
+                })?;
+            registers.set(name, value);
         }
         Ok(registers)
     }
@@ -301,16 +324,19 @@ impl VirtualExecutionEngine {
         &self,
         api: &UnicornApi,
         uc: *mut UcEngine,
-        registers: &BTreeMap<String, u64>,
+        registers: &RegisterFile,
     ) -> Result<BTreeMap<String, u64>, VmError> {
-        let Some(stack_pointer) = registers
-            .get(if self.arch.is_x86() { "esp" } else { "rsp" })
-            .copied()
-        else {
+        let unicorn = unsafe { api.bind(uc) };
+        let stack_pointer = if self.core.arch.is_x86() {
+            registers.esp
+        } else {
+            registers.rsp
+        };
+        if stack_pointer == 0 {
             return Ok(BTreeMap::new());
         };
-        let pointer_size = if self.arch.is_x86() { 4 } else { 8 };
-        let offsets = if self.arch.is_x86() {
+        let pointer_size = if self.core.arch.is_x86() { 4 } else { 8 };
+        let offsets = if self.core.arch.is_x86() {
             vec![0, 4, 0x28, 0x40, 0x60, 0x90, 0xA4]
         } else {
             vec![0, 8, 0x20, 0x28, 0x40]
@@ -318,7 +344,7 @@ impl VirtualExecutionEngine {
         let mut words = BTreeMap::new();
         for offset in offsets {
             let address = stack_pointer.saturating_add(offset);
-            let Ok(bytes) = (unsafe { api.mem_read_raw(uc, address, pointer_size) }) else {
+            let Ok(bytes) = unicorn.mem_read(address, pointer_size) else {
                 continue;
             };
             let value = if pointer_size == 4 {
@@ -331,6 +357,54 @@ impl VirtualExecutionEngine {
         Ok(words)
     }
 
+    fn native_fault_hint(
+        &self,
+        tid: u32,
+        exit_pc: u64,
+        snapshots: &VecDeque<NativeBlockSnapshot>,
+    ) -> Option<String> {
+        if exit_pc != 0 {
+            return None;
+        }
+        let mut parts = vec!["hint=suspect null indirect call/jump".to_string()];
+        if let Some(snapshot) = snapshots.back() {
+            parts.push(format!(
+                "last_block=0x{:X}/0x{:X}",
+                snapshot.pc, snapshot.size
+            ));
+            let last_pc = if self.core.arch.is_x86() {
+                let eip = snapshot.registers.eip;
+                if eip != 0 {
+                    eip
+                } else {
+                    snapshot.pc
+                }
+            } else {
+                let rip = snapshot.registers.rip;
+                if rip != 0 {
+                    rip
+                } else {
+                    snapshot.pc
+                }
+            };
+            parts.push(format!("last_block_pc=0x{last_pc:X}"));
+        }
+        if let Some(metadata) = self.trace.remote_shellcode_threads.get(&tid) {
+            parts.push(format!(
+                "remote_source_process=0x{:X}",
+                metadata.source_process_handle
+            ));
+            parts.push(format!(
+                "remote_source_start=0x{:X}",
+                metadata.source_start_address
+            ));
+            if let Some(staged_start) = metadata.staged_start_address {
+                parts.push(format!("remote_staged_start=0x{staged_start:X}"));
+            }
+        }
+        Some(parts.join("; "))
+    }
+
     #[allow(dead_code)]
     pub(super) fn run_unicorn_thread_slice(
         &mut self,
@@ -338,44 +412,74 @@ impl VirtualExecutionEngine {
         instruction_budget: u64,
     ) -> Result<(), VmError> {
         let thread = self
+            .core
             .scheduler
             .thread_snapshot(tid)
             .ok_or(VmError::RuntimeInvariant("thread snapshot missing"))?;
         let (unicorn_ptr, uc) = self.ensure_unicorn_session()?;
         let unicorn = unsafe { &*unicorn_ptr };
+        let bound = unsafe { unicorn.bind(uc) };
         self.restore_unicorn_thread_registers(unicorn, uc, &thread.registers)?;
 
-        let mut start_address = if self.arch.is_x86() {
-            thread
-                .registers
-                .get("eip")
-                .copied()
-                .unwrap_or(thread.start_address)
+        let mut start_address = if self.core.arch.is_x86() {
+            let eip = thread.registers.eip;
+            if eip != 0 {
+                eip
+            } else {
+                thread.start_address
+            }
         } else {
-            thread
-                .registers
-                .get("rip")
-                .copied()
-                .unwrap_or(thread.start_address)
+            let rip = thread.registers.rip;
+            if rip != 0 {
+                rip
+            } else {
+                thread.start_address
+            }
         };
+        if std::env::var_os("HVM_DEBUG_LOAD_STAGE").is_some() {
+            let stack_pointer = if self.core.arch.is_x86() {
+                thread.registers.esp
+            } else {
+                thread.registers.rsp
+            };
+            eprintln!(
+                "[LOAD_STAGE] unicorn_slice:start tid={} start=0x{:X} sp=0x{:X} budget={}",
+                tid, start_address, stack_pointer, instruction_budget
+            );
+        }
         let mut run_context = UnicornRunContext {
             engine: self as *mut Self,
             api: unicorn_ptr,
             uc,
             callback_error: None,
             pending_fault: None,
+            pending_protected_fetch: None,
             pending_writes: Vec::new(),
+            pending_write_bytes: 0,
             suppress_mem_write_hook: false,
             last_native_block: None,
             recent_blocks: VecDeque::new(),
+            logged_ldr_module_snapshot: false,
+            recent_sensitive_reads: VecDeque::new(),
+            recent_branch_trace: VecDeque::new(),
+            branch_trace_until_instruction: 0,
+            last_sensitive_chain_key: None,
         };
         let mut remaining_budget = usize::try_from(instruction_budget.max(1)).unwrap_or(usize::MAX);
         let (emu_result, registers) = loop {
-            let before = self.instruction_count;
+            let before = self.core.instruction_count;
             run_context.callback_error = None;
             run_context.pending_fault = None;
+            run_context.pending_protected_fetch = None;
+            run_context.last_native_block = None;
+            // Flush stale TB cache before starting to prevent UC_HOOK_BLOCK
+            // "wrongly cached" / block-chaining from skipping hooks (see uc_priv.h:518).
+            {
+                let _ = bound.ctl_flush_tb();
+            }
+            let emu_count = remaining_budget.max(1);
             let emu_result = {
-                let _profile = self.runtime_profiler.start_scope("unicorn.emu_start");
+                let _profile = self.core.runtime_profiler.start_scope("unicorn.emu_start");
                 ACTIVE_UNICORN_CONTEXT.with(|slot| {
                     let previous =
                         slot.replace((&mut run_context as *mut UnicornRunContext).cast());
@@ -386,15 +490,12 @@ impl VirtualExecutionEngine {
                             detail: "reentrant Unicorn execution is not supported".to_string(),
                         });
                     }
-                    let result = unsafe {
-                        unicorn.emu_start_raw(
-                            uc,
-                            start_address,
-                            self.native_return_sentinel,
-                            0,
-                            remaining_budget.max(1),
-                        )
-                    };
+                    let result = bound.emu_start(
+                        start_address,
+                        self.core.native_return_sentinel,
+                        0,
+                        emu_count,
+                    );
                     slot.set(previous);
                     result.map_err(|detail| VmError::NativeExecution {
                         op: "uc_emu_start",
@@ -403,27 +504,62 @@ impl VirtualExecutionEngine {
                 })
             };
             flush_unicorn_pending_writes(&mut run_context, uc)?;
-            let consumed =
-                usize::try_from(self.instruction_count.saturating_sub(before)).unwrap_or(0);
-            remaining_budget = remaining_budget.saturating_sub(consumed.max(1));
+            let hook_consumed =
+                usize::try_from(self.core.instruction_count.saturating_sub(before)).unwrap_or(0);
+            let is_clean_return = run_context.callback_error.is_none()
+                && run_context.pending_fault.is_none()
+                && run_context.pending_protected_fetch.is_none();
+            let consumed = if is_clean_return {
+                let c = hook_consumed.max(emu_count);
+                if c > hook_consumed {
+                    self.core.emu_floor_instructions += (c - hook_consumed) as u64;
+                }
+                c
+            } else {
+                hook_consumed.max(1)
+            };
+            remaining_budget = remaining_budget.saturating_sub(consumed);
             if let Some(error) = run_context.callback_error.take() {
                 let registers = self.capture_unicorn_thread_registers(unicorn, uc)?;
-                self.scheduler.set_thread_registers(tid, registers).ok_or(
-                    VmError::RuntimeInvariant("failed to capture thread registers"),
-                )?;
+                self.core
+                    .scheduler
+                    .set_thread_registers(tid, registers)
+                    .ok_or(VmError::RuntimeInvariant(
+                        "failed to capture thread registers",
+                    ))?;
                 return Err(error);
             }
+            if let Some(action) = run_context.pending_protected_fetch.take() {
+                self.handle_pending_protected_fetch(unicorn, uc, action)?;
+                start_address = if self.core.arch.is_x86() {
+                    bound
+                        .reg_read(UC_X86_REG_EIP)
+                        .map_err(|detail| VmError::NativeExecution {
+                            op: "uc_reg_read(eip)",
+                            detail,
+                        })?
+                } else {
+                    bound
+                        .reg_read(UC_X86_REG_RIP)
+                        .map_err(|detail| VmError::NativeExecution {
+                            op: "uc_reg_read(rip)",
+                            detail,
+                        })?
+                };
+                continue;
+            }
+            let mut unhandled_fault = None;
             if let Some(fault) = run_context.pending_fault.take() {
                 if self.handle_pending_unicorn_fault(unicorn, uc, fault)? {
-                    start_address = if self.arch.is_x86() {
-                        unsafe { unicorn.reg_read_raw(uc, UC_X86_REG_EIP) }.map_err(|detail| {
+                    start_address = if self.core.arch.is_x86() {
+                        bound.reg_read(UC_X86_REG_EIP).map_err(|detail| {
                             VmError::NativeExecution {
                                 op: "uc_reg_read(eip)",
                                 detail,
                             }
                         })?
                     } else {
-                        unsafe { unicorn.reg_read_raw(uc, UC_X86_REG_RIP) }.map_err(|detail| {
+                        bound.reg_read(UC_X86_REG_RIP).map_err(|detail| {
                             VmError::NativeExecution {
                                 op: "uc_reg_read(rip)",
                                 detail,
@@ -432,72 +568,122 @@ impl VirtualExecutionEngine {
                     };
                     continue;
                 }
+                unhandled_fault = Some(fault);
+            }
+            let emu_result = if let Some(fault) = unhandled_fault {
+                Err(self.unhandled_unicorn_fault_error(fault))
+            } else {
+                emu_result
+            };
+            if emu_result.is_ok() && self.dispatch.should_restart_from_updated_pc() {
+                start_address = if self.core.arch.is_x86() {
+                    bound
+                        .reg_read(UC_X86_REG_EIP)
+                        .map_err(|detail| VmError::NativeExecution {
+                            op: "uc_reg_read(eip)",
+                            detail,
+                        })?
+                } else {
+                    bound
+                        .reg_read(UC_X86_REG_RIP)
+                        .map_err(|detail| VmError::NativeExecution {
+                            op: "uc_reg_read(rip)",
+                            detail,
+                        })?
+                };
+                self.dispatch.reset_api_flow_control();
+                continue;
             }
             let registers = self.capture_unicorn_thread_registers(unicorn, uc)?;
             break (emu_result, registers);
         };
-        let exit_pc = if self.arch.is_x86() {
-            registers.get("eip").copied().unwrap_or(start_address)
+        let exit_pc = if self.core.arch.is_x86() {
+            let eip = registers.eip;
+            if eip != 0 {
+                eip
+            } else {
+                start_address
+            }
         } else {
-            registers.get("rip").copied().unwrap_or(start_address)
+            let rip = registers.rip;
+            if rip != 0 {
+                rip
+            } else {
+                start_address
+            }
         };
-        let return_value = if self.arch.is_x86() {
-            registers.get("eax").copied().unwrap_or(0) as u32
+        if std::env::var_os("HVM_DEBUG_LOAD_STAGE").is_some() {
+            let stack_pointer = if self.core.arch.is_x86() {
+                registers.esp
+            } else {
+                registers.rsp
+            };
+            eprintln!(
+                "[LOAD_STAGE] unicorn_slice:end tid={} exit_pc=0x{:X} sp=0x{:X} emu_ok={}",
+                tid,
+                exit_pc,
+                stack_pointer,
+                emu_result.is_ok()
+            );
+        }
+        let return_value = if self.core.arch.is_x86() {
+            registers.eax as u32
         } else {
-            registers.get("rax").copied().unwrap_or(0) as u32
+            registers.rax as u32
         };
-        let error_context = if self.arch.is_x86() {
+        let error_context = if self.core.arch.is_x86() {
             (
-                registers.get("esp").copied().unwrap_or(0),
-                registers.get("eax").copied().unwrap_or(0),
-                registers.get("ebx").copied().unwrap_or(0),
-                registers.get("ecx").copied().unwrap_or(0),
-                registers.get("edx").copied().unwrap_or(0),
-                registers.get("ebp").copied().unwrap_or(0),
-                registers.get("esi").copied().unwrap_or(0),
-                registers.get("edi").copied().unwrap_or(0),
+                registers.esp,
+                registers.eax,
+                registers.ebx,
+                registers.ecx,
+                registers.edx,
+                registers.ebp,
+                registers.esi,
+                registers.edi,
             )
         } else {
             (
-                registers.get("rsp").copied().unwrap_or(0),
-                registers.get("rax").copied().unwrap_or(0),
-                registers.get("rcx").copied().unwrap_or(0),
-                registers.get("rdx").copied().unwrap_or(0),
-                registers.get("r8").copied().unwrap_or(0),
-                registers.get("r9").copied().unwrap_or(0),
+                registers.rsp,
+                registers.rax,
+                registers.rcx,
+                registers.rdx,
+                registers.r8,
+                registers.r9,
                 0,
                 0,
             )
         };
 
-        self.scheduler
+        self.core
+            .scheduler
             .set_thread_registers(tid, registers)
             .ok_or(VmError::RuntimeInvariant(
                 "failed to capture thread registers",
             ))?;
 
-        if exit_pc == self.native_return_sentinel {
+        if exit_pc == self.core.native_return_sentinel {
             let _ = self.terminate_current_thread(return_value);
-            if Some(tid) == self.main_thread_tid && self.exit_code.is_none() {
-                self.exit_code = Some(return_value);
+            if Some(tid) == self.core.main_thread_tid && self.core.exit_code.is_none() {
+                self.core.exit_code = Some(return_value);
             }
-        } else if self.scheduler.thread_state(tid) == Some("running") {
-            self.scheduler
+        } else if self.core.scheduler.thread_state(tid) == Some("running") {
+            self.core
+                .scheduler
                 .mark_thread_ready(tid)
                 .ok_or(VmError::RuntimeInvariant(
                     "failed to ready scheduler thread",
                 ))?;
         }
 
-        if self.thread_yield_requested {
-            self.thread_yield_requested = false;
-            self.defer_api_return = false;
+        if self.dispatch.thread_yield_requested() {
+            self.dispatch.reset_api_flow_control();
         }
 
         match emu_result {
             Ok(()) => Ok(()),
             Err(VmError::NativeExecution { op, detail }) => {
-                let message = if self.arch.is_x86() {
+                let message = if self.core.arch.is_x86() {
                     format!(
                         "{detail}; pc=0x{exit_pc:X}; sp=0x{:X}; eax=0x{:X}; ebx=0x{:X}; ecx=0x{:X}; edx=0x{:X}; ebp=0x{:X}; esi=0x{:X}; edi=0x{:X}",
                         error_context.0,
@@ -520,11 +706,28 @@ impl VirtualExecutionEngine {
                         error_context.5,
                     )
                 };
+                let message = if let Some(hint) =
+                    self.native_fault_hint(tid, exit_pc, &run_context.recent_blocks)
+                {
+                    format!("{message}; {hint}")
+                } else {
+                    message
+                };
                 self.log_emu_stop("native", exit_pc, &message)?;
-                Err(VmError::NativeExecution {
-                    op,
-                    detail: message,
-                })
+                if self.core.scheduler.thread_state(tid) != Some("terminated") {
+                    let _ = self.terminate_current_thread(STATUS_ACCESS_VIOLATION_EXIT);
+                    if Some(tid) == self.core.main_thread_tid && self.core.exit_code.is_none() {
+                        self.core.exit_code = Some(STATUS_ACCESS_VIOLATION_EXIT);
+                    }
+                }
+                if self.core.scheduler.thread_state(tid) == Some("terminated") {
+                    Ok(())
+                } else {
+                    Err(VmError::NativeExecution {
+                        op,
+                        detail: message,
+                    })
+                }
             }
             Err(error) => Err(error),
         }

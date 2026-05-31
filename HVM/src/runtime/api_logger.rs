@@ -1,15 +1,20 @@
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::thread::{self, JoinHandle};
 
 use serde_json::{json, Map, Value};
 
 use crate::config::EngineConfig;
 use crate::error::VmError;
-use crate::hooks::base::HookDefinition;
 
 const DEFAULT_FLUSH_THRESHOLD: usize = 1024;
+const DEFAULT_HUMAN_FLUSH_THRESHOLD: usize = 32;
 const OUTPUT_BUFFER_CAPACITY: usize = 1024 * 1024;
+const BG_CHANNEL_BOUND: usize = 65536;
+const BG_BUFFER_CAPACITY: usize = 4 * 1024 * 1024;
+const BG_FLUSH_BATCH_SIZE: usize = 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiLogArg {
@@ -31,6 +36,75 @@ pub struct AddressRef {
     pub region: Option<String>,
     pub region_base: Option<u64>,
     pub region_offset: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiStackWord {
+    pub address: u64,
+    pub value: Option<u64>,
+    pub value_ref: Option<AddressRef>,
+    pub read_error: Option<String>,
+}
+
+impl ApiStackWord {
+    fn to_json_value(&self) -> Value {
+        let mut record = Map::new();
+        record.insert("address".to_string(), json!(self.address));
+        if let Some(value) = self.value {
+            record.insert("value".to_string(), json!(value));
+            record.insert("value_text".to_string(), json!(format!("0x{value:X}")));
+        }
+        if let Some(value_ref) = &self.value_ref {
+            record.insert("value_ref".to_string(), value_ref.to_json_value());
+        }
+        if let Some(read_error) = &self.read_error {
+            record.insert("read_error".to_string(), json!(read_error));
+        }
+        Value::Object(record)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiExecutionContext {
+    pub ip: u64,
+    pub sp: u64,
+    pub bp: u64,
+    pub ax: u64,
+    pub bx: u64,
+    pub cx: u64,
+    pub dx: u64,
+    pub si: u64,
+    pub di: u64,
+    pub flags: u64,
+    pub direction_flag: bool,
+    pub stack_words: Vec<ApiStackWord>,
+}
+
+impl ApiExecutionContext {
+    fn to_json_value(&self) -> Value {
+        let mut record = Map::new();
+        record.insert("ip".to_string(), json!(self.ip));
+        record.insert("sp".to_string(), json!(self.sp));
+        record.insert("bp".to_string(), json!(self.bp));
+        record.insert("ax".to_string(), json!(self.ax));
+        record.insert("bx".to_string(), json!(self.bx));
+        record.insert("cx".to_string(), json!(self.cx));
+        record.insert("dx".to_string(), json!(self.dx));
+        record.insert("si".to_string(), json!(self.si));
+        record.insert("di".to_string(), json!(self.di));
+        record.insert("flags".to_string(), json!(self.flags));
+        record.insert("direction_flag".to_string(), json!(self.direction_flag));
+        record.insert(
+            "stack_words".to_string(),
+            Value::Array(
+                self.stack_words
+                    .iter()
+                    .map(ApiStackWord::to_json_value)
+                    .collect(),
+            ),
+        );
+        Value::Object(record)
+    }
 }
 
 impl AddressRef {
@@ -87,6 +161,136 @@ struct OutputStream {
     writer: BufWriter<File>,
 }
 
+enum BackgroundLogItem {
+    JsonRecord(Map<String, Value>),
+    FlushAck(mpsc::Sender<()>),
+    Shutdown,
+}
+
+#[derive(Debug)]
+struct BackgroundWriter {
+    sender: SyncSender<BackgroundLogItem>,
+    handle: Option<JoinHandle<()>>,
+    dropped: u64,
+}
+
+impl BackgroundWriter {
+    fn spawn(path: PathBuf) -> Result<Self, VmError> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|source| VmError::OutputIo {
+                path: parent.to_path_buf(),
+                source,
+            })?;
+        }
+        let file = File::create(&path).map_err(|source| VmError::OutputIo {
+            path: path.clone(),
+            source,
+        })?;
+        let (sender, receiver) = mpsc::sync_channel(BG_CHANNEL_BOUND);
+        let handle = thread::Builder::new()
+            .name("hvm-bg-writer".to_string())
+            .spawn(move || Self::writer_loop(receiver, file))
+            .map_err(|source| VmError::OutputIo {
+                path: path.clone(),
+                source: std::io::Error::other(source),
+            })?;
+        Ok(Self {
+            sender,
+            handle: Some(handle),
+            dropped: 0,
+        })
+    }
+
+    fn writer_loop(receiver: Receiver<BackgroundLogItem>, file: File) {
+        let mut writer = BufWriter::with_capacity(BG_BUFFER_CAPACITY, file);
+        let mut batch_count: usize = 0;
+        loop {
+            match receiver.recv() {
+                Ok(item) => {
+                    if !Self::write_item(&mut writer, &mut batch_count, item) {
+                        return;
+                    }
+                    // Drain any additional ready items to amortize recv overhead
+                    while let Ok(item) = receiver.try_recv() {
+                        if !Self::write_item(&mut writer, &mut batch_count, item) {
+                            return;
+                        }
+                    }
+                }
+                Err(_) => {
+                    let _ = writer.flush();
+                    return;
+                }
+            }
+            if batch_count >= BG_FLUSH_BATCH_SIZE {
+                let _ = writer.flush();
+                batch_count = 0;
+            }
+        }
+    }
+
+    /// Write a single item. Returns false on Shutdown (caller should exit).
+    fn write_item(
+        writer: &mut BufWriter<File>,
+        batch_count: &mut usize,
+        item: BackgroundLogItem,
+    ) -> bool {
+        match item {
+            BackgroundLogItem::JsonRecord(record) => {
+                if serde_json::to_writer(&mut *writer, &Value::Object(record)).is_ok() {
+                    let _ = writer.write_all(b"\n");
+                    *batch_count += 1;
+                }
+            }
+            BackgroundLogItem::FlushAck(ack) => {
+                let _ = writer.flush();
+                *batch_count = 0;
+                let _ = ack.send(());
+            }
+            BackgroundLogItem::Shutdown => {
+                let _ = writer.flush();
+                return false;
+            }
+        }
+        true
+    }
+
+    fn try_send_record(&mut self, record: Map<String, Value>) {
+        match self.sender.try_send(BackgroundLogItem::JsonRecord(record)) {
+            Ok(()) => {}
+            Err(mpsc::TrySendError::Full(_)) => {
+                self.dropped += 1;
+                if self.dropped <= 10 || self.dropped % 1000 == 0 {
+                    eprintln!(
+                        "[DROPPED_LOG] JSON record dropped, channel full (total: {})",
+                        self.dropped
+                    );
+                }
+            }
+            Err(mpsc::TrySendError::Disconnected(_)) => {}
+        }
+    }
+
+    fn flush_and_wait(&mut self) {
+        let (tx, rx) = mpsc::channel();
+        let _ = self.sender.send(BackgroundLogItem::FlushAck(tx));
+        let _ = rx.recv();
+    }
+
+    fn shutdown(&mut self) {
+        let _ = self.sender.send(BackgroundLogItem::Shutdown);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+impl Drop for BackgroundWriter {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
 #[derive(Debug)]
 pub struct ApiLogger {
     trace_enabled: bool,
@@ -97,13 +301,13 @@ pub struct ApiLogger {
     call_sequence: u64,
     record_sequence: u64,
     flush_threshold: usize,
+    human_flush_threshold: usize,
     pending_lines: Vec<String>,
     pending_human_lines: Vec<String>,
-    pending_records: Vec<String>,
     pending_console_text: Vec<String>,
     stream: Option<OutputStream>,
     human_stream: Option<OutputStream>,
-    json_stream: Option<OutputStream>,
+    json_writer: Option<BackgroundWriter>,
     console_stream: Option<OutputStream>,
 }
 
@@ -130,13 +334,13 @@ impl ApiLogger {
             call_sequence: 0,
             record_sequence: 0,
             flush_threshold: DEFAULT_FLUSH_THRESHOLD,
+            human_flush_threshold: DEFAULT_HUMAN_FLUSH_THRESHOLD,
             pending_lines: Vec::with_capacity(DEFAULT_FLUSH_THRESHOLD),
-            pending_human_lines: Vec::with_capacity(DEFAULT_FLUSH_THRESHOLD),
-            pending_records: Vec::with_capacity(DEFAULT_FLUSH_THRESHOLD),
+            pending_human_lines: Vec::with_capacity(DEFAULT_HUMAN_FLUSH_THRESHOLD),
             pending_console_text: Vec::with_capacity(DEFAULT_FLUSH_THRESHOLD),
             stream: open_stream(config.api_log_path.as_ref())?,
             human_stream: open_stream(human_log_path.as_ref())?,
-            json_stream: open_stream(jsonl_path.as_ref())?,
+            json_writer: spawn_writer(jsonl_path.as_ref())?,
             console_stream: open_stream(config.console_output_path.as_ref())?,
         })
     }
@@ -145,7 +349,7 @@ impl ApiLogger {
         self.console_enabled
             || self.stream.is_some()
             || self.human_stream.is_some()
-            || self.json_stream.is_some()
+            || self.json_writer.is_some()
     }
 
     pub fn trace_enabled(&self) -> bool {
@@ -154,7 +358,7 @@ impl ApiLogger {
 
     pub fn writes_marker(&self, marker: &str) -> bool {
         let full_trace_sink =
-            self.console_enabled || self.stream.is_some() || self.json_stream.is_some();
+            self.console_enabled || self.stream.is_some() || self.json_writer.is_some();
         let human_trace_sink = self.human_stream.is_some() && should_write_human_log(marker);
         if is_api_marker(marker) {
             self.trace_enabled && (full_trace_sink || human_trace_sink)
@@ -184,13 +388,15 @@ impl ApiLogger {
         tid: u32,
         tick_ms: u64,
         instruction_count: u64,
-        definition: &HookDefinition,
+        target_module: &str,
+        target_function: &str,
         pc: u64,
         return_to: Option<u64>,
         target_base: u64,
         args: &[ApiLogArg],
         pc_ref: Option<AddressRef>,
         return_ref: Option<AddressRef>,
+        context: Option<ApiExecutionContext>,
     ) -> Result<u64, VmError> {
         if !self.trace_enabled {
             return Ok(0);
@@ -207,10 +413,10 @@ impl ApiLogger {
         record.insert("return_to_va".to_string(), json!(return_to));
         record.insert(
             "target".to_string(),
-            json!(format!("{}!{}", definition.module, definition.function)),
+            json!(format!("{}!{}", target_module, target_function)),
         );
-        record.insert("target_module".to_string(), json!(definition.module));
-        record.insert("target_function".to_string(), json!(definition.function));
+        record.insert("target_module".to_string(), json!(target_module));
+        record.insert("target_function".to_string(), json!(target_function));
         record.insert("target_base".to_string(), json!(target_base));
         record.insert("args_text".to_string(), json!(args_text));
         record.insert(
@@ -251,9 +457,12 @@ impl ApiLogger {
             record.insert("return_to_ref".to_string(), return_ref.to_json_value());
             record.insert("return_owner".to_string(), json!(return_ref.owner));
         }
+        if let Some(context) = &context {
+            record.insert("context".to_string(), context.to_json_value());
+        }
         let line = format!(
-            "[API_CALL] id={call_id} tid=0x{tid:X} pc=0x{pc:X} return_to=0x{return_to:X} target={}!{} target_base=0x{target_base:X} args={{{args_text}}}",
-            definition.module, definition.function,
+            "[API_CALL] icount={instruction_count} id={call_id} tid=0x{tid:X} pc=0x{pc:X} return_to=0x{return_to:X} target={}!{} target_base=0x{target_base:X} args={{{args_text}}}",
+            target_module, target_function,
         );
         self.emit("API_CALL", line, Some(record))?;
         Ok(call_id)
@@ -266,13 +475,15 @@ impl ApiLogger {
         tick_ms: u64,
         instruction_count: u64,
         call_id: u64,
-        definition: &HookDefinition,
+        target_module: &str,
+        target_function: &str,
         pc: u64,
         target_base: u64,
         retval: u64,
         last_error: u32,
         decoded_text: Option<String>,
         pc_ref: Option<AddressRef>,
+        context: Option<ApiExecutionContext>,
     ) -> Result<(), VmError> {
         if !self.trace_enabled || !self.include_return || call_id == 0 {
             return Ok(());
@@ -284,10 +495,10 @@ impl ApiLogger {
         record.insert("pc_va".to_string(), json!(pc));
         record.insert(
             "target".to_string(),
-            json!(format!("{}!{}", definition.module, definition.function)),
+            json!(format!("{}!{}", target_module, target_function)),
         );
-        record.insert("target_module".to_string(), json!(definition.module));
-        record.insert("target_function".to_string(), json!(definition.function));
+        record.insert("target_module".to_string(), json!(target_module));
+        record.insert("target_function".to_string(), json!(target_function));
         record.insert("target_base".to_string(), json!(target_base));
         record.insert("retval".to_string(), json!(retval));
         record.insert("retval_text".to_string(), json!(retval_text));
@@ -304,9 +515,12 @@ impl ApiLogger {
             }
             record.insert("pc_ref".to_string(), pc_ref.to_json_value());
         }
+        if let Some(context) = &context {
+            record.insert("context".to_string(), context.to_json_value());
+        }
         let mut line = format!(
-            "[API_RET] id={call_id} tid=0x{tid:X} pc=0x{pc:X} target={}!{} target_base=0x{target_base:X} retval={retval_text} last_error=0x{last_error:X}",
-            definition.module, definition.function,
+            "[API_RET] icount={instruction_count} id={call_id} tid=0x{tid:X} pc=0x{pc:X} target={}!{} target_base=0x{target_base:X} retval={retval_text} last_error=0x{last_error:X}",
+            target_module, target_function,
         );
         if let Some(decoded_text) = decoded_text {
             line.push_str(" decoded={");
@@ -382,8 +596,8 @@ impl ApiLogger {
         if let Some(stream) = self.human_stream.as_mut() {
             flush_line_stream(stream, &mut self.pending_human_lines)?;
         }
-        if let Some(stream) = self.json_stream.as_mut() {
-            flush_line_stream(stream, &mut self.pending_records)?;
+        if let Some(writer) = self.json_writer.as_mut() {
+            writer.flush_and_wait();
         }
         if let Some(stream) = self.console_stream.as_mut() {
             flush_console_stream(stream, &mut self.pending_console_text)?;
@@ -400,7 +614,9 @@ impl ApiLogger {
         if self.console_enabled {
             println!("{line}");
         }
-        if self.stream.is_some() {
+        let needs_human = self.human_stream.is_some() && should_write_human_log(marker);
+        let needs_stream = self.stream.is_some();
+        if needs_stream {
             self.pending_lines.push(line.clone());
             if self.pending_lines.len() >= self.flush_threshold {
                 if let Some(stream) = self.stream.as_mut() {
@@ -408,25 +624,17 @@ impl ApiLogger {
                 }
             }
         }
-        if self.human_stream.is_some() && should_write_human_log(marker) {
+        if needs_human {
             self.pending_human_lines.push(line);
-            if self.pending_human_lines.len() >= self.flush_threshold {
+            if self.pending_human_lines.len() >= self.human_flush_threshold {
                 if let Some(stream) = self.human_stream.as_mut() {
                     flush_line_stream(stream, &mut self.pending_human_lines)?;
                 }
             }
         }
         if let Some(record) = record {
-            if self.json_stream.is_some() {
-                self.pending_records.push(
-                    serde_json::to_string(&Value::Object(record))
-                        .unwrap_or_else(|_| "{}".to_string()),
-                );
-                if self.pending_records.len() >= self.flush_threshold {
-                    if let Some(stream) = self.json_stream.as_mut() {
-                        flush_line_stream(stream, &mut self.pending_records)?;
-                    }
-                }
+            if let Some(writer) = self.json_writer.as_mut() {
+                writer.try_send_record(record);
             }
         }
         Ok(())
@@ -479,25 +687,38 @@ fn open_stream(path: Option<&PathBuf>) -> Result<Option<OutputStream>, VmError> 
     }))
 }
 
+fn spawn_writer(path: Option<&PathBuf>) -> Result<Option<BackgroundWriter>, VmError> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    Ok(Some(BackgroundWriter::spawn(path.clone())?))
+}
+
 fn flush_line_stream(stream: &mut OutputStream, pending: &mut Vec<String>) -> Result<(), VmError> {
     if pending.is_empty() {
         return Ok(());
     }
-    stream
-        .writer
-        .write_all(pending[0].as_bytes())
-        .and_then(|_| {
-            for line in pending.iter().skip(1) {
-                stream.writer.write_all(b"\n")?;
-                stream.writer.write_all(line.as_bytes())?;
+    let write_result = (|| -> std::io::Result<()> {
+        let total_len: usize = pending.iter().map(|s| s.len() + 1).sum();
+        if total_len <= OUTPUT_BUFFER_CAPACITY {
+            let mut buf = Vec::with_capacity(total_len);
+            for line in pending.iter() {
+                buf.extend_from_slice(line.as_bytes());
+                buf.push(b'\n');
             }
-            stream.writer.write_all(b"\n")
-        })
-        .and_then(|_| stream.writer.flush())
-        .map_err(|source| VmError::OutputIo {
-            path: stream.path.clone(),
-            source,
-        })?;
+            stream.writer.write_all(&buf)?;
+        } else {
+            for line in pending.iter() {
+                stream.writer.write_all(line.as_bytes())?;
+                stream.writer.write_all(b"\n")?;
+            }
+        }
+        stream.writer.flush()
+    })();
+    write_result.map_err(|source| VmError::OutputIo {
+        path: stream.path.clone(),
+        source,
+    })?;
     pending.clear();
     Ok(())
 }
@@ -509,20 +730,16 @@ fn flush_console_stream(
     if pending.is_empty() {
         return Ok(());
     }
-    stream
-        .writer
-        .write_all(pending[0].as_bytes())
-        .and_then(|_| {
-            for chunk in pending.iter().skip(1) {
-                stream.writer.write_all(chunk.as_bytes())?;
-            }
-            Ok(())
-        })
-        .and_then(|_| stream.writer.flush())
-        .map_err(|source| VmError::OutputIo {
-            path: stream.path.clone(),
-            source,
-        })?;
+    let write_result = (|| -> std::io::Result<()> {
+        for chunk in pending.iter() {
+            stream.writer.write_all(chunk.as_bytes())?;
+        }
+        stream.writer.flush()
+    })();
+    write_result.map_err(|source| VmError::OutputIo {
+        path: stream.path.clone(),
+        source,
+    })?;
     pending.clear();
     Ok(())
 }
@@ -551,6 +768,7 @@ fn should_write_human_log(marker: &str) -> bool {
             | "API_HOTSPOT"
             | "ARTIFACT_HIDE"
             | "ENTRY_INVOKE"
+            | "NULL_CALL"
             | "FILE_CHDIR"
             | "FILE_COPY"
             | "FILE_DELETE"
@@ -594,12 +812,17 @@ fn should_write_human_log(marker: &str) -> bool {
             | "THREAD_RESUME_DUMP"
             | "EMU_STOP"
             | "RUN_STOP"
+            | "RUN_FINAL"
             | "PROCESS_EXIT"
             | "INSTRUCTION_BUDGET"
+            | "REAL_EXPORT_CALL"
             | "USER32_HOTSPOT"
             | "UNSUPPORTED_IMPORT"
             | "UNSUPPORTED_HOOK"
             | "UNSUPPORTED_RUNTIME"
+            | "COM_CALL"
+            | "COM_SHELL_EXECUTE"
+            | "EXEC_PROBE"
     )
 }
 
@@ -638,7 +861,6 @@ mod tests {
 
     use super::{AddressRef, ApiLogArg, ApiLogger};
     use crate::config::EngineConfig;
-    use crate::hooks::base::HookDefinition;
 
     #[test]
     fn api_logger_writes_trace_console_and_generic_events() {
@@ -653,7 +875,6 @@ mod tests {
         config.console_output_path = Some(root.join("trace.console.log"));
         let mut logger = ApiLogger::new(&config).unwrap();
 
-        let definition = HookDefinition::synthetic("kernel32.dll", "GetCommandLineW");
         let args = Vec::<ApiLogArg>::new();
         let call_id = logger
             .log_api_call(
@@ -661,7 +882,8 @@ mod tests {
                 0x1001,
                 7,
                 41,
-                &definition,
+                "kernel32.dll",
+                "GetCommandLineW",
                 0x1000_0010,
                 Some(0x401000),
                 0x7600_0000,
@@ -688,6 +910,7 @@ mod tests {
                     region_base: None,
                     region_offset: None,
                 }),
+                None,
             )
             .unwrap();
         logger
@@ -697,13 +920,15 @@ mod tests {
                 8,
                 42,
                 call_id,
-                &definition,
+                "kernel32.dll",
+                "GetCommandLineW",
                 0x1000_0010,
                 0x7600_0000,
                 0x2000_1000,
                 0,
                 None,
                 Some(AddressRef::unknown(0x1000_0010)),
+                None,
             )
             .unwrap();
         logger
@@ -790,6 +1015,8 @@ mod tests {
         assert!(logger.writes_marker("REG_SET_VALUE"));
         assert!(logger.writes_marker("SERVICE_START"));
         assert!(logger.writes_marker("HTTP_REQUEST"));
+        assert!(logger.writes_marker("COM_CALL"));
+        assert!(logger.writes_marker("COM_SHELL_EXECUTE"));
         assert!(!logger.writes_marker("NATIVE_BLOCK"));
         assert!(!logger.native_trace_sampling_enabled());
     }

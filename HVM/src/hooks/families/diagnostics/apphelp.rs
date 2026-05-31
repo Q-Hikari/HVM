@@ -1,75 +1,19 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "apphelp.dll",
-        "ApphelpCheckShellObject",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "SdbInitDatabase",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "SdbOpenDatabase",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "SdbOpenApphelpDetailsDatabase",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "SdbCloseDatabase",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "SdbReleaseDatabase",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "SdbGetAppPatchDir",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "SdbTagRefToTagID",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "apphelp.dll",
-        "ShimFlushCache",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("ApphelpCheckShellObject", LogicalAbi::WinApi),
+    ("SdbInitDatabase", LogicalAbi::WinApi),
+    ("SdbOpenDatabase", LogicalAbi::WinApi),
+    ("SdbOpenApphelpDetailsDatabase", LogicalAbi::WinApi),
+    ("SdbCloseDatabase", LogicalAbi::WinApi),
+    ("SdbReleaseDatabase", LogicalAbi::WinApi),
+    ("SdbGetAppPatchDir", LogicalAbi::WinApi),
+    ("SdbTagRefToTagID", LogicalAbi::WinApi),
+    ("ShimFlushCache", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ApphelpHookLibrary;
-
-impl HookLibrary for ApphelpHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_apphelp_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&ApphelpHookLibrary);
+    registry.register_function_stubs("apphelp.dll", &FUNCTIONS);
 }

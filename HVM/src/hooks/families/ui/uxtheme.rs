@@ -1,33 +1,22 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stdcall_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, usize)] = &[
-    ("CloseThemeData", 1),
-    ("DrawThemeBackground", 6),
-    ("DrawThemeParentBackground", 3),
-    ("DrawThemeText", 9),
-    ("GetCurrentThemeName", 6),
-    ("GetThemeColor", 5),
-    ("GetThemePartSize", 7),
-    ("GetThemeSysColor", 2),
-    ("GetWindowTheme", 1),
-    ("IsAppThemed", 0),
-    ("IsThemeBackgroundPartiallyTransparent", 3),
-    ("OpenThemeData", 2),
+const EXPORTS: &[(&str, LogicalAbi)] = &[
+    ("CloseThemeData", LogicalAbi::WinApi),
+    ("DrawThemeBackground", LogicalAbi::WinApi),
+    ("DrawThemeParentBackground", LogicalAbi::WinApi),
+    ("DrawThemeText", LogicalAbi::WinApi),
+    ("GetCurrentThemeName", LogicalAbi::WinApi),
+    ("GetThemeColor", LogicalAbi::WinApi),
+    ("GetThemePartSize", LogicalAbi::WinApi),
+    ("GetThemeSysColor", LogicalAbi::WinApi),
+    ("GetWindowTheme", LogicalAbi::WinApi),
+    ("IsAppThemed", LogicalAbi::WinApi),
+    ("IsThemeBackgroundPartiallyTransparent", LogicalAbi::WinApi),
+    ("OpenThemeData", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct UxthemeHookLibrary;
-
-impl HookLibrary for UxthemeHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stdcall_definitions("uxtheme.dll", EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_uxtheme_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&UxthemeHookLibrary);
+    registry.register_function_stubs("uxtheme.dll", &EXPORTS);
 }

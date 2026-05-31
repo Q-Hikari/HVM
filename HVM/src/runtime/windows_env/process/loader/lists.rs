@@ -8,7 +8,7 @@ impl WindowsProcessEnvironment {
     ) -> Result<Vec<u64>, MemoryError> {
         let mut entries = Vec::new();
         let mut cursor = self.read_pointer(head)?;
-        let mut remaining = (LDR_REGION_SIZE as usize / self.pointer_size()).max(1);
+        let mut remaining = (self.loader_region_size() as usize / self.pointer_size()).max(1);
 
         while cursor != head && remaining > 0 {
             if cursor < entry_link_offset {

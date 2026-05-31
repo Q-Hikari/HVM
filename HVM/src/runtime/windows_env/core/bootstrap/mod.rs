@@ -5,7 +5,7 @@ mod buffers;
 impl WindowsProcessEnvironment {
     pub(super) fn initialize_reserved_layout(&mut self) {
         self.initialize_peb_layout();
-        self.write_zeroes(self.layout.ldr_base, LDR_REGION_SIZE as usize);
+        self.write_zeroes(self.layout.ldr_base, self.loader_region_size() as usize);
         self.write_zeroes(
             self.layout.process_parameters_base,
             PROCESS_PARAMETERS_REGION_SIZE as usize,

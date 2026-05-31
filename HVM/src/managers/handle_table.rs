@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub struct HandleEntry {
 #[derive(Debug, Default)]
 pub struct HandleTable {
     next_handle: u32,
-    entries: BTreeMap<u32, Rc<SharedHandleRecord>>,
+    entries: HashMap<u32, Rc<SharedHandleRecord>>,
 }
 
 impl HandleTable {
@@ -29,7 +29,7 @@ impl HandleTable {
     pub fn new(start: u32) -> Self {
         Self {
             next_handle: start,
-            entries: BTreeMap::new(),
+            entries: HashMap::new(),
         }
     }
 

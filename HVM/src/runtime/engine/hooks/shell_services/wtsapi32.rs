@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("wtsapi32.dll", "WTSOpenServerA") => true,
@@ -31,51 +31,43 @@ impl VirtualExecutionEngine {
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
                 ("wtsapi32.dll", "WTSOpenServerA") => {
-                    Ok(self.wts_open_server(&self.read_c_string_from_memory(arg(args, 0))?))
+                    Ok(self.wts_open_server(&self.read_c_string_from_memory(ctx.raw(0))?))
                 }
                 ("wtsapi32.dll", "WTSOpenServerW") => {
-                    Ok(self.wts_open_server(&self.read_wide_string_from_memory(arg(args, 0))?))
+                    Ok(self.wts_open_server(&self.read_wide_string_from_memory(ctx.raw(0))?))
                 }
-                ("wtsapi32.dll", "WTSCloseServer") => {
-                    Ok(self.wts_close_server(arg(args, 0) as u32))
+                ("wtsapi32.dll", "WTSCloseServer") => Ok(self.wts_close_server(ctx.raw(0) as u32)),
+                ("wtsapi32.dll", "WTSEnumerateSessionsA") => {
+                    self.wts_enumerate_sessions(false, ctx.raw(0) as u32, ctx.raw(3), ctx.raw(4))
                 }
-                ("wtsapi32.dll", "WTSEnumerateSessionsA") => self.wts_enumerate_sessions(
-                    false,
-                    arg(args, 0) as u32,
-                    arg(args, 3),
-                    arg(args, 4),
-                ),
-                ("wtsapi32.dll", "WTSEnumerateSessionsW") => self.wts_enumerate_sessions(
-                    true,
-                    arg(args, 0) as u32,
-                    arg(args, 3),
-                    arg(args, 4),
-                ),
+                ("wtsapi32.dll", "WTSEnumerateSessionsW") => {
+                    self.wts_enumerate_sessions(true, ctx.raw(0) as u32, ctx.raw(3), ctx.raw(4))
+                }
                 ("wtsapi32.dll", "WTSQuerySessionInformationA") => self
                     .wts_query_session_information(
                         false,
-                        arg(args, 0) as u32,
-                        arg(args, 1) as u32,
-                        arg(args, 2) as u32,
-                        arg(args, 3),
-                        arg(args, 4),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1) as u32,
+                        ctx.raw(2) as u32,
+                        ctx.raw(3),
+                        ctx.raw(4),
                     ),
                 ("wtsapi32.dll", "WTSQuerySessionInformationW") => self
                     .wts_query_session_information(
                         true,
-                        arg(args, 0) as u32,
-                        arg(args, 1) as u32,
-                        arg(args, 2) as u32,
-                        arg(args, 3),
-                        arg(args, 4),
+                        ctx.raw(0) as u32,
+                        ctx.raw(1) as u32,
+                        ctx.raw(2) as u32,
+                        ctx.raw(3),
+                        ctx.raw(4),
                     ),
-                ("wtsapi32.dll", "WTSFreeMemory") => Ok(self.wts_free_memory(arg(args, 0))),
+                ("wtsapi32.dll", "WTSFreeMemory") => Ok(self.wts_free_memory(ctx.raw(0))),
                 ("wtsapi32.dll", "WTSQueryUserToken") => {
-                    self.wts_query_user_token(arg(args, 0) as u32, arg(args, 1))
+                    self.wts_query_user_token(ctx.raw(0) as u32, ctx.raw(1))
                 }
                 ("wtsapi32.dll", "WTSSendMessageA") | ("wtsapi32.dll", "WTSSendMessageW") => {
-                    if arg(args, 8) != 0 {
-                        self.write_u32(arg(args, 8), 1)?;
+                    if ctx.raw(8) != 0 {
+                        self.write_u32(ctx.raw(8), 1)?;
                     }
                     Ok(1)
                 }
@@ -109,7 +101,7 @@ struct WtsSessionInfoLayout {
 
 impl VirtualExecutionEngine {
     fn wts_session_info_layout(&self) -> WtsSessionInfoLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             WtsSessionInfoLayout {
                 size: 12,
                 station_name_offset: 4,
@@ -125,7 +117,7 @@ impl VirtualExecutionEngine {
     }
 
     fn wts_validate_server_handle(&self, handle: u32) -> bool {
-        handle == WTS_CURRENT_SERVER_HANDLE || self.wts_server_handles.contains(&handle)
+        handle == WTS_CURRENT_SERVER_HANDLE || self.objects.wts_server_handles.contains(&handle)
     }
 
     fn wts_validate_session_id(&self, session_id: u32) -> bool {
@@ -134,15 +126,16 @@ impl VirtualExecutionEngine {
 
     pub(super) fn wts_open_server(&mut self, _server_name: &str) -> u64 {
         let handle = self.allocate_object_handle();
-        self.wts_server_handles.insert(handle);
-        handle as u64
+        self.objects.wts_server_handles.insert(handle);
+        let result = handle as u64;
+        result
     }
 
     pub(super) fn wts_close_server(&mut self, handle: u32) -> u64 {
         if handle == WTS_CURRENT_SERVER_HANDLE {
             return 0;
         }
-        self.wts_server_handles.remove(&handle);
+        self.objects.wts_server_handles.remove(&handle);
         0
     }
 
@@ -215,8 +208,8 @@ impl VirtualExecutionEngine {
 
         let station_name = "Console".to_string();
         let user_name = self.active_user_name().to_string();
-        let domain_name = self.environment_profile.machine.user_domain.clone();
-        let client_name = if self.environment_profile.display.remote_session {
+        let domain_name = self.core.environment_profile.machine.user_domain.clone();
+        let client_name = if self.core.environment_profile.display.remote_session {
             self.active_computer_name().to_string()
         } else {
             String::new()
@@ -230,7 +223,7 @@ impl VirtualExecutionEngine {
             WTS_CONNECT_STATE_CLASS => WTS_ACTIVE.to_le_bytes().to_vec(),
             WTS_CLIENT_NAME_CLASS => encode_text_payload(&client_name, wide),
             WTS_CLIENT_PROTOCOL_TYPE_CLASS => {
-                let value = if self.environment_profile.display.remote_session {
+                let value = if self.core.environment_profile.display.remote_session {
                     2u16
                 } else {
                     0u16
@@ -248,7 +241,7 @@ impl VirtualExecutionEngine {
                 "wts:WTSQuerySessionInformationA"
             },
         )?;
-        self.modules.memory_mut().write(allocation, &payload)?;
+        self.core.modules.memory_mut().write(allocation, &payload)?;
         self.write_pointer_value(buffer_ptr, allocation)?;
         self.write_u32(bytes_returned_ptr, payload.len() as u32)?;
         self.set_last_error(ERROR_SUCCESS as u32);
@@ -257,7 +250,10 @@ impl VirtualExecutionEngine {
 
     pub(super) fn wts_free_memory(&mut self, address: u64) -> u64 {
         if address != 0 {
-            let _ = self.heaps.free(self.heaps.process_heap(), address);
+            let _ = self
+                .process_memory
+                .heaps
+                .free(self.process_memory.heaps.process_heap(), address);
         }
         0
     }
@@ -272,8 +268,9 @@ impl VirtualExecutionEngine {
             return Ok(0);
         }
         let handle = self.allocate_object_handle();
-        self.token_handles.insert(handle);
-        self.write_pointer_value(token_ptr, handle as u64)?;
+        self.handles.token_handles.insert(handle);
+        let ptr = handle as u64;
+        self.write_pointer_value(token_ptr, ptr as u64)?;
         self.set_last_error(ERROR_SUCCESS as u32);
         Ok(1)
     }

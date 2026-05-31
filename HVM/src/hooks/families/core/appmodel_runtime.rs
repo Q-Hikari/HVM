@@ -1,23 +1,12 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stdcall_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, usize)] = &[
-    ("AppPolicyGetProcessTerminationMethod", 2),
-    ("AppPolicyGetThreadInitializationType", 2),
+const EXPORTS: &[(&str, LogicalAbi)] = &[
+    ("AppPolicyGetProcessTerminationMethod", LogicalAbi::WinApi),
+    ("AppPolicyGetThreadInitializationType", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for appmodel runtime API-set exports.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct AppModelRuntimeHookLibrary;
-
-impl HookLibrary for AppModelRuntimeHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stdcall_definitions("api-ms-win-appmodel-runtime-l1-1-2.dll", EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this API-set family.
 pub fn register_appmodel_runtime_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&AppModelRuntimeHookLibrary);
+    registry.register_function_stubs("api-ms-win-appmodel-runtime-l1-1-2.dll", &EXPORTS);
 }

@@ -1,7 +1,18 @@
 use super::*;
 
-pub(super) fn arg(args: &[u64], index: usize) -> u64 {
-    args.get(index).copied().unwrap_or(0)
+/// Trait providing named access to raw hook argument slices.
+///
+/// Replaces the standalone `arg(args, i)` function with a method call
+/// `args.arg(i)`, keeping the same bounds-checked semantics.
+pub(super) trait ArgAccess {
+    /// Returns the argument at `index`, or 0 if out of bounds.
+    fn arg(&self, index: usize) -> u64;
+}
+
+impl ArgAccess for [u64] {
+    fn arg(&self, index: usize) -> u64 {
+        self.get(index).copied().unwrap_or(0)
+    }
 }
 
 pub(super) fn non_empty(value: &str) -> Option<&str> {
@@ -21,11 +32,21 @@ pub(super) fn is_std_handle(handle: u64) -> bool {
 
 pub(super) fn compare_ci(left: &str, right: &str) -> i32 {
     use std::cmp::Ordering;
-
-    match left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()) {
-        Ordering::Less => -1,
-        Ordering::Equal => 0,
-        Ordering::Greater => 1,
+    let mut li = left.bytes();
+    let mut ri = right.bytes();
+    loop {
+        let lb = li.next();
+        let rb = ri.next();
+        match (lb, rb) {
+            (None, None) => return 0,
+            (None, _) => return -1,
+            (_, None) => return 1,
+            (Some(l), Some(r)) => match l.to_ascii_lowercase().cmp(&r.to_ascii_lowercase()) {
+                Ordering::Equal => continue,
+                Ordering::Less => return -1,
+                Ordering::Greater => return 1,
+            },
+        }
     }
 }
 
@@ -77,7 +98,7 @@ pub(super) fn detect_runtime_architecture(
 impl VirtualExecutionEngine {
     pub(super) fn sign_extend_win32_handle_for_arch(&self, value: u64) -> u64 {
         let lower = value & 0xFFFF_FFFF;
-        if self.arch.is_x86() || lower & 0x8000_0000 == 0 {
+        if self.core.arch.is_x86() || lower & 0x8000_0000 == 0 {
             lower
         } else {
             lower | 0xFFFF_FFFF_0000_0000

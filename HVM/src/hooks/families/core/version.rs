@@ -1,93 +1,22 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "version.dll",
-        "GetFileVersionInfoSizeA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "GetFileVersionInfoSizeW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "GetFileVersionInfoSizeExA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "GetFileVersionInfoSizeExW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "GetFileVersionInfoA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "GetFileVersionInfoW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "GetFileVersionInfoExA",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "GetFileVersionInfoExW",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "VerQueryValueA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "VerQueryValueW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "VerLanguageNameA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "version.dll",
-        "VerLanguageNameW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("GetFileVersionInfoSizeA", LogicalAbi::WinApi),
+    ("GetFileVersionInfoSizeW", LogicalAbi::WinApi),
+    ("GetFileVersionInfoSizeExA", LogicalAbi::WinApi),
+    ("GetFileVersionInfoSizeExW", LogicalAbi::WinApi),
+    ("GetFileVersionInfoA", LogicalAbi::WinApi),
+    ("GetFileVersionInfoW", LogicalAbi::WinApi),
+    ("GetFileVersionInfoExA", LogicalAbi::WinApi),
+    ("GetFileVersionInfoExW", LogicalAbi::WinApi),
+    ("VerQueryValueA", LogicalAbi::WinApi),
+    ("VerQueryValueW", LogicalAbi::WinApi),
+    ("VerLanguageNameA", LogicalAbi::WinApi),
+    ("VerLanguageNameW", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct VersionHookLibrary;
-
-impl HookLibrary for VersionHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_version_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&VersionHookLibrary);
+    registry.register_function_stubs("version.dll", &FUNCTIONS);
 }

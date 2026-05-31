@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -16,12 +17,15 @@ const CRYPTOGRAPHY_KEY: &str = "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptog
 #[serde(default)]
 pub struct EnvironmentProfile {
     pub machine: MachineIdentity,
+    pub time: TimeProfile,
     pub os_version: OsVersion,
     pub locale: LocaleProfile,
     pub display: DisplayProfile,
     pub volume: VolumeProfile,
     pub shell_folders: ShellFolderProfile,
     pub network: NetworkProfile,
+    pub firmware: FirmwareProfile,
+    pub module_visible_bases: BTreeMap<String, u64>,
     pub module_search_paths: Vec<PathBuf>,
     pub environment_variables: Vec<EnvironmentVariableProfile>,
     pub processes: Vec<ProcessProfile>,
@@ -40,12 +44,15 @@ impl Default for EnvironmentProfile {
     fn default() -> Self {
         Self {
             machine: MachineIdentity::default(),
+            time: TimeProfile::default(),
             os_version: OsVersion::default(),
             locale: LocaleProfile::default(),
             display: DisplayProfile::default(),
             volume: VolumeProfile::default(),
             shell_folders: ShellFolderProfile::default(),
             network: NetworkProfile::default(),
+            firmware: FirmwareProfile::default(),
+            module_visible_bases: BTreeMap::new(),
             module_search_paths: Vec::new(),
             environment_variables: Vec::new(),
             processes: Vec::new(),
@@ -80,6 +87,11 @@ impl EnvironmentProfile {
                 *search_path = base.join(&search_path);
             }
         }
+        profile.module_visible_bases = profile
+            .module_visible_bases
+            .into_iter()
+            .map(|(module_name, visible_base)| (module_name.to_ascii_lowercase(), visible_base))
+            .collect();
         Ok(profile)
     }
 
@@ -159,6 +171,9 @@ impl EnvironmentProfile {
         if let Some(machine) = &overrides.machine {
             machine.apply_to(&mut self.machine);
         }
+        if let Some(time) = &overrides.time {
+            time.apply_to(&mut self.time);
+        }
         if let Some(os_version) = &overrides.os_version {
             os_version.apply_to(&mut self.os_version);
         }
@@ -176,6 +191,15 @@ impl EnvironmentProfile {
         }
         if let Some(network) = &overrides.network {
             network.apply_to(&mut self.network);
+        }
+        if let Some(firmware) = &overrides.firmware {
+            firmware.apply_to(&mut self.firmware);
+        }
+        if let Some(module_visible_bases) = &overrides.module_visible_bases {
+            for (module_name, visible_base) in module_visible_bases {
+                self.module_visible_bases
+                    .insert(module_name.to_ascii_lowercase(), *visible_base);
+            }
         }
         if let Some(environment_variables) = &overrides.environment_variables {
             for variable in environment_variables {
@@ -227,12 +251,15 @@ impl EnvironmentProfile {
 #[serde(default)]
 pub struct EnvironmentOverrides {
     pub machine: Option<MachineIdentityOverrides>,
+    pub time: Option<TimeProfileOverrides>,
     pub os_version: Option<OsVersionOverrides>,
     pub locale: Option<LocaleProfileOverrides>,
     pub display: Option<DisplayProfileOverrides>,
     pub volume: Option<VolumeProfileOverrides>,
     pub shell_folders: Option<ShellFolderOverrides>,
     pub network: Option<NetworkProfileOverrides>,
+    pub firmware: Option<FirmwareProfileOverrides>,
+    pub module_visible_bases: Option<BTreeMap<String, u64>>,
     pub environment_variables: Option<Vec<EnvironmentVariableProfile>>,
     pub processes: Option<Vec<ProcessProfile>>,
     pub users: Option<Vec<UserAccountProfile>>,
@@ -324,6 +351,20 @@ impl MachineIdentityOverrides {
         }
         if let Some(value) = &self.command_line {
             target.command_line = value.clone();
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct TimeProfileOverrides {
+    pub tick_ms_base: Option<u64>,
+}
+
+impl TimeProfileOverrides {
+    fn apply_to(&self, target: &mut TimeProfile) {
+        if let Some(value) = self.tick_ms_base {
+            target.tick_ms_base = value;
         }
     }
 }
@@ -443,7 +484,10 @@ pub struct DisplayProfileOverrides {
     pub message_y: Option<i32>,
     pub message_step_x: Option<i32>,
     pub message_step_y: Option<i32>,
+    pub double_click_time_ms: Option<u32>,
+    pub caret_blink_time_ms: Option<u32>,
     pub remote_session: Option<bool>,
+    pub windows: Option<Vec<WindowProfile>>,
 }
 
 impl DisplayProfileOverrides {
@@ -484,8 +528,17 @@ impl DisplayProfileOverrides {
         if let Some(value) = self.message_step_y {
             target.message_step_y = value;
         }
+        if let Some(value) = self.double_click_time_ms {
+            target.double_click_time_ms = value.max(1);
+        }
+        if let Some(value) = self.caret_blink_time_ms {
+            target.caret_blink_time_ms = value.max(1);
+        }
         if let Some(value) = self.remote_session {
             target.remote_session = value;
+        }
+        if let Some(value) = &self.windows {
+            target.windows = value.clone();
         }
     }
 }
@@ -664,6 +717,136 @@ impl NetworkProfileOverrides {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct FirmwareProfileOverrides {
+    pub bios_vendor: Option<String>,
+    pub bios_version: Option<String>,
+    pub bios_release_date: Option<String>,
+    pub system_manufacturer: Option<String>,
+    pub system_product_name: Option<String>,
+    pub system_version: Option<String>,
+    pub system_serial_number: Option<String>,
+    pub system_uuid: Option<String>,
+    pub system_sku: Option<String>,
+    pub system_family: Option<String>,
+    pub baseboard_manufacturer: Option<String>,
+    pub baseboard_product_name: Option<String>,
+    pub baseboard_version: Option<String>,
+    pub baseboard_serial_number: Option<String>,
+    pub baseboard_asset_tag: Option<String>,
+    pub baseboard_location_in_chassis: Option<String>,
+    pub chassis_manufacturer: Option<String>,
+    pub chassis_type: Option<u8>,
+    pub chassis_version: Option<String>,
+    pub chassis_serial_number: Option<String>,
+    pub chassis_asset_tag: Option<String>,
+    pub acpi_oem_id: Option<String>,
+    pub acpi_oem_table_id: Option<String>,
+    pub acpi_creator_id: Option<String>,
+    pub acpi_creator_revision: Option<u32>,
+    pub acpi_body: Option<String>,
+    pub firm_bios_label: Option<String>,
+}
+
+impl FirmwareProfileOverrides {
+    fn apply_to(&self, target: &mut FirmwareProfile) {
+        if let Some(value) = &self.bios_vendor {
+            target.bios_vendor = value.clone();
+        }
+        if let Some(value) = &self.bios_version {
+            target.bios_version = value.clone();
+        }
+        if let Some(value) = &self.bios_release_date {
+            target.bios_release_date = value.clone();
+        }
+        if let Some(value) = &self.system_manufacturer {
+            target.system_manufacturer = value.clone();
+        }
+        if let Some(value) = &self.system_product_name {
+            target.system_product_name = value.clone();
+        }
+        if let Some(value) = &self.system_version {
+            target.system_version = value.clone();
+        }
+        if let Some(value) = &self.system_serial_number {
+            target.system_serial_number = value.clone();
+        }
+        if let Some(value) = &self.system_uuid {
+            target.system_uuid = value.clone();
+        }
+        if let Some(value) = &self.system_sku {
+            target.system_sku = value.clone();
+        }
+        if let Some(value) = &self.system_family {
+            target.system_family = value.clone();
+        }
+        if let Some(value) = &self.baseboard_manufacturer {
+            target.baseboard_manufacturer = value.clone();
+        }
+        if let Some(value) = &self.baseboard_product_name {
+            target.baseboard_product_name = value.clone();
+        }
+        if let Some(value) = &self.baseboard_version {
+            target.baseboard_version = value.clone();
+        }
+        if let Some(value) = &self.baseboard_serial_number {
+            target.baseboard_serial_number = value.clone();
+        }
+        if let Some(value) = &self.baseboard_asset_tag {
+            target.baseboard_asset_tag = value.clone();
+        }
+        if let Some(value) = &self.baseboard_location_in_chassis {
+            target.baseboard_location_in_chassis = value.clone();
+        }
+        if let Some(value) = &self.chassis_manufacturer {
+            target.chassis_manufacturer = value.clone();
+        }
+        if let Some(value) = self.chassis_type {
+            target.chassis_type = value;
+        }
+        if let Some(value) = &self.chassis_version {
+            target.chassis_version = value.clone();
+        }
+        if let Some(value) = &self.chassis_serial_number {
+            target.chassis_serial_number = value.clone();
+        }
+        if let Some(value) = &self.chassis_asset_tag {
+            target.chassis_asset_tag = value.clone();
+        }
+        if let Some(value) = &self.acpi_oem_id {
+            target.acpi_oem_id = value.clone();
+        }
+        if let Some(value) = &self.acpi_oem_table_id {
+            target.acpi_oem_table_id = value.clone();
+        }
+        if let Some(value) = &self.acpi_creator_id {
+            target.acpi_creator_id = value.clone();
+        }
+        if let Some(value) = self.acpi_creator_revision {
+            target.acpi_creator_revision = value;
+        }
+        if let Some(value) = &self.acpi_body {
+            target.acpi_body = value.clone();
+        }
+        if let Some(value) = &self.firm_bios_label {
+            target.firm_bios_label = value.clone();
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimeProfile {
+    pub tick_ms_base: u64,
+}
+
+impl Default for TimeProfile {
+    fn default() -> Self {
+        Self { tick_ms_base: 0 }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MachineIdentity {
@@ -791,7 +974,10 @@ pub struct DisplayProfile {
     pub message_y: i32,
     pub message_step_x: i32,
     pub message_step_y: i32,
+    pub double_click_time_ms: u32,
+    pub caret_blink_time_ms: u32,
     pub remote_session: bool,
+    pub windows: Vec<WindowProfile>,
 }
 
 impl Default for DisplayProfile {
@@ -809,9 +995,23 @@ impl Default for DisplayProfile {
             message_y: 31,
             message_step_x: 0,
             message_step_y: 0,
+            double_click_time_ms: 500,
+            caret_blink_time_ms: 530,
             remote_session: false,
+            windows: Vec::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WindowProfile {
+    pub handle: u32,
+    pub class_name: String,
+    pub title: String,
+    pub parent_handle: u32,
+    pub owner_thread_id: u32,
+    pub instance: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -982,6 +1182,72 @@ impl Default for NetworkAddressProfile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FirmwareProfile {
+    pub bios_vendor: String,
+    pub bios_version: String,
+    pub bios_release_date: String,
+    pub system_manufacturer: String,
+    pub system_product_name: String,
+    pub system_version: String,
+    pub system_serial_number: String,
+    pub system_uuid: String,
+    pub system_sku: String,
+    pub system_family: String,
+    pub baseboard_manufacturer: String,
+    pub baseboard_product_name: String,
+    pub baseboard_version: String,
+    pub baseboard_serial_number: String,
+    pub baseboard_asset_tag: String,
+    pub baseboard_location_in_chassis: String,
+    pub chassis_manufacturer: String,
+    pub chassis_type: u8,
+    pub chassis_version: String,
+    pub chassis_serial_number: String,
+    pub chassis_asset_tag: String,
+    pub acpi_oem_id: String,
+    pub acpi_oem_table_id: String,
+    pub acpi_creator_id: String,
+    pub acpi_creator_revision: u32,
+    pub acpi_body: String,
+    pub firm_bios_label: String,
+}
+
+impl Default for FirmwareProfile {
+    fn default() -> Self {
+        Self {
+            bios_vendor: "American Megatrends International, LLC.".to_string(),
+            bios_version: "F16".to_string(),
+            bios_release_date: "08/15/2023".to_string(),
+            system_manufacturer: "Gigabyte Technology Co., Ltd.".to_string(),
+            system_product_name: "B660M DS3H DDR4".to_string(),
+            system_version: "1.0".to_string(),
+            system_serial_number: "SYS-B660M-0001".to_string(),
+            system_uuid: String::new(),
+            system_sku: "SKU-Default".to_string(),
+            system_family: "Desktop".to_string(),
+            baseboard_manufacturer: "Gigabyte Technology Co., Ltd.".to_string(),
+            baseboard_product_name: "B660M DS3H DDR4".to_string(),
+            baseboard_version: "x.x".to_string(),
+            baseboard_serial_number: "BRD-B660M-0001".to_string(),
+            baseboard_asset_tag: "Baseboard-Asset".to_string(),
+            baseboard_location_in_chassis: "Default string".to_string(),
+            chassis_manufacturer: "Gigabyte Technology Co., Ltd.".to_string(),
+            chassis_type: 0x03,
+            chassis_version: "1.0".to_string(),
+            chassis_serial_number: "CHS-B660M-0001".to_string(),
+            chassis_asset_tag: "Asset-Tag".to_string(),
+            acpi_oem_id: "GBT".to_string(),
+            acpi_oem_table_id: "B660MPC".to_string(),
+            acpi_creator_id: "INTL".to_string(),
+            acpi_creator_revision: 0x2023_1201,
+            acpi_body: "B660M-ACPI-2023".to_string(),
+            firm_bios_label: "AMI BIOS 2023".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnvironmentVariableProfile {
     pub name: String,
     pub value: String,
@@ -1017,6 +1283,7 @@ pub struct UserAccountProfile {
     pub comment: String,
     pub flags: u32,
     pub privilege_level: u32,
+    pub integrity_level_rid: Option<u32>,
     pub home_dir: String,
     pub script_path: String,
     pub rid: u32,
@@ -1030,6 +1297,7 @@ impl Default for UserAccountProfile {
             comment: String::new(),
             flags: 0x0001 | 0x0200 | 0x10000,
             privilege_level: 1,
+            integrity_level_rid: None,
             home_dir: String::new(),
             script_path: String::new(),
             rid: 1001,
@@ -1397,47 +1665,205 @@ fn default_local_groups() -> Vec<LocalGroupProfile> {
 }
 
 fn default_services() -> Vec<ServiceProfile> {
+    // Comprehensive Windows 10 service inventory so that service enumeration
+    // returns a realistic set.  Malware samples routinely probe the service
+    // database for anti-sandbox / target-reconnaissance, and a too-small list
+    // causes incorrect branching (e.g. falling into an unsupported service-
+    // exploitation path that crashes the emulator).
+    macro_rules! svc {
+        ($name:literal, $display:literal, $binary:literal, $start_name:literal, $desc:literal $(, $($key:ident : $val:expr),* $(,)?)?) => {
+            ServiceProfile {
+                name: $name.to_string(),
+                display_name: $display.to_string(),
+                binary_path: $binary.to_string(),
+                start_name: $start_name.to_string(),
+                description: $desc.to_string(),
+                $($($key: $val,)*)?
+                ..ServiceProfile::default()
+            }
+        };
+    }
+
     vec![
-        ServiceProfile {
-            name: "Dnscache".to_string(),
-            display_name: "DNS Client".to_string(),
-            process_id: 2800,
-            binary_path: "%SystemRoot%\\System32\\svchost.exe -k NetworkService -p".to_string(),
-            start_name: "NT AUTHORITY\\NetworkService".to_string(),
-            description: "Caches Domain Name System (DNS) names and registers the full computer name for this computer.".to_string(),
-            ..ServiceProfile::default()
-        },
-        ServiceProfile {
-            name: "EventLog".to_string(),
-            display_name: "Windows Event Log".to_string(),
-            process_id: 2800,
-            binary_path:
-                "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted -p"
-                    .to_string(),
-            start_name: "NT AUTHORITY\\LocalService".to_string(),
-            description: "This service manages events and event logs.".to_string(),
-            ..ServiceProfile::default()
-        },
-        ServiceProfile {
-            name: "wuauserv".to_string(),
-            display_name: "Windows Update".to_string(),
-            process_id: 2800,
-            description: "Enables the detection, download, and installation of updates for Windows and other programs.".to_string(),
-            delayed_auto_start: true,
-            ..ServiceProfile::default()
-        },
-        ServiceProfile {
-            name: "WinDefend".to_string(),
-            display_name: "Microsoft Defender Antivirus Service".to_string(),
+        // ── Core system services ─────────────────────────────────
+        svc!("Dnscache", "DNS Client",
+            "%SystemRoot%\\System32\\svchost.exe -k NetworkService -p",
+            "NT AUTHORITY\\NetworkService",
+            "Caches DNS names and registers the full computer name.",
+            process_id: 2800),
+        svc!("EventLog", "Windows Event Log",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted -p",
+            "NT AUTHORITY\\LocalService",
+            "Manages events and event logs.",
+            process_id: 2800),
+        svc!("WinDefend", "Microsoft Defender Antivirus Service",
+            "%ProgramFiles%\\Windows Defender\\MsMpEng.exe",
+            "LocalSystem",
+            "Helps protect users from malware and other potentially unwanted software.",
             process_id: 3540,
-            binary_path: "%ProgramFiles%\\Windows Defender\\MsMpEng.exe".to_string(),
-            description: "Helps protect users from malware and other potentially unwanted software.".to_string(),
-            required_privileges: vec![
-                "SeChangeNotifyPrivilege".to_string(),
-                "SeImpersonatePrivilege".to_string(),
-            ],
-            ..ServiceProfile::default()
-        },
+            required_privileges: vec!["SeChangeNotifyPrivilege".to_string(), "SeImpersonatePrivilege".to_string()]),
+        // ── Windows Update / BITS ────────────────────────────────
+        svc!("wuauserv", "Windows Update",
+            "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "LocalSystem",
+            "Enables detection, download, and installation of updates.",
+            process_id: 2800, delayed_auto_start: true),
+        svc!("BITS", "Background Intelligent Transfer Service",
+            "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "LocalSystem",
+            "Transfers files in the background using idle network bandwidth.",
+            process_id: 1088),
+        // ── Network services ─────────────────────────────────────
+        svc!("CryptSvc", "Cryptographic Services",
+            "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+            "NT AUTHORITY\\NetworkService",
+            "Provides management services for trusted root certificates.",
+            process_id: 1088),
+        svc!("LanmanServer", "Server",
+            "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "LocalSystem",
+            "Supports file, print, and named-pipe sharing.",
+            process_id: 864),
+        svc!("LanmanWorkstation", "Workstation",
+            "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+            "NT AUTHORITY\\NetworkService",
+            "Creates and maintains client network connections.",
+            process_id: 1088),
+        svc!("Spooler", "Print Spooler",
+            "%SystemRoot%\\System32\\spoolsv.exe",
+            "LocalSystem",
+            "Manages all local and network print queues.",
+            process_id: 2480),
+        svc!("WSearch", "Windows Search",
+            "%SystemRoot%\\System32\\SearchIndexer.exe",
+            "LocalSystem",
+            "Provides content indexing and file search.",
+            process_id: 4012),
+        // ── RPC / COM infrastructure ─────────────────────────────
+        svc!("RpcSs", "Remote Procedure Call (RPC)",
+            "%SystemRoot%\\System32\\svchost.exe -k rpcss",
+            "NT AUTHORITY\\NetworkService",
+            "The RPCSS service is the Service Control Manager for COM and DCOM.",
+            process_id: 780),
+        svc!("DcomLaunch", "DCOM Server Process Launcher",
+            "%SystemRoot%\\System32\\svchost.exe -k DcomLaunch",
+            "LocalSystem",
+            "Launches COM and DCOM servers.",
+            process_id: 712),
+        svc!("RpcEptMapper", "RPC Endpoint Mapper",
+            "%SystemRoot%\\System32\\svchost.exe -k RPCSS",
+            "NT AUTHORITY\\NetworkService",
+            "Resolves RPC interfaces identifiers to transport endpoints.",
+            process_id: 780),
+        // ── Shell / UI ───────────────────────────────────────────
+        svc!("ShellHWDetection", "Shell Hardware Detection",
+            "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "LocalSystem",
+            "Provides notifications for AutoPlay hardware events.",
+            process_id: 864),
+        svc!("sihost", "Shell Infrastructure Host",
+            "%SystemRoot%\\System32\\sihost.exe",
+            "LocalSystem",
+            "Handles generic UI host processes.",
+            process_id: 1560),
+        svc!("CoreMessagingRegistrar", "Core Messaging",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalService",
+            "NT AUTHORITY\\LocalService",
+            "Manages communication between system components.",
+            process_id: 712),
+        // ── Security / authentication ────────────────────────────
+        svc!("SamSs", "Security Accounts Manager",
+            "%SystemRoot%\\System32\\lsass.exe",
+            "LocalSystem",
+            "Manages local security account database.",
+            process_id: 648),
+        svc!("VaultSvc", "Credential Manager",
+            "%SystemRoot%\\System32\\lsass.exe",
+            "LocalSystem",
+            "Provides secure storage for user credentials.",
+            process_id: 648),
+        // ── Task Scheduler ───────────────────────────────────────
+        svc!("Schedule", "Task Scheduler",
+            "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "LocalSystem",
+            "Enables configuration and scheduling of automated tasks.",
+            process_id: 864),
+        // ── Networking ───────────────────────────────────────────
+        svc!("Dhcp", "DHCP Client",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted",
+            "NT AUTHORITY\\LocalService",
+            "Registers and updates IP addresses and DNS records.",
+            process_id: 1012),
+        svc!("NlaSvc", "Network Location Awareness",
+            "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+            "NT AUTHORITY\\NetworkService",
+            "Collects and stores network configuration and location.",
+            process_id: 1088),
+        svc!("netprofm", "Network List Service",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalService",
+            "NT AUTHORITY\\LocalService",
+            "Identifies the networks the computer has connected to.",
+            process_id: 1012),
+        // ── Other common services ────────────────────────────────
+        svc!("AudioSrv", "Windows Audio",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted",
+            "NT AUTHORITY\\LocalService",
+            "Manages audio for Windows-based programs.",
+            process_id: 1012),
+        svc!("BFE", "Base Filtering Engine",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNoNetwork",
+            "NT AUTHORITY\\LocalService",
+            "Manages firewall and IPsec policies.",
+            process_id: 1012),
+        svc!("WinHttpAutoProxySvc", "WinHTTP Web Proxy Auto-Discovery Service",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted",
+            "NT AUTHORITY\\LocalService",
+            "Implements the WPAD protocol for automatic proxy discovery.",
+            process_id: 1012),
+        svc!("W32Time", "Windows Time",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalService",
+            "NT AUTHORITY\\LocalService",
+            "Maintains date and time synchronization.",
+            process_id: 1012),
+        svc!("EventSystem", "COM+ Event System",
+            "%SystemRoot%\\System32\\svchost.exe -k LocalService",
+            "NT AUTHORITY\\LocalService",
+            "Supports System Event Notification Service.",
+            process_id: 1012),
+        svc!("SENS", "System Event Notification Service",
+            "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "LocalSystem",
+            "Monitors system events and notifies subscribers.",
+            process_id: 864),
+        // ── Common Chinese security software (anti-VM reconnaissance) ─
+        // Many malware families probe for these services to decide whether
+        // the target machine has third-party security software installed.
+        // When they are absent the sample may take a different code path
+        // that can crash if the emulator doesn't fully support it.
+        svc!("2345SafeSvc", "2345 Safe Guard Service",
+            "%ProgramFiles%\\2345Soft\\2345Safe\\2345SafeSvc.exe",
+            "LocalSystem",
+            "2345 Safe Guard real-time protection service.",
+            current_state: 4u32,
+            process_id: 1420),
+        svc!("HipsDaemon", "HIPS Daemon Service",
+            "%ProgramFiles%\\360\\360Safe\\safemon\\HipsDaemon.exe",
+            "LocalSystem",
+            "360 Total Security HIPS daemon.",
+            current_state: 4u32,
+            process_id: 1580),
+        svc!("QQPCRTP", "QQ PC Real-time Protection",
+            "%ProgramFiles%\\Tencent\\QQPCMgr\\QQPCRTP.exe",
+            "LocalSystem",
+            "Tencent PC Manager real-time protection.",
+            current_state: 4u32,
+            process_id: 1720),
+        svc!("kxescore", "Kingsoft Antivirus Core",
+            "%ProgramFiles%\\Kingsoft\\Kingsoft Antivirus\\kxescore.exe",
+            "LocalSystem",
+            "Kingsoft Antivirus core scanning engine.",
+            current_state: 4u32,
+            process_id: 1880),
     ]
 }
 

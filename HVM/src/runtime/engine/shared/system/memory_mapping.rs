@@ -13,7 +13,8 @@ impl VirtualExecutionEngine {
                 .as_ref()
                 .map(|path| path.to_string_lossy().to_string())
         } else {
-            self.file_mappings
+            self.process_memory
+                .file_mappings
                 .mapped_path_for_address(process_key, address)
                 .map(str::to_string)
         }
@@ -34,7 +35,11 @@ impl VirtualExecutionEngine {
             .is_some()
         {
             MEM_IMAGE
-        } else if let Some(image) = self.file_mappings.view_is_image(process_key, address) {
+        } else if let Some(image) = self
+            .process_memory
+            .file_mappings
+            .view_is_image(process_key, address)
+        {
             if image {
                 MEM_IMAGE
             } else {
@@ -78,7 +83,7 @@ impl VirtualExecutionEngine {
         }
 
         let mut free_base = 0u64;
-        let mut free_end = if self.arch.is_x86() {
+        let mut free_end = if self.core.arch.is_x86() {
             (u32::MAX as u64).saturating_add(1)
         } else {
             0x0000_8000_0000_0000
@@ -86,7 +91,7 @@ impl VirtualExecutionEngine {
         let regions = self.with_process_memory(process_handle, |memory| {
             memory
                 .regions
-                .iter()
+                .values()
                 .map(|region| (region.base, region.end()))
                 .collect::<Vec<_>>()
         })?;
@@ -132,7 +137,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn memory_basic_information_size(&self) -> usize {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             28
         } else {
             48
@@ -147,7 +152,7 @@ impl VirtualExecutionEngine {
     ) -> Result<usize, VmError> {
         let struct_size = self.memory_basic_information_size();
         let mut bytes = vec![0u8; struct_size];
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             bytes[0..4].copy_from_slice(&(info.base_address as u32).to_le_bytes());
             bytes[4..8].copy_from_slice(&(info.allocation_base as u32).to_le_bytes());
             bytes[8..12].copy_from_slice(&info.allocation_protect.to_le_bytes());
@@ -164,7 +169,8 @@ impl VirtualExecutionEngine {
             bytes[36..40].copy_from_slice(&info.protect.to_le_bytes());
             bytes[40..44].copy_from_slice(&info.region_type.to_le_bytes());
         }
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(address, &bytes[..capacity.min(bytes.len())])?;
         Ok(struct_size)
@@ -187,7 +193,7 @@ impl VirtualExecutionEngine {
             return Ok(String::new());
         }
         let length = self.read_u16(address)? as usize;
-        let buffer = if self.arch.is_x86() {
+        let buffer = if self.core.arch.is_x86() {
             self.read_u32(address + 4)? as u64
         } else {
             self.read_pointer_value(address + 8)?
@@ -205,7 +211,7 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(String::new());
         }
-        let object_name = if self.arch.is_x86() {
+        let object_name = if self.core.arch.is_x86() {
             self.read_u32(address + 8)? as u64
         } else {
             self.read_pointer_value(address + 16)?
@@ -224,7 +230,7 @@ impl VirtualExecutionEngine {
         let source = if pagefile_backed {
             None
         } else {
-            let Some(state) = self.file_handles.get(&(file_handle as u32)) else {
+            let Some(state) = self.handles.file_handles.get(&(file_handle as u32)) else {
                 self.set_last_error(ERROR_INVALID_HANDLE as u32);
                 return Ok(0);
             };
@@ -241,7 +247,7 @@ impl VirtualExecutionEngine {
             })
         };
 
-        let Some(result) = self.file_mappings.create_mapping(
+        let Some(result) = self.process_memory.file_mappings.create_mapping(
             file_handle as u32,
             protect,
             maximum_size,
@@ -261,7 +267,7 @@ impl VirtualExecutionEngine {
     }
 
     pub(in crate::runtime::engine) fn open_file_mapping_handle(&mut self, name: &str) -> u64 {
-        let Some(handle) = self.file_mappings.open_named_mapping(name) else {
+        let Some(handle) = self.process_memory.file_mappings.open_named_mapping(name) else {
             self.set_last_error(ERROR_FILE_NOT_FOUND as u32);
             return 0;
         };
@@ -278,7 +284,10 @@ impl VirtualExecutionEngine {
     ) -> Result<u64, VmError> {
         let process_key = self.current_process_space_key();
         let view = {
-            let (file_mappings, modules) = (&mut self.file_mappings, &mut self.modules);
+            let (file_mappings, modules) = (
+                &mut self.process_memory.file_mappings,
+                &mut self.core.modules,
+            );
             file_mappings.map_view(
                 handle,
                 process_key,
@@ -306,7 +315,10 @@ impl VirtualExecutionEngine {
         size: u64,
     ) -> Result<u64, VmError> {
         let process_key = self.current_process_space_key();
-        let (file_mappings, modules) = (&mut self.file_mappings, &mut self.modules);
+        let (file_mappings, modules) = (
+            &mut self.process_memory.file_mappings,
+            &mut self.core.modules,
+        );
         if !file_mappings.flush_view(process_key, base, size, modules.memory_mut()) {
             self.set_last_error(ERROR_INVALID_PARAMETER as u32);
             return Ok(0);
@@ -321,7 +333,10 @@ impl VirtualExecutionEngine {
     ) -> Result<u64, VmError> {
         let process_key = self.current_process_space_key();
         let unmapped = {
-            let (file_mappings, modules) = (&mut self.file_mappings, &mut self.modules);
+            let (file_mappings, modules) = (
+                &mut self.process_memory.file_mappings,
+                &mut self.core.modules,
+            );
             file_mappings.unmap_view(process_key, base, modules.memory_mut())
         };
         if !unmapped {
@@ -374,7 +389,7 @@ impl VirtualExecutionEngine {
         let source = if pagefile_backed {
             None
         } else {
-            let Some(state) = self.file_handles.get(&(file_handle as u32)) else {
+            let Some(state) = self.handles.file_handles.get(&(file_handle as u32)) else {
                 return Ok(STATUS_INVALID_HANDLE as u64);
             };
             Some(MappingSource {
@@ -390,7 +405,7 @@ impl VirtualExecutionEngine {
             })
         };
 
-        let Some(result) = self.file_mappings.create_mapping(
+        let Some(result) = self.process_memory.file_mappings.create_mapping(
             file_handle as u32,
             section_page_protection,
             maximum_size,
@@ -444,7 +459,10 @@ impl VirtualExecutionEngine {
             FILE_MAP_READ
         };
         let view = if process_key == self.current_process_space_key() {
-            let (file_mappings, modules) = (&mut self.file_mappings, &mut self.modules);
+            let (file_mappings, modules) = (
+                &mut self.process_memory.file_mappings,
+                &mut self.core.modules,
+            );
             file_mappings.map_view(
                 section_handle,
                 process_key,
@@ -457,13 +475,14 @@ impl VirtualExecutionEngine {
                 modules.memory_mut(),
             )
         } else {
-            let arch = self.arch;
+            let arch = self.core.arch;
             let memory = &mut self
+                .process_memory
                 .process_spaces
                 .entry(process_key)
                 .or_insert_with(|| SyntheticProcessSpace::new(arch))
                 .memory;
-            self.file_mappings.map_view(
+            self.process_memory.file_mappings.map_view(
                 section_handle,
                 process_key,
                 desired_access,
@@ -493,11 +512,17 @@ impl VirtualExecutionEngine {
             return Ok(STATUS_INVALID_HANDLE as u64);
         };
         let unmapped = if process_key == self.current_process_space_key() {
-            let (file_mappings, modules) = (&mut self.file_mappings, &mut self.modules);
+            let (file_mappings, modules) = (
+                &mut self.process_memory.file_mappings,
+                &mut self.core.modules,
+            );
             file_mappings.unmap_view(process_key, base_address, modules.memory_mut())
-        } else if let Some(space) = self.process_spaces.get_mut(&process_key) {
-            self.file_mappings
-                .unmap_view(process_key, base_address, &mut space.memory)
+        } else if let Some(space) = self.process_memory.process_spaces.get_mut(&process_key) {
+            self.process_memory.file_mappings.unmap_view(
+                process_key,
+                base_address,
+                &mut space.memory,
+            )
         } else {
             false
         };

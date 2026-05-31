@@ -13,6 +13,7 @@ pub struct SocketObject {
     pub peer_address: Option<(String, u16)>,
     pub recv_queue: Vec<Vec<u8>>,
     pub sent_data: Vec<Vec<u8>>,
+    pub sent_data_consumed: usize,
 }
 
 /// Stores one WinINet-style session object.
@@ -52,7 +53,7 @@ pub struct InternetRequest {
     pub read_offset: usize,
 }
 
-/// Mirrors the Python network manager over shared handle-backed objects.
+/// Manages emulated sockets and WinINet objects via handle tables.
 #[derive(Debug)]
 pub struct NetworkManager {
     handles: HandleTable,
@@ -93,6 +94,7 @@ impl NetworkManager {
                 peer_address: None,
                 recv_queue: Vec::new(),
                 sent_data: Vec::new(),
+                sent_data_consumed: 0,
             },
         )
     }

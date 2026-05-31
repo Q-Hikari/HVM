@@ -86,6 +86,32 @@ impl VirtualExecutionEngine {
         self.log_runtime_event("SERVICE_OPEN", fields)
     }
 
+    fn log_service_create_event(
+        &mut self,
+        manager_handle: u32,
+        service: &ServiceProfile,
+        access: u32,
+        handle: u32,
+    ) -> Result<(), VmError> {
+        let mut fields = Map::new();
+        fields.insert("manager_handle".to_string(), json!(manager_handle));
+        fields.insert("service_name".to_string(), json!(service.name));
+        fields.insert("display_name".to_string(), json!(service.display_name));
+        fields.insert("access".to_string(), json!(access));
+        fields.insert("service_type".to_string(), json!(service.service_type));
+        fields.insert("start_type".to_string(), json!(service.start_type));
+        fields.insert("error_control".to_string(), json!(service.error_control));
+        fields.insert("binary_path".to_string(), json!(service.binary_path));
+        fields.insert(
+            "load_order_group".to_string(),
+            json!(service.load_order_group),
+        );
+        fields.insert("start_name".to_string(), json!(service.start_name));
+        fields.insert("tag_id".to_string(), json!(service.tag_id));
+        fields.insert("service_handle".to_string(), json!(handle));
+        self.log_runtime_event("SERVICE_CREATE", fields)
+    }
+
     fn log_service_state_transition(
         &mut self,
         marker: &str,
@@ -119,7 +145,7 @@ impl VirtualExecutionEngine {
     }
 
     fn enum_service_status_process_layout(&self) -> EnumServiceStatusProcessLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             EnumServiceStatusProcessLayout {
                 size: 44,
                 service_name_offset: 0,
@@ -137,7 +163,7 @@ impl VirtualExecutionEngine {
     }
 
     fn query_service_config_layout(&self) -> QueryServiceConfigLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             QueryServiceConfigLayout {
                 size: 36,
                 binary_path_offset: 12,
@@ -161,7 +187,7 @@ impl VirtualExecutionEngine {
     }
 
     fn failure_actions_layout(&self) -> FailureActionsLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             FailureActionsLayout {
                 size: 20,
                 reboot_msg_offset: 4,
@@ -192,6 +218,7 @@ impl VirtualExecutionEngine {
             database_name
         };
         let handle = self
+            .dispatch
             .services
             .open_manager(machine_name, database_name, access);
         self.set_last_error(ERROR_SUCCESS as u32);
@@ -205,15 +232,18 @@ impl VirtualExecutionEngine {
         service_name: &str,
         access: u32,
     ) -> Result<u64, VmError> {
-        let Some(handle) = self
-            .services
-            .open_service(manager_handle, service_name, access)
+        let Some(handle) =
+            self.dispatch
+                .services
+                .open_service(manager_handle, service_name, access)
         else {
-            self.set_last_error(if self.services.is_manager_handle(manager_handle) {
-                ERROR_SERVICE_DOES_NOT_EXIST as u32
-            } else {
-                ERROR_INVALID_HANDLE as u32
-            });
+            self.set_last_error(
+                if self.dispatch.services.is_manager_handle(manager_handle) {
+                    ERROR_SERVICE_DOES_NOT_EXIST as u32
+                } else {
+                    ERROR_INVALID_HANDLE as u32
+                },
+            );
             return Ok(0);
         };
         self.set_last_error(ERROR_SUCCESS as u32);
@@ -221,8 +251,80 @@ impl VirtualExecutionEngine {
         Ok(handle as u64)
     }
 
+    pub(in crate::runtime::engine) fn create_service(
+        &mut self,
+        manager_handle: u32,
+        service_name: &str,
+        display_name: &str,
+        access: u32,
+        service_type: u32,
+        start_type: u32,
+        error_control: u32,
+        binary_path: &str,
+        load_order_group: &str,
+        tag_id_ptr: u64,
+        dependencies: &str,
+        start_name: &str,
+    ) -> Result<u64, VmError> {
+        if !self.dispatch.services.is_manager_handle(manager_handle) {
+            self.set_last_error(ERROR_INVALID_HANDLE as u32);
+            return Ok(0);
+        }
+        if service_name.trim().is_empty() || binary_path.trim().is_empty() {
+            self.set_last_error(ERROR_INVALID_PARAMETER as u32);
+            return Ok(0);
+        }
+        if self.dispatch.services.find_service(service_name).is_some() {
+            self.set_last_error(ERROR_SERVICE_EXISTS as u32);
+            return Ok(0);
+        }
+
+        let service = ServiceProfile {
+            name: service_name.to_string(),
+            display_name: if display_name.trim().is_empty() {
+                service_name.to_string()
+            } else {
+                display_name.to_string()
+            },
+            service_type,
+            start_type,
+            error_control,
+            current_state: SERVICE_STOPPED,
+            binary_path: binary_path.to_string(),
+            load_order_group: load_order_group.to_string(),
+            tag_id: 0,
+            dependencies: parse_service_dependencies(dependencies),
+            start_name: if start_name.trim().is_empty() {
+                ServiceProfile::default().start_name
+            } else {
+                start_name.to_string()
+            },
+            ..ServiceProfile::default()
+        };
+
+        let Some(handle) =
+            self.dispatch
+                .services
+                .create_service(manager_handle, service.clone(), access)
+        else {
+            self.set_last_error(ERROR_INVALID_HANDLE as u32);
+            return Ok(0);
+        };
+        if handle == 0 {
+            self.set_last_error(ERROR_SERVICE_EXISTS as u32);
+            return Ok(0);
+        }
+
+        if tag_id_ptr != 0 {
+            self.write_u32(tag_id_ptr, service.tag_id)?;
+        }
+        self.set_last_error(ERROR_SUCCESS as u32);
+        self.log_service_create_event(manager_handle, &service, access, handle)?;
+        Ok(handle as u64)
+    }
+
     pub(in crate::runtime::engine) fn close_service_handle(&mut self, handle: u32) -> u64 {
-        let ok = self.services.close_handle(handle);
+        let ok = self.dispatch.services.close_handle(handle);
         self.set_last_error(if ok {
             ERROR_SUCCESS as u32
         } else {
@@ -236,7 +338,7 @@ impl VirtualExecutionEngine {
         handle: u32,
         status_ptr: u64,
     ) -> Result<u64, VmError> {
-        let Some(service) = self.services.get_service(handle) else {
+        let Some(service) = self.dispatch.services.get_service(handle) else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
@@ -257,7 +359,7 @@ impl VirtualExecutionEngine {
         buffer_size: u32,
         bytes_needed_ptr: u64,
     ) -> Result<u64, VmError> {
-        let Some(service) = self.services.get_service(handle) else {
+        let Some(service) = self.dispatch.services.get_service(handle) else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
@@ -288,13 +390,13 @@ impl VirtualExecutionEngine {
         buffer_size: u32,
         bytes_needed_ptr: u64,
     ) -> Result<u64, VmError> {
-        let Some(service) = self.services.get_service(handle) else {
+        let Some(service) = self.dispatch.services.get_service(handle) else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
 
         let layout = self.query_service_config_layout();
-        let mut required = align_up(layout.size, self.arch.pointer_size as u64);
+        let mut required = align_up(layout.size, self.core.arch.pointer_size as u64);
         required += optional_text_storage_size(wide, &service.binary_path);
         required += optional_text_storage_size(wide, &service.load_order_group);
         required += optional_multi_storage_size(wide, &service.dependencies);
@@ -314,7 +416,7 @@ impl VirtualExecutionEngine {
         self.write_u32(buffer + 4, service.start_type)?;
         self.write_u32(buffer + 8, service.error_control)?;
 
-        let mut cursor = align_up(buffer + layout.size, self.arch.pointer_size as u64);
+        let mut cursor = align_up(buffer + layout.size, self.core.arch.pointer_size as u64);
         let binary_path = if wide {
             write_optional_inline_wide_string(self, &mut cursor, &service.binary_path)?
         } else {
@@ -360,19 +462,19 @@ impl VirtualExecutionEngine {
         buffer_size: u32,
         bytes_needed_ptr: u64,
     ) -> Result<u64, VmError> {
-        let Some(service) = self.services.get_service(handle) else {
+        let Some(service) = self.dispatch.services.get_service(handle) else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
 
         let required = match info_level {
             SERVICE_CONFIG_DESCRIPTION => {
-                self.arch.pointer_size as u64
+                self.core.arch.pointer_size as u64
                     + optional_text_storage_size(wide, &service.description)
             }
             SERVICE_CONFIG_FAILURE_ACTIONS => {
                 let layout = self.failure_actions_layout();
-                align_up(layout.size, self.arch.pointer_size as u64)
+                align_up(layout.size, self.core.arch.pointer_size as u64)
                     + optional_text_storage_size(wide, &service.failure_reboot_message)
                     + optional_text_storage_size(wide, &service.failure_command)
             }
@@ -381,7 +483,7 @@ impl VirtualExecutionEngine {
             | SERVICE_CONFIG_SERVICE_SID_INFO
             | SERVICE_CONFIG_PRESHUTDOWN_INFO => 4,
             SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO => {
-                self.arch.pointer_size as u64
+                self.core.arch.pointer_size as u64
                     + optional_multi_storage_size(wide, &service.required_privileges)
             }
             _ => {
@@ -402,8 +504,8 @@ impl VirtualExecutionEngine {
         match info_level {
             SERVICE_CONFIG_DESCRIPTION => {
                 let mut cursor = align_up(
-                    buffer + self.arch.pointer_size as u64,
-                    self.arch.pointer_size as u64,
+                    buffer + self.core.arch.pointer_size as u64,
+                    self.core.arch.pointer_size as u64,
                 );
                 let description = if wide {
                     write_optional_inline_wide_string(self, &mut cursor, &service.description)?
@@ -414,7 +516,7 @@ impl VirtualExecutionEngine {
             }
             SERVICE_CONFIG_FAILURE_ACTIONS => {
                 let layout = self.failure_actions_layout();
-                let mut cursor = align_up(buffer + layout.size, self.arch.pointer_size as u64);
+                let mut cursor = align_up(buffer + layout.size, self.core.arch.pointer_size as u64);
                 let reboot_message = if wide {
                     write_optional_inline_wide_string(
                         self,
@@ -450,8 +552,8 @@ impl VirtualExecutionEngine {
             }
             SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO => {
                 let mut cursor = align_up(
-                    buffer + self.arch.pointer_size as u64,
-                    self.arch.pointer_size as u64,
+                    buffer + self.core.arch.pointer_size as u64,
+                    self.core.arch.pointer_size as u64,
                 );
                 let privileges = if wide {
                     write_optional_inline_wide_multi_string(
@@ -491,7 +593,7 @@ impl VirtualExecutionEngine {
         services_returned_ptr: u64,
         resume_handle_ptr: u64,
     ) -> Result<u64, VmError> {
-        if !self.services.is_manager_handle(manager_handle) {
+        if !self.dispatch.services.is_manager_handle(manager_handle) {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         }
@@ -503,7 +605,7 @@ impl VirtualExecutionEngine {
         let services = self.filtered_services(service_type, service_state);
         let layout = self.enum_service_status_process_layout();
         let mut required = services.len() as u64 * layout.size;
-        required = align_up(required, self.arch.pointer_size as u64);
+        required = align_up(required, self.core.arch.pointer_size as u64);
         for service in &services {
             required += optional_text_storage_size(wide, &service.name);
             required += optional_text_storage_size(wide, &service.display_name);
@@ -527,7 +629,7 @@ impl VirtualExecutionEngine {
         self.fill_memory_pattern(buffer, required, 0)?;
         let mut string_cursor = align_up(
             buffer + services.len() as u64 * layout.size,
-            self.arch.pointer_size as u64,
+            self.core.arch.pointer_size as u64,
         );
         for (index, service) in services.iter().enumerate() {
             let entry = buffer + index as u64 * layout.size;
@@ -553,13 +655,89 @@ impl VirtualExecutionEngine {
         Ok(1)
     }
 
+    /// EnumServicesStatusW — non-Ex variant using ENUM_SERVICE_STATUS (no PROCESS info).
+    pub(in crate::runtime::engine) fn enum_services_status(
+        &mut self,
+        wide: bool,
+        manager_handle: u32,
+        service_type: u32,
+        service_state: u32,
+        buffer: u64,
+        buffer_size: u32,
+        bytes_needed_ptr: u64,
+        services_returned_ptr: u64,
+        resume_handle_ptr: u64,
+    ) -> Result<u64, VmError> {
+        if !self.dispatch.services.is_manager_handle(manager_handle) {
+            self.set_last_error(ERROR_INVALID_HANDLE as u32);
+            return Ok(0);
+        }
+
+        let services = self.filtered_services(service_type, service_state);
+        // ENUM_SERVICE_STATUS layout:
+        //   lpServiceName  (pointer_size)
+        //   lpDisplayName  (pointer_size)
+        //   SERVICE_STATUS (7 * DWORD = 28 bytes)
+        let ptr_size = self.core.arch.pointer_size as u64;
+        let entry_size = 2 * ptr_size + 28;
+        let mut required = services.len() as u64 * entry_size;
+        required = align_up(required, ptr_size);
+        for service in &services {
+            required += optional_text_storage_size(wide, &service.name);
+            required += optional_text_storage_size(wide, &service.display_name);
+        }
+
+        if bytes_needed_ptr != 0 {
+            self.write_u32(bytes_needed_ptr, required.min(u32::MAX as u64) as u32)?;
+        }
+        if services_returned_ptr != 0 {
+            self.write_u32(services_returned_ptr, 0)?;
+        }
+        if resume_handle_ptr != 0 {
+            self.write_u32(resume_handle_ptr, 0)?;
+        }
+
+        if buffer == 0 || (buffer_size as u64) < required {
+            self.set_last_error(ERROR_MORE_DATA as u32);
+            return Ok(0);
+        }
+
+        self.fill_memory_pattern(buffer, required, 0)?;
+        let mut string_cursor = align_up(buffer + services.len() as u64 * entry_size, ptr_size);
+        for (index, service) in services.iter().enumerate() {
+            let entry = buffer + index as u64 * entry_size;
+            let service_name = if wide {
+                write_inline_wide_string(self, &mut string_cursor, &service.name)?
+            } else {
+                write_inline_ansi_string(self, &mut string_cursor, &service.name)?
+            };
+            let display_name = if wide {
+                write_inline_wide_string(self, &mut string_cursor, &service.display_name)?
+            } else {
+                write_inline_ansi_string(self, &mut string_cursor, &service.display_name)?
+            };
+            // Write pointer fields
+            self.write_pointer_value(entry, service_name)?;
+            self.write_pointer_value(entry + ptr_size, display_name)?;
+            // Write SERVICE_STATUS (7 DWORDs) at offset 2*ptr_size
+            let status_addr = entry + 2 * ptr_size;
+            self.write_service_status(status_addr, service)?;
+        }
+
+        if services_returned_ptr != 0 {
+            self.write_u32(services_returned_ptr, services.len() as u32)?;
+        }
+        self.set_last_error(ERROR_SUCCESS as u32);
+        Ok(1)
+    }
+
     pub(in crate::runtime::engine) fn start_service(
         &mut self,
         handle: u32,
         num_args: u32,
         args_ptr: u64,
     ) -> Result<u64, VmError> {
-        if !self.services.is_service_handle(handle) {
+        if !self.dispatch.services.is_service_handle(handle) {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         }
@@ -568,7 +746,7 @@ impl VirtualExecutionEngine {
             return Ok(0);
         }
 
-        let Some(service) = self.services.get_service(handle) else {
+        let Some(service) = self.dispatch.services.get_service(handle) else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
@@ -577,7 +755,7 @@ impl VirtualExecutionEngine {
             return Ok(0);
         }
 
-        self.services.update_service(handle, |stored| {
+        self.dispatch.services.update_service(handle, |stored| {
             stored.current_state = SERVICE_RUNNING;
             stored.win32_exit_code = 0;
             stored.service_specific_exit_code = 0;
@@ -605,7 +783,7 @@ impl VirtualExecutionEngine {
         control: u32,
         status_ptr: u64,
     ) -> Result<u64, VmError> {
-        let Some(service) = self.services.get_service(handle) else {
+        let Some(service) = self.dispatch.services.get_service(handle) else {
             self.set_last_error(ERROR_INVALID_HANDLE as u32);
             return Ok(0);
         };
@@ -668,7 +846,7 @@ impl VirtualExecutionEngine {
         };
 
         if let Some(next_state) = next_state {
-            self.services.update_service(handle, |stored| {
+            self.dispatch.services.update_service(handle, |stored| {
                 stored.current_state = next_state;
                 stored.win32_exit_code = 0;
                 stored.service_specific_exit_code = 0;
@@ -682,7 +860,11 @@ impl VirtualExecutionEngine {
             });
         }
 
-        let service = self.services.get_service(handle).unwrap_or(service);
+        let service = self
+            .dispatch
+            .services
+            .get_service(handle)
+            .unwrap_or(service);
         if status_ptr != 0 {
             self.write_service_status(status_ptr, &service)?;
         }
@@ -699,7 +881,8 @@ impl VirtualExecutionEngine {
     }
 
     fn filtered_services(&self, service_type: u32, service_state: u32) -> Vec<ServiceProfile> {
-        self.services
+        self.dispatch
+            .services
             .enumerate_services()
             .into_iter()
             .filter(|service| service_type == 0 || (service.service_type & service_type) != 0)
@@ -858,7 +1041,7 @@ fn write_optional_inline_wide_multi_string(
     *cursor = align_up(*cursor, 2);
     let address = *cursor;
     let bytes = encode_wide_multi_string(values);
-    engine.modules.memory_mut().write(address, &bytes)?;
+    engine.core.modules.memory_mut().write(address, &bytes)?;
     *cursor += bytes.len() as u64;
     Ok(address)
 }
@@ -873,7 +1056,7 @@ fn write_optional_inline_ansi_multi_string(
     }
     let address = *cursor;
     let bytes = encode_ansi_multi_string(values);
-    engine.modules.memory_mut().write(address, &bytes)?;
+    engine.core.modules.memory_mut().write(address, &bytes)?;
     *cursor += bytes.len() as u64;
     Ok(address)
 }
@@ -896,6 +1079,14 @@ fn encode_ansi_multi_string(values: &[String]) -> Vec<u8> {
     }
     bytes.push(0);
     bytes
+}
+
+fn parse_service_dependencies(value: &str) -> Vec<String> {
+    value
+        .split('\0')
+        .filter(|entry| !entry.is_empty())
+        .map(ToString::to_string)
+        .collect()
 }
 
 fn write_inline_wide_string(

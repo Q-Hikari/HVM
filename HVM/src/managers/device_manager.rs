@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 
 pub const REG_SZ: u32 = 1;
 pub const REG_DWORD: u32 = 4;
@@ -26,24 +26,24 @@ pub struct DeviceRecord {
     pub present: bool,
 }
 
-/// Mirrors the Python device inventory used by setupapi- and device-backed hooks.
+/// Manages the emulated Plug and Play device inventory.
 #[derive(Debug, Default)]
 pub struct DeviceManager {
-    devices: BTreeMap<u32, DeviceRecord>,
-    instance_map: BTreeMap<String, u32>,
-    class_guid_map: BTreeMap<String, BTreeSet<u32>>,
-    class_name_map: BTreeMap<String, BTreeSet<u32>>,
+    devices: HashMap<u32, DeviceRecord>,
+    instance_map: HashMap<String, u32>,
+    class_guid_map: HashMap<String, BTreeSet<u32>>,
+    class_name_map: HashMap<String, BTreeSet<u32>>,
 }
 
 impl DeviceManager {
-    /// Builds the manager with the same seeded root, network, and disk devices as Python.
+    /// Builds the manager with seeded root, network, and disk devices.
     pub fn new() -> Self {
         let mut manager = Self::default();
         manager.seed();
         manager
     }
 
-    /// Returns the current device list filtered like the Python baseline.
+    /// Returns the device list filtered by class GUID and enumerator.
     pub fn list_devices(
         &self,
         class_guid: &str,

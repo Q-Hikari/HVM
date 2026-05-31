@@ -1,11 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 
 /// Tracks allocated TLS slots and their current emulated values.
 #[derive(Debug, Default)]
 pub struct TlsManager {
     next_slot: usize,
     allocated: BTreeSet<usize>,
-    thread_values: BTreeMap<u32, BTreeMap<usize, u64>>,
+    thread_values: HashMap<u32, HashMap<usize, u64>>,
 }
 
 impl TlsManager {
@@ -80,12 +80,12 @@ impl TlsManager {
     }
 
     /// Returns the current slot-value map for environment mirroring.
-    pub fn snapshot(&self) -> BTreeMap<usize, u64> {
+    pub fn snapshot(&self) -> HashMap<usize, u64> {
         self.snapshot_for_thread(0)
     }
 
     /// Returns the current slot-value map for one emulated thread.
-    pub fn snapshot_for_thread(&self, thread_id: u32) -> BTreeMap<usize, u64> {
+    pub fn snapshot_for_thread(&self, thread_id: u32) -> HashMap<usize, u64> {
         self.thread_values
             .get(&thread_id)
             .cloned()

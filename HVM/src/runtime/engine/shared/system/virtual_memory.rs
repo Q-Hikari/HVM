@@ -103,7 +103,10 @@ impl VirtualExecutionEngine {
             return Ok(());
         };
         if process_key != self.current_process_space_key()
-            && !self.process_spaces.contains_key(&process_key)
+            && !self
+                .process_memory
+                .process_spaces
+                .contains_key(&process_key)
         {
             let _ = self.ensure_process_space_initialized(process_handle)?;
         }
@@ -422,9 +425,9 @@ impl VirtualExecutionEngine {
         remote: bool,
     ) -> Result<u64, VmError> {
         let allocation_size = size.max(1);
-        let reserve = allocation_type & MEM_RESERVE != 0;
+        let reserve_requested = allocation_type & MEM_RESERVE != 0;
         let commit = allocation_type & MEM_COMMIT != 0;
-        if !reserve && !commit {
+        if !reserve_requested && !commit {
             self.set_last_error(ERROR_INVALID_PARAMETER as u32);
             return Ok(0);
         }
@@ -432,6 +435,9 @@ impl VirtualExecutionEngine {
             self.set_last_error(ERROR_INVALID_PARAMETER as u32);
             return Ok(0);
         };
+        // Match VirtualAlloc/VirtualAllocEx behavior: MEM_COMMIT with a NULL base lets the
+        // system pick a free range and backs it with committed private pages.
+        let reserve = reserve_requested || (commit && requested == 0);
         let address = if reserve {
             let Some(address) = self.with_process_memory_mut(process_handle, |memory| {
                 let address = memory
@@ -686,7 +692,7 @@ impl VirtualExecutionEngine {
             }
             return Ok(0);
         }
-        self.modules.memory_mut().write(buffer, &bytes)?;
+        self.core.modules.memory_mut().write(buffer, &bytes)?;
         if bytes_read_ptr != 0 {
             self.write_pointer_value(bytes_read_ptr, bytes.len() as u64)?;
         }
@@ -756,6 +762,14 @@ impl VirtualExecutionEngine {
                 self.write_pointer_value(bytes_written_ptr, 0)?;
             }
             return Ok(0);
+        }
+        // Mirror writes targeting a module with a visible alias so that the
+        // guest always sees consistent data regardless of which base it uses.
+        if self.is_current_process_handle(process_handle) {
+            self.core
+                .modules
+                .mirror_write_into_visible_alias(base_address, &data)
+                .map_err(VmError::from)?;
         }
         self.propagate_file_mapping_write(process_handle, base_address, &data)?;
         if bytes_written_ptr != 0 {
@@ -835,7 +849,7 @@ impl VirtualExecutionEngine {
             return Ok(STATUS_INVALID_PARAMETER as u64);
         };
 
-        self.modules.memory_mut().write(buffer, &bytes)?;
+        self.core.modules.memory_mut().write(buffer, &bytes)?;
         if bytes_read_ptr != 0 {
             self.write_pointer_value(bytes_read_ptr, bytes.len() as u64)?;
         }

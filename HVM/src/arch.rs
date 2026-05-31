@@ -1,7 +1,7 @@
-/// The 32-bit PE machine identifier used by the Python baseline.
+/// 32-bit PE machine identifier (i386).
 pub const IMAGE_FILE_MACHINE_I386: u16 = 0x14C;
 
-/// The 64-bit PE machine identifier used by the Python baseline.
+/// 64-bit PE machine identifier (AMD64).
 pub const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
 
 /// Captures the architecture-specific layout and ABI values the runtime needs.
@@ -43,7 +43,7 @@ pub const X64_ARCH: ArchSpec = ArchSpec {
     alloc_base: 0x0000_7FF6_0000_0000,
 };
 
-/// Converts a PE machine identifier into the Python-compatible architecture name.
+/// Converts a PE machine identifier into the architecture name.
 pub fn arch_name(machine: u16) -> Option<&'static str> {
     arch_spec(machine).map(|arch| arch.name)
 }

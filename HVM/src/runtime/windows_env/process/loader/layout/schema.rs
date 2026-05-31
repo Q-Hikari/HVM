@@ -10,6 +10,11 @@ pub(in crate::runtime::windows_env::process::loader) struct LoaderEntryOffsets {
     pub size_of_image: u64,
     pub full_dll_name: u64,
     pub base_dll_name: u64,
+    pub flags: u64,
+    pub load_count: u64,
+    pub tls_index: u64,
+    pub hash_links: u64,
+    pub time_date_stamp: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,59 +30,37 @@ impl WindowsProcessEnvironment {
     pub(in crate::runtime::windows_env::process::loader) fn loader_entry_offsets(
         &self,
     ) -> LoaderEntryOffsets {
-        if self.arch.is_x86() {
-            LoaderEntryOffsets {
-                in_load_order: 0x00,
-                in_memory_order: 0x08,
-                in_initialization_order: 0x10,
-                dll_base: 0x18,
-                entry_point: 0x1C,
-                size_of_image: 0x20,
-                full_dll_name: 0x24,
-                base_dll_name: 0x2C,
-            }
-        } else {
-            LoaderEntryOffsets {
-                in_load_order: 0x00,
-                in_memory_order: 0x10,
-                in_initialization_order: 0x20,
-                dll_base: 0x30,
-                entry_point: 0x38,
-                size_of_image: 0x40,
-                full_dll_name: 0x48,
-                base_dll_name: 0x58,
-            }
+        LoaderEntryOffsets {
+            in_load_order: self.offsets.ldr_entry_in_load_order,
+            in_memory_order: self.offsets.ldr_entry_in_memory_order,
+            in_initialization_order: self.offsets.ldr_entry_in_initialization_order,
+            dll_base: self.offsets.ldr_entry_dll_base,
+            entry_point: self.offsets.ldr_entry_entry_point,
+            size_of_image: self.offsets.ldr_entry_size_of_image,
+            full_dll_name: self.offsets.ldr_entry_full_dll_name,
+            base_dll_name: self.offsets.ldr_entry_base_dll_name,
+            flags: self.offsets.ldr_entry_flags,
+            load_count: self.offsets.ldr_entry_load_count,
+            tls_index: self.offsets.ldr_entry_tls_index,
+            hash_links: self.offsets.ldr_entry_hash_links,
+            time_date_stamp: self.offsets.ldr_entry_time_date_stamp,
         }
     }
 
     pub(in crate::runtime::windows_env::process::loader) fn loader_header_layout(
         &self,
     ) -> LoaderHeaderLayout {
-        if self.arch.is_x86() {
-            LoaderHeaderLayout {
-                length: 0x30,
-                initialized: 0x04,
-                in_load_order: 0x0C,
-                in_memory_order: 0x14,
-                in_initialization_order: 0x1C,
-            }
-        } else {
-            LoaderHeaderLayout {
-                length: 0x58,
-                initialized: 0x04,
-                in_load_order: 0x10,
-                in_memory_order: 0x20,
-                in_initialization_order: 0x30,
-            }
+        LoaderHeaderLayout {
+            length: self.offsets.ldr_length,
+            initialized: self.offsets.ldr_initialized,
+            in_load_order: self.offsets.ldr_in_load_order,
+            in_memory_order: self.offsets.ldr_in_memory_order,
+            in_initialization_order: self.offsets.ldr_in_initialization_order,
         }
     }
 
     pub(in crate::runtime::windows_env::process::loader) fn loader_entry_size(&self) -> usize {
-        if self.arch.is_x86() {
-            0x38
-        } else {
-            0x70
-        }
+        self.offsets.ldr_entry_size
     }
 
     pub(in crate::runtime::windows_env::process::loader) fn loader_entry_is_dll(

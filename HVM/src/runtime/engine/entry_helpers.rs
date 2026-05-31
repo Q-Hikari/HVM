@@ -1,23 +1,24 @@
 use super::*;
+use crate::runtime::windows_env::ldr_region_size_for_arch;
 
 impl VirtualExecutionEngine {
     pub(super) fn resolve_entry_address(
         &mut self,
         entry_module: &ModuleRecord,
     ) -> Result<u64, VmError> {
-        let address = if let Some(export) = self.config.entry_export.as_deref() {
-            self.modules.resolve_export(
+        let address = if let Some(export) = self.core.config.entry_export.as_deref() {
+            self.core.modules.resolve_export(
                 entry_module.base,
-                &self.config,
-                &mut self.hooks,
+                &self.core.config,
+                &mut self.core.hooks,
                 Some(export),
                 None,
             )
-        } else if let Some(ordinal) = self.config.entry_ordinal {
-            self.modules.resolve_export(
+        } else if let Some(ordinal) = self.core.config.entry_ordinal {
+            self.core.modules.resolve_export(
                 entry_module.base,
-                &self.config,
-                &mut self.hooks,
+                &self.core.config,
+                &mut self.core.hooks,
                 None,
                 Some(ordinal),
             )
@@ -28,12 +29,12 @@ impl VirtualExecutionEngine {
             return Ok(address);
         }
 
-        let detail = if let Some(export) = self.config.entry_export.as_deref() {
+        let detail = if let Some(export) = self.core.config.entry_export.as_deref() {
             format!(
                 "failed to resolve export `{export}` from {}",
                 entry_module.name
             )
-        } else if let Some(ordinal) = self.config.entry_ordinal {
+        } else if let Some(ordinal) = self.core.config.entry_ordinal {
             format!(
                 "failed to resolve ordinal #{ordinal} from {}",
                 entry_module.name
@@ -51,14 +52,14 @@ impl VirtualExecutionEngine {
         &mut self,
         entry_module: &ModuleRecord,
     ) -> Result<Vec<u64>, VmError> {
-        if self.config.entry_args.is_empty()
-            && self.entry_invocation == EntryInvocation::NativeEntrypoint
+        if self.core.config.entry_args.is_empty()
+            && self.core.entry_invocation == EntryInvocation::NativeEntrypoint
             && Self::module_looks_like_dll(entry_module)
         {
             return Ok(vec![entry_module.base, DLL_PROCESS_ATTACH, 0]);
         }
 
-        let arguments = self.config.entry_args.clone();
+        let arguments = self.core.config.entry_args.clone();
         arguments
             .iter()
             .enumerate()
@@ -97,14 +98,16 @@ impl VirtualExecutionEngine {
         contents: &[u8],
     ) -> Result<u64, VmError> {
         let size = contents.len().max(1) as u64;
-        let address =
-            self.modules
-                .memory_mut()
-                .reserve(size, None, &format!("entry_arg:{index}"), true)?;
+        let address = self.core.modules.memory_mut().reserve(
+            size,
+            None,
+            &format!("entry_arg:{index}"),
+            true,
+        )?;
         if contents.is_empty() {
-            self.modules.memory_mut().write(address, &[0])?;
+            self.core.modules.memory_mut().write(address, &[0])?;
         } else {
-            self.modules.memory_mut().write(address, contents)?;
+            self.core.modules.memory_mut().write(address, contents)?;
         }
         Ok(address)
     }
@@ -124,7 +127,7 @@ impl VirtualExecutionEngine {
         module: &ModuleRecord,
         operation: &'static str,
     ) -> Result<(), VmError> {
-        if module.synthetic || module.arch.eq_ignore_ascii_case(self.arch.name) {
+        if module.synthetic || module.arch.eq_ignore_ascii_case(self.core.arch.name) {
             return Ok(());
         }
         Err(VmError::UnsupportedExecutionArchitecture {
@@ -137,12 +140,12 @@ impl VirtualExecutionEngine {
         })
     }
 
-    pub(super) fn reserve_python_process_env_footprint(&mut self) -> Result<(), VmError> {
-        // Python's WindowsProcessEnvironment.build() advances the allocator before module initializers run.
+    pub(super) fn reserve_process_env_footprint(&mut self) -> Result<(), VmError> {
+        // Reserve process environment memory before module initializers run.
         for (size, tag) in [
             (0x2000, "teb"),
             (0x3000, "peb"),
-            (0x4000, "ldr"),
+            (ldr_region_size_for_arch(self.core.arch), "ldr"),
             (0x2000, "params"),
             (0x1000, "tls_bitmap"),
             (0x1000, "tls_bitmap_bits"),
@@ -156,7 +159,10 @@ impl VirtualExecutionEngine {
             (0x2000, "params_environment_a"),
             (0x1000, "gdt"),
         ] {
-            self.modules.memory_mut().reserve(size, None, tag, true)?;
+            self.core
+                .modules
+                .memory_mut()
+                .reserve(size, None, tag, true)?;
         }
         Ok(())
     }

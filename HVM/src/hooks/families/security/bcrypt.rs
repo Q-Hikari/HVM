@@ -1,123 +1,27 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "bcrypt.dll",
-        "BCryptOpenAlgorithmProvider",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptCloseAlgorithmProvider",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptGetProperty",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptSetProperty",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptCreateHash",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptHashData",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptFinishHash",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptDestroyHash",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptDuplicateHash",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptGenRandom",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptGenerateSymmetricKey",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptImportKey",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptImportKeyPair",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptExportKey",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptEncrypt",
-        10,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptDecrypt",
-        10,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "bcrypt.dll",
-        "BCryptDestroyKey",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("BCryptOpenAlgorithmProvider", LogicalAbi::WinApi),
+    ("BCryptCloseAlgorithmProvider", LogicalAbi::WinApi),
+    ("BCryptGetProperty", LogicalAbi::WinApi),
+    ("BCryptSetProperty", LogicalAbi::WinApi),
+    ("BCryptCreateHash", LogicalAbi::WinApi),
+    ("BCryptHashData", LogicalAbi::WinApi),
+    ("BCryptFinishHash", LogicalAbi::WinApi),
+    ("BCryptDestroyHash", LogicalAbi::WinApi),
+    ("BCryptDuplicateHash", LogicalAbi::WinApi),
+    ("BCryptGenRandom", LogicalAbi::WinApi),
+    ("BCryptGenerateSymmetricKey", LogicalAbi::WinApi),
+    ("BCryptImportKey", LogicalAbi::WinApi),
+    ("BCryptImportKeyPair", LogicalAbi::WinApi),
+    ("BCryptExportKey", LogicalAbi::WinApi),
+    ("BCryptEncrypt", LogicalAbi::WinApi),
+    ("BCryptDecrypt", LogicalAbi::WinApi),
+    ("BCryptDestroyKey", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct BcryptHookLibrary;
-
-impl HookLibrary for BcryptHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_bcrypt_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&BcryptHookLibrary);
+    registry.register_function_stubs("bcrypt.dll", &FUNCTIONS);
 }

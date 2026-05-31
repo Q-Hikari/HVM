@@ -1,177 +1,37 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "combase.dll",
-        "CoInitializeEx",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoUninitialize",
-        0,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoCreateGuid",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "StringFromGUID2",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "IIDFromString",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CLSIDFromString",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "StringFromIID",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "StringFromCLSID",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoTaskMemAlloc",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoTaskMemFree",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoTaskMemRealloc",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoIncrementMTAUsage",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoDecrementMTAUsage",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "WindowsCreateString",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "WindowsDeleteString",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "WindowsDuplicateString",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "WindowsGetStringLen",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "WindowsGetStringRawBuffer",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "WindowsIsStringEmpty",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "RoInitialize",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "RoUninitialize",
-        0,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "RoGetActivationFactory",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoCreateInstance",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoGetClassObject",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "PropVariantClear",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "combase.dll",
-        "CoGetMalloc",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("CoInitializeEx", LogicalAbi::WinApi),
+    ("CoUninitialize", LogicalAbi::WinApi),
+    ("CoCreateGuid", LogicalAbi::WinApi),
+    ("StringFromGUID2", LogicalAbi::WinApi),
+    ("IIDFromString", LogicalAbi::WinApi),
+    ("CLSIDFromString", LogicalAbi::WinApi),
+    ("StringFromIID", LogicalAbi::WinApi),
+    ("StringFromCLSID", LogicalAbi::WinApi),
+    ("CoTaskMemAlloc", LogicalAbi::WinApi),
+    ("CoTaskMemFree", LogicalAbi::WinApi),
+    ("CoTaskMemRealloc", LogicalAbi::WinApi),
+    ("CoIncrementMTAUsage", LogicalAbi::WinApi),
+    ("CoDecrementMTAUsage", LogicalAbi::WinApi),
+    ("WindowsCreateString", LogicalAbi::WinApi),
+    ("WindowsDeleteString", LogicalAbi::WinApi),
+    ("WindowsDuplicateString", LogicalAbi::WinApi),
+    ("WindowsGetStringLen", LogicalAbi::WinApi),
+    ("WindowsGetStringRawBuffer", LogicalAbi::WinApi),
+    ("WindowsIsStringEmpty", LogicalAbi::WinApi),
+    ("RoInitialize", LogicalAbi::WinApi),
+    ("RoUninitialize", LogicalAbi::WinApi),
+    ("RoGetActivationFactory", LogicalAbi::WinApi),
+    ("CoCreateInstance", LogicalAbi::WinApi),
+    ("CoGetClassObject", LogicalAbi::WinApi),
+    ("PropVariantClear", LogicalAbi::WinApi),
+    ("CoGetMalloc", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct CombaseHookLibrary;
-
-impl HookLibrary for CombaseHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_combase_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&CombaseHookLibrary);
+    registry.register_function_stubs("combase.dll", &FUNCTIONS);
+    registry.register_signatures(super::combase_signatures::COMBASE_SIGNATURES);
 }

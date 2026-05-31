@@ -1,6 +1,6 @@
 [package]
 name = "hvm-hikari-virtual-engine"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 default-run = "hvm-hikari-virtual-engine"
 description = "HVM-Hikari Virtual Engine: a Rust virtual execution engine for Windows PE inspection and behavior simulation"
@@ -9,13 +9,18 @@ description = "HVM-Hikari Virtual Engine: a Rust virtual execution engine for Wi
 name = "hvm"
 
 [dependencies]
+aes = "0.8"
 clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
 encoding = "0.2"
 encoding-index-simpchinese = "1.20141219.5"
+flate2 = "1"
 goblin = "0.10.5"
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
+smallvec = "1"
 thiserror = "2"
 
 [dev-dependencies]

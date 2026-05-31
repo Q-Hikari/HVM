@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("wininet.dll", "InternetOpenA") => true,
@@ -38,52 +38,59 @@ impl VirtualExecutionEngine {
 
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
-                ("wininet.dll", "InternetOpenA") => Ok(self.network.internet_open(
-                    &self.read_c_string_from_memory(arg(args, 0))?,
-                    arg(args, 1) as u32,
-                    &self.read_c_string_from_memory(arg(args, 2))?,
-                    &self.read_c_string_from_memory(arg(args, 3))?,
-                ) as u64),
-                ("wininet.dll", "InternetOpenW") => Ok(self.network.internet_open(
-                    &self.read_wide_string_from_memory(arg(args, 0))?,
-                    arg(args, 1) as u32,
-                    &self.read_wide_string_from_memory(arg(args, 2))?,
-                    &self.read_wide_string_from_memory(arg(args, 3))?,
-                ) as u64),
+                ("wininet.dll", "InternetOpenA") => {
+                    let handle = self.network_state.network.internet_open(
+                        &self.read_c_string_from_memory(ctx.raw(0))?,
+                        ctx.raw(1) as u32,
+                        &self.read_c_string_from_memory(ctx.raw(2))?,
+                        &self.read_c_string_from_memory(ctx.raw(3))?,
+                    );
+                    Ok(handle as u64)
+                }
+                ("wininet.dll", "InternetOpenW") => {
+                    let handle = self.network_state.network.internet_open(
+                        &self.read_wide_string_from_memory(ctx.raw(0))?,
+                        ctx.raw(1) as u32,
+                        &self.read_wide_string_from_memory(ctx.raw(2))?,
+                        &self.read_wide_string_from_memory(ctx.raw(3))?,
+                    );
+                    Ok(handle as u64)
+                }
                 ("wininet.dll", "InternetConnectA") => {
-                    let handle = self.network.internet_connect(
-                        arg(args, 0) as u32,
-                        &self.read_c_string_from_memory(arg(args, 1))?,
-                        arg(args, 2) as u16,
-                        arg(args, 5) as u32,
-                        &self.read_c_string_from_memory(arg(args, 3))?,
-                        &self.read_c_string_from_memory(arg(args, 4))?,
+                    let handle = self.network_state.network.internet_connect(
+                        ctx.raw(0) as u32,
+                        &self.read_c_string_from_memory(ctx.raw(1))?,
+                        ctx.raw(2) as u16,
+                        ctx.raw(5) as u32,
+                        &self.read_c_string_from_memory(ctx.raw(3))?,
+                        &self.read_c_string_from_memory(ctx.raw(4))?,
                     );
                     self.log_http_connect_event("InternetConnectA", handle)?;
                     Ok(handle as u64)
                 }
                 ("wininet.dll", "InternetConnectW") => {
-                    let handle = self.network.internet_connect(
-                        arg(args, 0) as u32,
-                        &self.read_wide_string_from_memory(arg(args, 1))?,
-                        arg(args, 2) as u16,
-                        arg(args, 5) as u32,
-                        &self.read_wide_string_from_memory(arg(args, 3))?,
-                        &self.read_wide_string_from_memory(arg(args, 4))?,
+                    let handle = self.network_state.network.internet_connect(
+                        ctx.raw(0) as u32,
+                        &self.read_wide_string_from_memory(ctx.raw(1))?,
+                        ctx.raw(2) as u16,
+                        ctx.raw(5) as u32,
+                        &self.read_wide_string_from_memory(ctx.raw(3))?,
+                        &self.read_wide_string_from_memory(ctx.raw(4))?,
                     );
                     self.log_http_connect_event("InternetConnectW", handle)?;
                     Ok(handle as u64)
                 }
                 ("wininet.dll", "InternetOpenUrlA") => {
-                    let handle = self.network.open_request(
-                        arg(args, 0) as u32,
+                    let handle = self.network_state.network.open_request(
+                        ctx.raw(0) as u32,
                         "GET",
-                        &self.read_c_string_from_memory(arg(args, 1))?,
+                        &self.read_c_string_from_memory(ctx.raw(1))?,
                         "HTTP/1.1",
                         "",
-                        &self.read_c_string_from_memory(arg(args, 2))?,
+                        &self.read_c_string_from_memory(ctx.raw(2))?,
                     );
                     let _ = self
+                        .network_state
                         .network
                         .with_request_mut(handle, |request| request.sent = true);
                     self.apply_configured_http_response(handle)?;
@@ -91,15 +98,16 @@ impl VirtualExecutionEngine {
                     Ok(handle as u64)
                 }
                 ("wininet.dll", "InternetOpenUrlW") => {
-                    let handle = self.network.open_request(
-                        arg(args, 0) as u32,
+                    let handle = self.network_state.network.open_request(
+                        ctx.raw(0) as u32,
                         "GET",
-                        &self.read_wide_string_from_memory(arg(args, 1))?,
+                        &self.read_wide_string_from_memory(ctx.raw(1))?,
                         "HTTP/1.1",
                         "",
-                        &self.read_wide_string_from_memory(arg(args, 2))?,
+                        &self.read_wide_string_from_memory(ctx.raw(2))?,
                     );
                     let _ = self
+                        .network_state
                         .network
                         .with_request_mut(handle, |request| request.sent = true);
                     self.apply_configured_http_response(handle)?;
@@ -107,45 +115,45 @@ impl VirtualExecutionEngine {
                     Ok(handle as u64)
                 }
                 ("wininet.dll", "HttpOpenRequestA") => {
-                    let handle = self.network.open_request(
-                        arg(args, 0) as u32,
-                        non_empty(&self.read_c_string_from_memory(arg(args, 1))?).unwrap_or("GET"),
-                        &self.read_c_string_from_memory(arg(args, 2))?,
-                        non_empty(&self.read_c_string_from_memory(arg(args, 3))?)
+                    let handle = self.network_state.network.open_request(
+                        ctx.raw(0) as u32,
+                        non_empty(&self.read_c_string_from_memory(ctx.raw(1))?).unwrap_or("GET"),
+                        &self.read_c_string_from_memory(ctx.raw(2))?,
+                        non_empty(&self.read_c_string_from_memory(ctx.raw(3))?)
                             .unwrap_or("HTTP/1.1"),
-                        &self.read_c_string_from_memory(arg(args, 4))?,
+                        &self.read_c_string_from_memory(ctx.raw(4))?,
                         "",
                     );
                     self.apply_configured_http_response(handle)?;
                     Ok(handle as u64)
                 }
                 ("wininet.dll", "HttpOpenRequestW") => {
-                    let handle = self.network.open_request(
-                        arg(args, 0) as u32,
-                        non_empty(&self.read_wide_string_from_memory(arg(args, 1))?)
-                            .unwrap_or("GET"),
-                        &self.read_wide_string_from_memory(arg(args, 2))?,
-                        non_empty(&self.read_wide_string_from_memory(arg(args, 3))?)
+                    let handle = self.network_state.network.open_request(
+                        ctx.raw(0) as u32,
+                        non_empty(&self.read_wide_string_from_memory(ctx.raw(1))?).unwrap_or("GET"),
+                        &self.read_wide_string_from_memory(ctx.raw(2))?,
+                        non_empty(&self.read_wide_string_from_memory(ctx.raw(3))?)
                             .unwrap_or("HTTP/1.1"),
-                        &self.read_wide_string_from_memory(arg(args, 4))?,
+                        &self.read_wide_string_from_memory(ctx.raw(4))?,
                         "",
                     );
                     self.apply_configured_http_response(handle)?;
                     Ok(handle as u64)
                 }
                 ("wininet.dll", "HttpSendRequestA") => {
-                    let handle = arg(args, 0) as u32;
-                    let headers = if arg(args, 1) != 0 {
-                        self.read_c_string_from_memory(arg(args, 1))?
+                    let handle = ctx.raw(0) as u32;
+                    let headers = if ctx.raw(1) != 0 {
+                        self.read_c_string_from_memory(ctx.raw(1))?
                     } else {
                         String::new()
                     };
-                    let optional = if arg(args, 3) == 0 || arg(args, 4) == 0 {
+                    let optional = if ctx.raw(3) == 0 || ctx.raw(4) == 0 {
                         Vec::new()
                     } else {
-                        self.read_bytes_from_memory(arg(args, 3), arg(args, 4) as usize)?
+                        self.read_bytes_from_memory(ctx.raw(3), ctx.raw(4) as usize)?
                     };
                     let sent = self
+                        .network_state
                         .network
                         .with_request_mut(handle, |request| {
                             if !headers.is_empty() {
@@ -164,18 +172,19 @@ impl VirtualExecutionEngine {
                     Ok(sent)
                 }
                 ("wininet.dll", "HttpSendRequestW") => {
-                    let handle = arg(args, 0) as u32;
-                    let headers = if arg(args, 1) != 0 {
-                        self.read_wide_string_from_memory(arg(args, 1))?
+                    let handle = ctx.raw(0) as u32;
+                    let headers = if ctx.raw(1) != 0 {
+                        self.read_wide_string_from_memory(ctx.raw(1))?
                     } else {
                         String::new()
                     };
-                    let optional = if arg(args, 3) == 0 || arg(args, 4) == 0 {
+                    let optional = if ctx.raw(3) == 0 || ctx.raw(4) == 0 {
                         Vec::new()
                     } else {
-                        self.read_bytes_from_memory(arg(args, 3), arg(args, 4) as usize)?
+                        self.read_bytes_from_memory(ctx.raw(3), ctx.raw(4) as usize)?
                     };
                     let sent = self
+                        .network_state
                         .network
                         .with_request_mut(handle, |request| {
                             if !headers.is_empty() {
@@ -194,56 +203,62 @@ impl VirtualExecutionEngine {
                     Ok(sent)
                 }
                 ("wininet.dll", "InternetCanonicalizeUrlA") => {
-                    self.internet_canonicalize_url(false, arg(args, 0), arg(args, 1), arg(args, 2))
+                    self.internet_canonicalize_url(false, ctx.raw(0), ctx.raw(1), ctx.raw(2))
                 }
                 ("wininet.dll", "InternetCanonicalizeUrlW") => {
-                    self.internet_canonicalize_url(true, arg(args, 0), arg(args, 1), arg(args, 2))
+                    self.internet_canonicalize_url(true, ctx.raw(0), ctx.raw(1), ctx.raw(2))
                 }
                 ("wininet.dll", "InternetReadFile") => {
                     let data = self
+                        .network_state
                         .network
-                        .request_read(arg(args, 0) as u32, arg(args, 2) as usize);
-                    if arg(args, 1) != 0 && !data.is_empty() {
-                        self.modules.memory_mut().write(arg(args, 1), &data)?;
+                        .request_read(ctx.raw(0) as u32, ctx.raw(2) as usize);
+                    if ctx.raw(1) != 0 && !data.is_empty() {
+                        self.core.modules.memory_mut().write(ctx.raw(1), &data)?;
                     }
-                    if arg(args, 3) != 0 {
-                        self.write_u32(arg(args, 3), data.len() as u32)?;
+                    if ctx.raw(3) != 0 {
+                        self.write_u32(ctx.raw(3), data.len() as u32)?;
                     }
                     Ok(1)
                 }
-                ("wininet.dll", "InternetCloseHandle") => {
-                    Ok(self.network.close_internet_handle(arg(args, 0) as u32) as u64)
-                }
+                ("wininet.dll", "InternetCloseHandle") => Ok(self
+                    .network_state
+                    .network
+                    .close_internet_handle(ctx.raw(0) as u32)
+                    as u64),
                 ("wininet.dll", "InternetSetOptionA") | ("wininet.dll", "InternetSetOptionW") => {
                     Ok(1)
                 }
                 ("wininet.dll", "InternetQueryOptionA")
                 | ("wininet.dll", "InternetQueryOptionW") => {
-                    if arg(args, 3) != 0 {
-                        self.write_u32(arg(args, 3), 4)?;
+                    if ctx.raw(3) != 0 {
+                        self.write_u32(ctx.raw(3), 4)?;
                     }
-                    if arg(args, 2) != 0 {
-                        self.write_u32(arg(args, 2), 0)?;
+                    if ctx.raw(2) != 0 {
+                        self.write_u32(ctx.raw(2), 0)?;
                     }
                     Ok(1)
                 }
                 ("wininet.dll", "InternetCrackUrlA") => {
-                    self.internet_crack_url(false, arg(args, 0), arg(args, 1), arg(args, 3))
+                    self.internet_crack_url(false, ctx.raw(0), ctx.raw(1), ctx.raw(3))
                 }
                 ("wininet.dll", "InternetCrackUrlW") => {
-                    self.internet_crack_url(true, arg(args, 0), arg(args, 1), arg(args, 3))
+                    self.internet_crack_url(true, ctx.raw(0), ctx.raw(1), ctx.raw(3))
                 }
                 ("wininet.dll", "InternetGetConnectedState") => {
-                    if arg(args, 0) != 0 {
-                        self.write_u32(arg(args, 0), 1)?;
+                    if ctx.raw(0) != 0 {
+                        self.write_u32(ctx.raw(0), 1)?;
                     }
                     Ok(1)
                 }
                 ("wininet.dll", "InternetQueryDataAvailable") => {
-                    if arg(args, 1) != 0 {
+                    if ctx.raw(1) != 0 {
                         self.write_u32(
-                            arg(args, 1),
-                            self.network.request_remaining(arg(args, 0) as u32) as u32,
+                            ctx.raw(1),
+                            self.network_state
+                                .network
+                                .request_remaining(ctx.raw(0) as u32)
+                                as u32,
                         )?;
                     }
                     Ok(1)

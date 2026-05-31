@@ -1,111 +1,25 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "winspool.dll",
-        "OpenPrinterA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "OpenPrinterW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "ClosePrinter",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "GetDefaultPrinterA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "GetDefaultPrinterW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "StartDocPrinterA",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "StartDocPrinterW",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "EndDocPrinter",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "AbortPrinter",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "StartPagePrinter",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "EndPagePrinter",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "WritePrinter",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "EnumPrintersA",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "EnumPrintersW",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "winspool.dll",
-        "DocumentPropertiesW",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("OpenPrinterA", LogicalAbi::WinApi),
+    ("OpenPrinterW", LogicalAbi::WinApi),
+    ("ClosePrinter", LogicalAbi::WinApi),
+    ("GetDefaultPrinterA", LogicalAbi::WinApi),
+    ("GetDefaultPrinterW", LogicalAbi::WinApi),
+    ("StartDocPrinterA", LogicalAbi::WinApi),
+    ("StartDocPrinterW", LogicalAbi::WinApi),
+    ("EndDocPrinter", LogicalAbi::WinApi),
+    ("AbortPrinter", LogicalAbi::WinApi),
+    ("StartPagePrinter", LogicalAbi::WinApi),
+    ("EndPagePrinter", LogicalAbi::WinApi),
+    ("WritePrinter", LogicalAbi::WinApi),
+    ("EnumPrintersA", LogicalAbi::WinApi),
+    ("EnumPrintersW", LogicalAbi::WinApi),
+    ("DocumentPropertiesW", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct WinspoolDrvHookLibrary;
-
-impl HookLibrary for WinspoolDrvHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_winspool_drv_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&WinspoolDrvHookLibrary);
+    registry.register_function_stubs("winspool.dll", &FUNCTIONS);
 }

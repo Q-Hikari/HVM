@@ -123,7 +123,7 @@ impl RemoteThreadEntrySource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::runtime::engine) struct RemoteShellcodeThread {
+pub(crate) struct RemoteShellcodeThread {
     pub(in crate::runtime::engine) thread_tid: u32,
     pub(in crate::runtime::engine) thread_handle: u32,
     pub(in crate::runtime::engine) source_process_handle: u64,
@@ -162,6 +162,7 @@ impl VirtualExecutionEngine {
         };
 
         let thread = self
+            .core
             .scheduler
             .create_virtual_thread(start_address, parameter, suspended)
             .ok_or(VmError::RuntimeInvariant(
@@ -187,7 +188,9 @@ impl VirtualExecutionEngine {
             staged_regions: Vec::new(),
         };
         self.log_remote_thread_record_event(&metadata, state)?;
-        self.remote_shellcode_threads.insert(thread.tid, metadata);
+        self.trace
+            .remote_shellcode_threads
+            .insert(thread.tid, metadata);
 
         self.set_last_error(ERROR_SUCCESS as u32);
         self.log_thread_event(
@@ -205,7 +208,7 @@ impl VirtualExecutionEngine {
         &mut self,
         tid: u32,
     ) -> Result<(), VmError> {
-        let Some(metadata) = self.remote_shellcode_threads.get(&tid).cloned() else {
+        let Some(metadata) = self.trace.remote_shellcode_threads.get(&tid).cloned() else {
             return Ok(());
         };
         if metadata.staged_start_address.is_some() {
@@ -214,7 +217,7 @@ impl VirtualExecutionEngine {
 
         match self.stage_remote_shellcode_thread(metadata.clone()) {
             Ok(updated) => {
-                self.remote_shellcode_threads.insert(tid, updated);
+                self.trace.remote_shellcode_threads.insert(tid, updated);
                 Ok(())
             }
             Err(error) => {
@@ -291,7 +294,7 @@ impl VirtualExecutionEngine {
             }
         }
 
-        if let Some(local_module) = self.modules.get_by_address(start_address).cloned() {
+        if let Some(local_module) = self.core.modules.get_by_address(start_address).cloned() {
             return Ok(Some(RemoteThreadEntrySource::ModuleRvaTranslation {
                 source_module_name: local_module.name.clone(),
                 source_module_base: local_module.base,
@@ -303,7 +306,7 @@ impl VirtualExecutionEngine {
             }));
         }
 
-        if let Some((module, function)) = self.hooks.binding_for_address(start_address) {
+        if let Some((module, function)) = self.core.hooks.binding_for_address(start_address) {
             return Ok(Some(RemoteThreadEntrySource::BoundHookTranslation {
                 translated_module_name: module.to_string(),
                 translated_function_name: function.to_string(),
@@ -319,7 +322,7 @@ impl VirtualExecutionEngine {
         &mut self,
         remote_module: &ModuleRecord,
     ) -> Result<Option<ModuleRecord>, VmError> {
-        if let Some(local) = self.modules.get_loaded(&remote_module.name).cloned() {
+        if let Some(local) = self.core.modules.get_loaded(&remote_module.name).cloned() {
             return Ok(Some(local));
         }
         let Some(path) = remote_module.path.as_ref() else {
@@ -329,11 +332,14 @@ impl VirtualExecutionEngine {
             return Ok(None);
         }
 
-        let module = self.modules.load_runtime_dependency(
+        let module = self.core.modules.load_runtime_dependency(
             &path.to_string_lossy(),
-            &self.config,
-            &mut self.hooks,
+            &self.core.config,
+            &mut self.core.hooks,
         )?;
+        let module = self
+            .refresh_module_visible_base(module.base)
+            .unwrap_or(module);
         self.register_module_image_allocation(self.current_process_space_key(), &module)?;
         self.sync_process_environment_modules()?;
         Ok(Some(module))
@@ -439,15 +445,17 @@ impl VirtualExecutionEngine {
         metadata: &RemoteShellcodeThread,
     ) -> Result<RemoteShellcodeStagedRegion, VmError> {
         let preferred = record.allocation_base;
-        let exact_base = self
-            .modules
-            .memory()
-            .is_free(preferred, record.allocation_size, false);
+        let exact_base =
+            self.core
+                .modules
+                .memory()
+                .is_free(preferred, record.allocation_size, false);
         let tag = format!(
             "remote_thread:pk-0x{:X}:0x{:X}",
             metadata.source_process_key, record.allocation_base
         );
         let staged_base = self
+            .core
             .modules
             .memory_mut()
             .reserve(record.allocation_size, Some(preferred), &tag, true)
@@ -470,7 +478,8 @@ impl VirtualExecutionEngine {
             let bytes = bytes.map_err(VmError::from)?;
             let staged_segment_base =
                 staged_base.saturating_add(segment.base.saturating_sub(record.allocation_base));
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .write(staged_segment_base, &bytes)
                 .map_err(VmError::from)?;
@@ -487,7 +496,8 @@ impl VirtualExecutionEngine {
             } else {
                 0
             };
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .protect(staged_segment_base, segment.size, perms)
                 .map_err(VmError::from)?;
@@ -527,37 +537,41 @@ impl VirtualExecutionEngine {
         start_address: u64,
         parameter: u64,
     ) -> Result<(), VmError> {
-        self.scheduler
+        self.core
+            .scheduler
             .set_thread_start_address(tid, start_address)
             .ok_or(VmError::RuntimeInvariant(
                 "failed to retarget remote thread start address",
             ))?;
-        self.scheduler
+        self.core
+            .scheduler
             .set_thread_parameter(tid, parameter)
             .ok_or(VmError::RuntimeInvariant(
                 "failed to retarget remote thread parameter",
             ))?;
         let mut registers = self
+            .core
             .scheduler
             .thread_snapshot(tid)
             .ok_or(VmError::RuntimeInvariant(
                 "missing thread snapshot while staging remote thread",
             ))?
             .registers;
-        if self.arch.is_x86() {
-            registers.insert("eip".to_string(), start_address);
-            let esp = registers
-                .get("esp")
-                .copied()
-                .ok_or(VmError::RuntimeInvariant(
+        if self.core.arch.is_x86() {
+            registers.eip = start_address;
+            let esp = registers.esp;
+            if esp == 0 {
+                return Err(VmError::RuntimeInvariant(
                     "missing ESP while staging x86 remote thread",
-                ))?;
+                ));
+            }
             self.write_u32(esp.saturating_add(4), parameter as u32)?;
         } else {
-            registers.insert("rip".to_string(), start_address);
-            registers.insert("rcx".to_string(), parameter);
+            registers.rip = start_address;
+            registers.rcx = parameter;
         }
-        self.scheduler
+        self.core
+            .scheduler
             .set_thread_registers(tid, registers)
             .ok_or(VmError::RuntimeInvariant(
                 "failed to update staged remote thread registers",

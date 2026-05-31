@@ -151,3 +151,89 @@ fn co_create_instance_returns_class_not_registered_and_clears_output_pointer() {
     };
     assert_eq!(cleared, 0);
 }
+
+#[test]
+fn ole_initialize_reuses_com_initialize_success_path() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let stub = engine.bind_hook_for_test("ole32.dll", "OleInitialize");
+    assert_eq!(engine.dispatch_bound_stub(stub, &[0]).unwrap(), 0);
+}
+
+#[test]
+fn co_register_message_filter_returns_previous_filter_pointer() {
+    let mut engine = VirtualExecutionEngine::new(sample_config()).unwrap();
+    engine.load().unwrap();
+
+    let stub = engine.bind_hook_for_test("ole32.dll", "CoRegisterMessageFilter");
+    let previous_ptr = engine.allocate_executable_test_page(0x7205_0000).unwrap();
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(stub, &[0x1111_2222, previous_ptr])
+            .unwrap(),
+        0
+    );
+    let first_previous = if engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        u64::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(previous_ptr, 8)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        )
+    } else {
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(previous_ptr, 4)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ) as u64
+    };
+    assert_eq!(first_previous, 0);
+
+    assert_eq!(
+        engine
+            .dispatch_bound_stub(stub, &[0x3333_4444, previous_ptr])
+            .unwrap(),
+        0
+    );
+    let second_previous = if engine
+        .entry_module()
+        .or_else(|| engine.main_module())
+        .map(|module| module.arch.eq_ignore_ascii_case("x64"))
+        .unwrap_or(false)
+    {
+        u64::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(previous_ptr, 8)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        )
+    } else {
+        u32::from_le_bytes(
+            engine
+                .modules()
+                .memory()
+                .read(previous_ptr, 4)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ) as u64
+    };
+    assert_eq!(second_previous, 0x1111_2222);
+}

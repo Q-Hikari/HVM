@@ -85,7 +85,7 @@ struct UnicastAddressLayout {
 
 impl VirtualExecutionEngine {
     fn effective_network_host_name(&self) -> String {
-        let configured = self.environment_profile.network.host_name.trim();
+        let configured = self.core.environment_profile.network.host_name.trim();
         if configured.is_empty() {
             self.active_computer_name().to_string()
         } else {
@@ -94,11 +94,11 @@ impl VirtualExecutionEngine {
     }
 
     fn effective_network_domain_name(&self) -> String {
-        let configured = self.environment_profile.network.domain_name.trim();
+        let configured = self.core.environment_profile.network.domain_name.trim();
         if !configured.is_empty() {
             return configured.to_string();
         }
-        let suffix = self.environment_profile.network.dns_suffix.trim();
+        let suffix = self.core.environment_profile.network.dns_suffix.trim();
         if !suffix.is_empty() {
             return suffix.to_string();
         }
@@ -109,13 +109,14 @@ impl VirtualExecutionEngine {
         if !adapter.dns_suffix.trim().is_empty() {
             adapter.dns_suffix.clone()
         } else if !self
+            .core
             .environment_profile
             .network
             .dns_suffix
             .trim()
             .is_empty()
         {
-            self.environment_profile.network.dns_suffix.clone()
+            self.core.environment_profile.network.dns_suffix.clone()
         } else {
             self.effective_network_domain_name()
         }
@@ -130,22 +131,22 @@ impl VirtualExecutionEngine {
                 return adapter.dns_servers.clone();
             }
         }
-        if !self.environment_profile.network.dns_servers.is_empty() {
-            return self.environment_profile.network.dns_servers.clone();
+        if !self.core.environment_profile.network.dns_servers.is_empty() {
+            return self.core.environment_profile.network.dns_servers.clone();
         }
         vec!["192.168.56.1".to_string()]
     }
 
     fn effective_network_adapters(&self) -> Vec<NetworkAdapterProfile> {
-        if self.environment_profile.network.adapters.is_empty() {
+        if self.core.environment_profile.network.adapters.is_empty() {
             vec![NetworkAdapterProfile::default()]
         } else {
-            self.environment_profile.network.adapters.clone()
+            self.core.environment_profile.network.adapters.clone()
         }
     }
 
     fn ip_addr_string_layout(&self) -> IpAddrStringLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             IpAddrStringLayout {
                 size: 40,
                 next_offset: 0,
@@ -166,7 +167,7 @@ impl VirtualExecutionEngine {
 
     fn ip_adapter_info_layout(&self) -> AdapterInfoLayout {
         let ip_addr_layout = self.ip_addr_string_layout();
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             AdapterInfoLayout {
                 size: 640,
                 next_offset: 0,
@@ -217,7 +218,7 @@ impl VirtualExecutionEngine {
 
     fn fixed_info_layout(&self) -> FixedInfoLayout {
         let ip_addr_layout = self.ip_addr_string_layout();
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             FixedInfoLayout {
                 size: 584,
                 host_name_offset: 0,
@@ -249,7 +250,7 @@ impl VirtualExecutionEngine {
     }
 
     fn ip_adapter_addresses_layout(&self) -> AdapterAddressesLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             AdapterAddressesLayout {
                 size: 144,
                 next_offset: 8,
@@ -287,7 +288,7 @@ impl VirtualExecutionEngine {
     }
 
     fn unicast_address_layout(&self) -> UnicastAddressLayout {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             UnicastAddressLayout {
                 size: 48,
                 next_offset: 8,
@@ -373,26 +374,26 @@ impl VirtualExecutionEngine {
         self.fill_memory_pattern(buffer, required, 0)?;
         let host_name = self.effective_network_host_name();
         let domain_name = self.effective_network_domain_name();
-        let scope_id = self.environment_profile.network.scope_id.clone();
+        let scope_id = self.core.environment_profile.network.scope_id.clone();
         self.write_c_string_to_memory(buffer + layout.host_name_offset, 132, &host_name)?;
         self.write_c_string_to_memory(buffer + layout.domain_name_offset, 132, &domain_name)?;
         self.write_pointer_value(buffer + layout.current_dns_offset, 0)?;
         self.write_u32(
             buffer + layout.node_type_offset,
-            self.environment_profile.network.node_type,
+            self.core.environment_profile.network.node_type,
         )?;
         self.write_c_string_to_memory(buffer + layout.scope_id_offset, 260, &scope_id)?;
         self.write_u32(
             buffer + layout.enable_routing_offset,
-            self.environment_profile.network.enable_routing as u32,
+            self.core.environment_profile.network.enable_routing as u32,
         )?;
         self.write_u32(
             buffer + layout.enable_proxy_offset,
-            self.environment_profile.network.enable_proxy as u32,
+            self.core.environment_profile.network.enable_proxy as u32,
         )?;
         self.write_u32(
             buffer + layout.enable_dns_offset,
-            self.environment_profile.network.enable_dns as u32,
+            self.core.environment_profile.network.enable_dns as u32,
         )?;
 
         let mut extra_cursor = buffer + layout.size;
@@ -550,11 +551,11 @@ impl VirtualExecutionEngine {
             .sum::<usize>() as u64;
 
         let mut required = adapters.len() as u64 * layout.size;
-        required = align_up(required, self.arch.pointer_size as u64);
+        required = align_up(required, self.core.arch.pointer_size as u64);
         required += unicast_count * unicast_layout.size;
         required = align_up(required, 4);
         required += unicast_count * 16;
-        required = align_up(required, self.arch.pointer_size as u64);
+        required = align_up(required, self.core.arch.pointer_size as u64);
         for adapter in &adapters {
             let dns_suffix = self.effective_network_dns_suffix(adapter);
             required += (adapter.name.len() + 1) as u64;
@@ -564,7 +565,7 @@ impl VirtualExecutionEngine {
             required += wide_storage_size(&adapter.description);
             required = align_up(required, 2);
             required += wide_storage_size(&adapter.friendly_name);
-            required = align_up(required, self.arch.pointer_size as u64);
+            required = align_up(required, self.core.arch.pointer_size as u64);
         }
 
         let available = self.read_u32(size_ptr).unwrap_or(0) as u64;
@@ -575,12 +576,12 @@ impl VirtualExecutionEngine {
 
         self.fill_memory_pattern(buffer, required, 0)?;
         let base_end = buffer + adapters.len() as u64 * layout.size;
-        let mut unicast_cursor = align_up(base_end, self.arch.pointer_size as u64);
+        let mut unicast_cursor = align_up(base_end, self.core.arch.pointer_size as u64);
         let sockaddr_start = align_up(unicast_cursor + unicast_count * unicast_layout.size, 4);
         let mut sockaddr_cursor = sockaddr_start;
         let mut string_cursor = align_up(
             sockaddr_start + unicast_count * 16,
-            self.arch.pointer_size as u64,
+            self.core.arch.pointer_size as u64,
         );
 
         for (index, adapter) in adapters.iter().enumerate() {
@@ -650,7 +651,7 @@ impl VirtualExecutionEngine {
                 self.write_u32(node + unicast_layout.valid_lifetime_offset, u32::MAX)?;
                 self.write_u32(node + unicast_layout.preferred_lifetime_offset, u32::MAX)?;
                 self.write_u32(node + unicast_layout.lease_lifetime_offset, u32::MAX)?;
-                self.modules.memory_mut().write(
+                self.core.modules.memory_mut().write(
                     node + unicast_layout.on_link_prefix_length_offset,
                     &[ipv4_prefix_length(&address.netmask)],
                 )?;
@@ -695,10 +696,11 @@ impl VirtualExecutionEngine {
     }
 
     fn write_service_time(&mut self, address: u64, value: i64) -> Result<(), VmError> {
-        if self.arch.is_x86() {
+        if self.core.arch.is_x86() {
             self.write_u32(address, value as u32)
         } else {
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .write(address, &value.to_le_bytes())
                 .map_err(VmError::from)
@@ -740,7 +742,7 @@ fn write_inline_wide_string(
     let capacity = value.encode_utf16().count() + 1;
     engine.write_wide_string_to_memory(address, capacity, value)?;
     *cursor += (capacity * 2) as u64;
-    *cursor = align_up(*cursor, engine.arch.pointer_size as u64);
+    *cursor = align_up(*cursor, engine.core.arch.pointer_size as u64);
     Ok(address)
 }
 

@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        _args: &[u64],
+        _ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("winmm.dll", "timeGetTime") => true,
@@ -19,7 +19,7 @@ impl VirtualExecutionEngine {
 
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
-                ("winmm.dll", "timeGetTime") => Ok(self.time.current().tick_ms),
+                ("winmm.dll", "timeGetTime") => Ok(self.dispatch.time.current().tick_ms),
                 ("winmm.dll", "timeBeginPeriod") | ("winmm.dll", "timeEndPeriod") => Ok(0),
                 ("winmm.dll", "timeSetEvent") => Ok(1),
                 _ => unreachable!("prechecked extracted dispatch should always match"),

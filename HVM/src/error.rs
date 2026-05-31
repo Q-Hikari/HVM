@@ -98,6 +98,8 @@ pub enum VmError {
     },
     #[error("native execution failed during {op}: {detail}")]
     NativeExecution { op: &'static str, detail: String },
+    #[error("hook aborted after guest fault handling")]
+    HookAbortedForGuestException,
 }
 
 /// Captures memory-manager failures, including live Unicorn backend errors.
@@ -107,8 +109,15 @@ pub enum MemoryError {
     OverlappingRegion { base: u64, size: u64 },
     #[error("no mapped region contains address 0x{address:X} size 0x{size:X}")]
     MissingRegion { address: u64, size: u64 },
-    #[error("unable to reserve 0x{size:X} bytes")]
-    OutOfMemory { size: u64 },
+    #[error(
+        "unable to reserve 0x{size:X} bytes (tag={tag:?}, preferred={preferred:?}, avoid_history={avoid_history:?})"
+    )]
+    OutOfMemory {
+        size: u64,
+        tag: Option<String>,
+        preferred: Option<u64>,
+        avoid_history: Option<bool>,
+    },
     #[error("native memory backend failed during {op}: {detail}")]
     NativeBackend { op: &'static str, detail: String },
 }

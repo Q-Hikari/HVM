@@ -1,54 +1,53 @@
-use crate::hooks::base::{CallConv, HookDefinition, HookLibrary};
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stdcall_definitions;
+use crate::hooks::types::LogicalAbi;
 use crate::tests_support::LoadedTestEngine;
 
 pub const SHELL_EXECUTE_SUCCESS: u32 = 33;
 pub const SEE_MASK_NOCLOSEPROCESS: u32 = 0x00000040;
 
-const STUB_EXPORTS: &[(&str, usize)] = &[
-    ("DragFinish", 1),
-    ("DragQueryFileW", 4),
-    ("SHAppBarMessage", 2),
-    ("SHBrowseForFolderW", 1),
-    ("SHGetDesktopFolder", 1),
-    ("SHGetFileInfoW", 5),
-    ("SHGetMalloc", 1),
-    ("SHGetPathFromIDListW", 2),
-    ("SHGetSpecialFolderLocation", 3),
+const STUB_EXPORTS: &[(&str, LogicalAbi)] = &[
+    ("DragFinish", LogicalAbi::WinApi),
+    ("DragQueryFileW", LogicalAbi::WinApi),
+    ("SHAppBarMessage", LogicalAbi::WinApi),
+    ("SHBrowseForFolderW", LogicalAbi::WinApi),
+    ("SHGetDesktopFolder", LogicalAbi::WinApi),
+    ("SHGetFileInfoW", LogicalAbi::WinApi),
+    ("SHGetMalloc", LogicalAbi::WinApi),
+    ("SHGetPathFromIDListW", LogicalAbi::WinApi),
+    ("SHGetSpecialFolderLocation", LogicalAbi::WinApi),
+    ("ordinal_165", LogicalAbi::WinApi),
+    ("SHAddToRecentDocs", LogicalAbi::WinApi),
+    ("SHCreateItemFromParsingName", LogicalAbi::WinApi),
+    ("SHCreateItemInKnownFolder", LogicalAbi::WinApi),
+    ("ShellAboutW", LogicalAbi::WinApi),
+    ("SHGetSpecialFolderPathW", LogicalAbi::WinApi),
 ];
 
-/// Collects the `shell32.dll` hook definitions currently backed by Rust code.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Shell32HookLibrary;
-
-impl HookLibrary for Shell32HookLibrary {
-    fn collect(&self) -> Vec<HookDefinition> {
-        let mut definitions = vec![
-            definition("IsUserAnAdmin", 0),
-            definition("ShellExecuteW", 6),
-            definition("ShellExecuteExW", 1),
-            definition("SHBrowseForFolderA", 1),
-            definition("SHGetFolderPathW", 5),
-            definition("SHGetImageList", 3),
-            definition("IMalloc_QueryInterface", 3),
-            definition("IMalloc_AddRef", 1),
-            definition("IMalloc_Release", 1),
-            definition("IMalloc_Alloc", 2),
-            definition("IMalloc_Realloc", 3),
-            definition("IMalloc_Free", 2),
-            definition("IMalloc_GetSize", 2),
-            definition("IMalloc_DidAlloc", 2),
-            definition("IMalloc_HeapMinimize", 1),
-        ];
-        definitions.extend(stdcall_definitions("shell32.dll", STUB_EXPORTS));
-        definitions
-    }
-}
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("IsUserAnAdmin", LogicalAbi::WinApi),
+    ("CommandLineToArgvW", LogicalAbi::WinApi),
+    ("ShellExecuteW", LogicalAbi::WinApi),
+    ("ShellExecuteA", LogicalAbi::WinApi),
+    ("ShellExecuteExW", LogicalAbi::WinApi),
+    ("SHBrowseForFolderA", LogicalAbi::WinApi),
+    ("SHGetFolderPathW", LogicalAbi::WinApi),
+    ("SHGetKnownFolderPath", LogicalAbi::WinApi),
+    ("SHGetImageList", LogicalAbi::WinApi),
+    ("IMalloc_QueryInterface", LogicalAbi::WinApi),
+    ("IMalloc_AddRef", LogicalAbi::WinApi),
+    ("IMalloc_Release", LogicalAbi::WinApi),
+    ("IMalloc_Alloc", LogicalAbi::WinApi),
+    ("IMalloc_Realloc", LogicalAbi::WinApi),
+    ("IMalloc_Free", LogicalAbi::WinApi),
+    ("IMalloc_GetSize", LogicalAbi::WinApi),
+    ("IMalloc_DidAlloc", LogicalAbi::WinApi),
+    ("IMalloc_HeapMinimize", LogicalAbi::WinApi),
+];
 
 /// Registers the currently supported `shell32.dll` hook definitions.
 pub fn register_shell32_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&Shell32HookLibrary);
+    registry.register_function_stubs("shell32.dll", &FUNCTIONS);
+    registry.register_function_stubs("shell32.dll", &STUB_EXPORTS);
 }
 
 /// Exposes test-only `shell32.dll` helpers over the loaded Rust runtime scaffold.
@@ -93,14 +92,5 @@ impl<'a> Shell32Api<'a> {
         } else {
             Some(0)
         }
-    }
-}
-
-fn definition(function: &'static str, argc: usize) -> HookDefinition {
-    HookDefinition {
-        module: "shell32.dll",
-        function,
-        argc,
-        call_conv: CallConv::Stdcall,
     }
 }

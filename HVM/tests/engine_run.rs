@@ -286,7 +286,7 @@ fn load_accepts_x64_sample_config_and_prepares_export_entry() {
     let module = engine.load().unwrap().clone();
     let main_tid = engine.main_thread_tid().unwrap();
     let thread = engine.scheduler().thread_snapshot(main_tid).unwrap();
-    let rsp = *thread.registers.get("rsp").unwrap();
+    let rsp = thread.registers.rsp;
 
     assert_eq!(
         module
@@ -306,12 +306,9 @@ fn load_accepts_x64_sample_config_and_prepares_export_entry() {
             .and_then(|name| name.to_str()),
         Some("9b66f94497b13dd05fc6840894374776")
     );
-    assert_eq!(thread.registers.get("rip"), engine.entry_address().as_ref());
-    assert_eq!(
-        thread.registers.get("rcx"),
-        Some(&engine.entry_arguments()[0])
-    );
-    assert_eq!(thread.registers.get("rflags"), Some(&0x202));
+    assert_eq!(Some(&thread.registers.rip), engine.entry_address().as_ref());
+    assert_eq!(thread.registers.rcx, engine.entry_arguments()[0]);
+    assert_eq!(thread.registers.rflags, 0x202);
     assert!(thread.stack_limit < thread.stack_top);
     assert!(rsp >= thread.stack_limit);
     assert!(rsp < thread.stack_top);
@@ -337,10 +334,10 @@ fn load_initializes_main_thread_x86_context_and_stack_frame() {
     let module = engine.load().unwrap().clone();
     let main_tid = engine.main_thread_tid().unwrap();
     let thread = engine.scheduler().thread_snapshot(main_tid).unwrap();
-    let esp = *thread.registers.get("esp").unwrap();
+    let esp = thread.registers.esp;
 
-    assert_eq!(thread.registers.get("eip"), Some(&module.entrypoint));
-    assert_eq!(thread.registers.get("eflags"), Some(&0x202));
+    assert_eq!(thread.registers.eip, module.entrypoint);
+    assert_eq!(thread.registers.eflags, 0x202);
     assert_eq!(thread.exit_address, engine.main_thread_exit_sentinel());
     assert!(thread.stack_limit < thread.stack_top);
     assert!(esp >= thread.stack_limit);
@@ -635,17 +632,17 @@ fn load_dll_export_entry_uses_host_image_identity_and_prepares_export_args() {
     );
     assert_eq!(thread.start_address, entry_address);
     if dll_sample.arch.eq_ignore_ascii_case("x64") {
-        assert_eq!(thread.registers.get("rip"), Some(&entry_address));
-        assert_eq!(thread.registers.get("rcx"), Some(&4660));
-        let rsp = *thread.registers.get("rsp").unwrap();
+        assert_eq!(thread.registers.rip, entry_address);
+        assert_eq!(thread.registers.rcx, 4660);
+        let rsp = thread.registers.rsp;
         let frame = engine.modules().memory().read(rsp, 8).unwrap();
         assert_eq!(
             u64::from_le_bytes(frame.try_into().unwrap()),
             engine.main_thread_exit_sentinel()
         );
     } else {
-        assert_eq!(thread.registers.get("eip"), Some(&entry_address));
-        let esp = *thread.registers.get("esp").unwrap();
+        assert_eq!(thread.registers.eip, entry_address);
+        let esp = thread.registers.esp;
         let frame = engine.modules().memory().read(esp, 8).unwrap();
         assert_eq!(
             u32::from_le_bytes(frame[0..4].try_into().unwrap()) as u64,
@@ -713,7 +710,7 @@ fn load_native_dll_entry_without_explicit_args_defaults_to_dllmain_signature() {
     assert_eq!(prepared_args, vec![entry_module.base, 1, 0]);
     assert_eq!(thread.parameter, entry_module.base);
     if dll_sample.arch.eq_ignore_ascii_case("x64") {
-        assert_eq!(thread.registers.get("rcx"), Some(&entry_module.base));
+        assert_eq!(thread.registers.rcx, entry_module.base);
     }
 
     fs::remove_file(config_path).unwrap();

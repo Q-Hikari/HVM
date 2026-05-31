@@ -5,326 +5,704 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
-        let handled = match (module_name, function) {
-            ("ntdll.dll", "NtOpenProcess") | ("ntdll.dll", "ZwOpenProcess") => true,
-            ("ntdll.dll", "NtAllocateVirtualMemory") | ("ntdll.dll", "ZwAllocateVirtualMemory") => {
-                true
-            }
-            ("ntdll.dll", "NtFreeVirtualMemory") | ("ntdll.dll", "ZwFreeVirtualMemory") => true,
-            ("ntdll.dll", "NtProtectVirtualMemory") | ("ntdll.dll", "ZwProtectVirtualMemory") => {
-                true
-            }
-            ("ntdll.dll", "NtCreateThreadEx") | ("ntdll.dll", "ZwCreateThreadEx") => true,
-            ("ntdll.dll", "RtlGetVersion") => true,
-            ("ntdll.dll", "RtlCreateUserThread") => true,
-            ("ntdll.dll", "NtQueryInformationProcess")
-            | ("ntdll.dll", "ZwQueryInformationProcess") => true,
-            ("ntdll.dll", "NtQuerySystemInformation")
-            | ("ntdll.dll", "ZwQuerySystemInformation") => true,
-            ("ntdll.dll", "NtQueryVirtualMemory") | ("ntdll.dll", "ZwQueryVirtualMemory") => true,
-            ("ntdll.dll", "NtReadVirtualMemory") | ("ntdll.dll", "ZwReadVirtualMemory") => true,
-            ("ntdll.dll", "ZwSetInformationKey") => true,
-            ("ntdll.dll", "NtQueueApcThread") | ("ntdll.dll", "ZwQueueApcThread") => true,
-            ("ntdll.dll", "NtGetContextThread") | ("ntdll.dll", "ZwGetContextThread") => true,
-            ("ntdll.dll", "NtContinue") | ("ntdll.dll", "ZwContinue") => true,
-            ("ntdll.dll", "NtSetContextThread") | ("ntdll.dll", "ZwSetContextThread") => true,
-            ("ntdll.dll", "RtlAllocateHeap") => true,
-            ("ntdll.dll", "RtlCaptureContext") => true,
-            ("ntdll.dll", "RtlFillMemory") => true,
-            ("ntdll.dll", "RtlFreeHeap") => true,
-            ("ntdll.dll", "NtClose") => true,
-            ("ntdll.dll", "RtlLookupFunctionEntry") => true,
-            ("ntdll.dll", "RtlPcToFileHeader") => true,
-            ("ntdll.dll", "RtlRestoreContext") => true,
-            ("ntdll.dll", "RtlUnwind") => true,
-            ("ntdll.dll", "RtlUnwindEx") => true,
-            ("ntdll.dll", "RtlVirtualUnwind") => true,
-            ("ntdll.dll", "RtlZeroMemory") => true,
-            ("ntdll.dll", "NtCreateSection") | ("ntdll.dll", "ZwCreateSection") => true,
-            ("ntdll.dll", "NtDuplicateObject") => true,
-            ("ntdll.dll", "NtMapViewOfSection") | ("ntdll.dll", "ZwMapViewOfSection") => true,
-            ("ntdll.dll", "NtRemoveProcessDebug") | ("ntdll.dll", "DbgUiSetThreadDebugObject") => {
-                true
-            }
-            ("ntdll.dll", "NtUnmapViewOfSection") | ("ntdll.dll", "ZwUnmapViewOfSection") => true,
-            ("ntdll.dll", "NtWriteVirtualMemory") | ("ntdll.dll", "ZwWriteVirtualMemory") => true,
-            _ => false,
-        };
-        if !handled {
+        if module_name != "ntdll.dll" {
             return None;
         }
 
-        Some((|| -> Result<u64, VmError> {
-            match (module_name, function) {
-                ("ntdll.dll", "NtOpenProcess") | ("ntdll.dll", "ZwOpenProcess") => {
-                    self.nt_open_process(arg(args, 0), arg(args, 3))
-                }
-                ("ntdll.dll", "NtAllocateVirtualMemory")
-                | ("ntdll.dll", "ZwAllocateVirtualMemory") => self.nt_allocate_virtual_memory(
-                    arg(args, 0),
-                    arg(args, 1),
-                    arg(args, 3),
-                    arg(args, 4) as u32,
-                    arg(args, 5) as u32,
-                    "NtAllocateVirtualMemory",
-                ),
-                ("ntdll.dll", "NtFreeVirtualMemory") | ("ntdll.dll", "ZwFreeVirtualMemory") => self
-                    .nt_free_virtual_memory(
-                        arg(args, 0),
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3),
-                        "NtFreeVirtualMemory",
-                    ),
-                ("ntdll.dll", "NtProtectVirtualMemory")
-                | ("ntdll.dll", "ZwProtectVirtualMemory") => self.nt_protect_virtual_memory(
-                    arg(args, 0),
-                    arg(args, 1),
-                    arg(args, 2),
-                    arg(args, 3) as u32,
-                    arg(args, 4),
-                    "NtProtectVirtualMemory",
-                ),
-                ("ntdll.dll", "NtCreateThreadEx") | ("ntdll.dll", "ZwCreateThreadEx") => {
-                    let process_handle = arg(args, 3);
-                    let handle = if self.is_current_process_handle(process_handle) {
-                        self.create_runtime_thread(
-                            arg(args, 4),
-                            arg(args, 5),
-                            if arg(args, 6) & 0x1 != 0 { 0x4 } else { 0 },
-                            0,
-                        )?
-                    } else {
-                        if !self.is_known_process_target(process_handle) {
-                            return Ok(STATUS_INVALID_HANDLE as u64);
-                        }
-                        let Some(handle) = self.create_remote_shellcode_thread(
-                            process_handle,
-                            arg(args, 4),
-                            arg(args, 5),
-                            arg(args, 6) & 0x1 != 0,
-                            0,
-                            "NtCreateThreadEx",
-                        )?
-                        else {
-                            return Ok(STATUS_INVALID_PARAMETER as u64);
-                        };
-                        handle
-                    };
-                    if arg(args, 0) != 0 {
-                        self.write_pointer_value(arg(args, 0), handle)?;
-                    }
-                    Ok(STATUS_SUCCESS as u64)
-                }
-                ("ntdll.dll", "RtlGetVersion") => {
-                    Ok(if self.write_version_info(arg(args, 0), true)? {
-                        STATUS_SUCCESS as u64
-                    } else {
-                        STATUS_INVALID_PARAMETER as u64
-                    })
-                }
-                ("ntdll.dll", "RtlCreateUserThread") => {
-                    let process_handle = arg(args, 0);
-                    let suspended = arg(args, 2) != 0;
-                    let handle = if self.is_current_process_handle(process_handle) {
-                        self.create_runtime_thread(
-                            arg(args, 6),
-                            arg(args, 7),
-                            if suspended { 0x4 } else { 0 },
-                            0,
-                        )?
-                    } else {
-                        if !self.is_known_process_target(process_handle) {
-                            return Ok(STATUS_INVALID_HANDLE as u64);
-                        }
-                        let Some(handle) = self.create_remote_shellcode_thread(
-                            process_handle,
-                            arg(args, 6),
-                            arg(args, 7),
-                            suspended,
-                            0,
-                            "RtlCreateUserThread",
-                        )?
-                        else {
-                            return Ok(STATUS_INVALID_PARAMETER as u64);
-                        };
-                        handle
-                    };
-                    if arg(args, 8) != 0 {
-                        self.write_pointer_value(arg(args, 8), handle)?;
-                    }
-                    if arg(args, 9) != 0 {
-                        let process_id = self
-                            .process_identity_for_handle(process_handle)
-                            .map(|process| process.pid as u64)
-                            .unwrap_or(self.current_process_id() as u64);
-                        let thread_id = self
-                            .scheduler
-                            .thread_tid_for_handle(handle as u32)
-                            .unwrap_or(0) as u64;
-                        self.write_pointer_value(arg(args, 9), process_id)?;
-                        self.write_pointer_value(
-                            arg(args, 9) + self.arch.pointer_size as u64,
-                            thread_id,
-                        )?;
-                    }
-                    Ok(STATUS_SUCCESS as u64)
-                }
-                ("ntdll.dll", "NtQueryInformationProcess")
-                | ("ntdll.dll", "ZwQueryInformationProcess") => self.nt_query_information_process(
-                    arg(args, 0),
-                    arg(args, 1),
-                    arg(args, 2),
-                    arg(args, 3) as usize,
-                    arg(args, 4),
-                ),
-                ("ntdll.dll", "NtQuerySystemInformation")
-                | ("ntdll.dll", "ZwQuerySystemInformation") => self.nt_query_system_information(
-                    arg(args, 0),
-                    arg(args, 1),
-                    arg(args, 2) as usize,
-                    arg(args, 3),
-                ),
-                ("ntdll.dll", "NtQueryVirtualMemory") | ("ntdll.dll", "ZwQueryVirtualMemory") => {
-                    self.nt_query_virtual_memory(
-                        arg(args, 0),
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3),
-                        arg(args, 4) as usize,
-                        arg(args, 5),
-                    )
-                }
-                ("ntdll.dll", "NtReadVirtualMemory") | ("ntdll.dll", "ZwReadVirtualMemory") => self
-                    .nt_read_virtual_memory(
-                        arg(args, 0),
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3) as usize,
-                        arg(args, 4),
-                    ),
-                ("ntdll.dll", "ZwSetInformationKey") => Ok(STATUS_SUCCESS as u64),
-                ("ntdll.dll", "NtQueueApcThread") | ("ntdll.dll", "ZwQueueApcThread") => {
-                    let status = if self
-                        .scheduler
-                        .queue_user_apc(arg(args, 0) as u32, arg(args, 1), arg(args, 2))
-                        .is_some()
-                    {
-                        STATUS_SUCCESS
-                    } else {
-                        STATUS_INVALID_HANDLE
-                    };
-                    Ok(status as u64)
-                }
-                ("ntdll.dll", "NtGetContextThread") | ("ntdll.dll", "ZwGetContextThread") => {
-                    if arg(args, 1) == 0 {
-                        Ok(STATUS_INVALID_PARAMETER as u64)
-                    } else if self.write_thread_context(arg(args, 0) as u32, arg(args, 1))? {
-                        Ok(STATUS_SUCCESS as u64)
-                    } else {
-                        Ok(STATUS_INVALID_HANDLE as u64)
-                    }
-                }
-                ("ntdll.dll", "NtContinue") | ("ntdll.dll", "ZwContinue") => {
-                    if self.queue_current_context_restore(arg(args, 0))? {
-                        Ok(STATUS_SUCCESS as u64)
-                    } else {
-                        Ok(STATUS_INVALID_PARAMETER as u64)
-                    }
-                }
-                ("ntdll.dll", "NtSetContextThread") | ("ntdll.dll", "ZwSetContextThread") => {
-                    if arg(args, 1) == 0 {
-                        Ok(STATUS_INVALID_PARAMETER as u64)
-                    } else if self.read_thread_context(arg(args, 0) as u32, arg(args, 1))? {
-                        Ok(STATUS_SUCCESS as u64)
-                    } else {
-                        Ok(STATUS_INVALID_HANDLE as u64)
-                    }
-                }
-                ("ntdll.dll", "RtlAllocateHeap") => Ok(self
-                    .heaps
-                    .alloc(
-                        self.modules.memory_mut(),
-                        arg(args, 0) as u32,
-                        arg(args, 2).max(1),
-                    )
-                    .unwrap_or(0)),
-                ("ntdll.dll", "RtlCaptureContext") => self.rtl_capture_context(arg(args, 0)),
-                ("ntdll.dll", "RtlFillMemory") => {
-                    self.fill_memory_pattern(arg(args, 0), arg(args, 1), arg(args, 2) as u8)?;
-                    Ok(0)
-                }
-                ("ntdll.dll", "RtlFreeHeap") => {
-                    Ok(self.heaps.free(arg(args, 0) as u32, arg(args, 2)) as u64)
-                }
-                ("ntdll.dll", "NtClose") => Ok(if self.close_object_handle(arg(args, 0) as u32) {
-                    STATUS_SUCCESS as u64
+        // Delegate to sub-dispatchers grouped by functionality.
+        // Each returns Some(result) if it handles the function, None otherwise.
+        self.dispatch_ntdll_syscalls(function, ctx)
+            .or_else(|| self.dispatch_ntdll_rtl(function, ctx))
+            .or_else(|| self.dispatch_ntdll_version(function, ctx))
+            .or_else(|| self.dispatch_ntdll_stubs(function, ctx))
+            .or_else(|| {
+                // New ntdll exports without specific implementations return STATUS_SUCCESS.
+                Some(Ok(STATUS_SUCCESS as u64))
+            })
+    }
+
+    /// Handles ntdll.dll functions forwarded from kernel32.dll that need actual
+    /// implementation (not just STATUS_SUCCESS).  Currently covers version-
+    /// checking helpers whose return values affect sample control flow.
+    pub(in crate::runtime::engine) fn dispatch_ntdll_version(
+        &mut self,
+        function: &str,
+        ctx: &HookContext<'_>,
+    ) -> Option<Result<u64, VmError>> {
+        match function {
+            "VerSetConditionMask" => {
+                let (current_mask, type_mask, condition) = if self.core.arch.is_x86() {
+                    (ctx.raw(0) | (ctx.raw(1) << 32), ctx.raw(2), ctx.raw(3))
                 } else {
-                    STATUS_INVALID_HANDLE as u64
-                }),
-                ("ntdll.dll", "RtlLookupFunctionEntry") => {
-                    self.rtl_lookup_function_entry(arg(args, 0), arg(args, 1))
-                }
-                ("ntdll.dll", "RtlPcToFileHeader") => {
-                    self.rtl_pc_to_file_header(arg(args, 0), arg(args, 1))
-                }
-                ("ntdll.dll", "RtlRestoreContext") => self.rtl_restore_context(arg(args, 0)),
-                ("ntdll.dll", "RtlUnwind") => {
-                    self.rtl_unwind(arg(args, 0), arg(args, 1), arg(args, 3))
-                }
-                ("ntdll.dll", "RtlUnwindEx") => {
-                    self.rtl_unwind_ex(arg(args, 0), arg(args, 1), arg(args, 3))
-                }
-                ("ntdll.dll", "RtlVirtualUnwind") => self.rtl_virtual_unwind(
-                    arg(args, 0),
-                    arg(args, 1),
-                    arg(args, 2),
-                    arg(args, 3),
-                    arg(args, 4),
-                    arg(args, 5),
-                    arg(args, 6),
-                ),
-                ("ntdll.dll", "RtlZeroMemory") => {
-                    self.fill_memory_pattern(arg(args, 0), arg(args, 1), 0)?;
-                    Ok(0)
-                }
-                ("ntdll.dll", "NtCreateSection") | ("ntdll.dll", "ZwCreateSection") => self
-                    .nt_create_section(
-                        arg(args, 0),
-                        arg(args, 2),
-                        arg(args, 3),
-                        arg(args, 4) as u32,
-                        arg(args, 5) as u32,
-                        arg(args, 6),
-                    ),
-                ("ntdll.dll", "NtDuplicateObject") => Ok(STATUS_SUCCESS as u64),
-                ("ntdll.dll", "NtMapViewOfSection") | ("ntdll.dll", "ZwMapViewOfSection") => self
-                    .nt_map_view_of_section(
-                        arg(args, 0) as u32,
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 5),
-                        arg(args, 6),
-                        arg(args, 9) as u32,
-                    ),
-                ("ntdll.dll", "NtRemoveProcessDebug")
-                | ("ntdll.dll", "DbgUiSetThreadDebugObject") => Ok(STATUS_SUCCESS as u64),
-                ("ntdll.dll", "NtUnmapViewOfSection") | ("ntdll.dll", "ZwUnmapViewOfSection") => {
-                    self.nt_unmap_view_of_section(arg(args, 0), arg(args, 1))
-                }
-                ("ntdll.dll", "NtWriteVirtualMemory") | ("ntdll.dll", "ZwWriteVirtualMemory") => {
-                    self.nt_write_virtual_memory(
-                        arg(args, 0),
-                        arg(args, 1),
-                        arg(args, 2),
-                        arg(args, 3) as usize,
-                        arg(args, 4),
-                    )
-                }
-                _ => unreachable!("prechecked extracted dispatch should always match"),
+                    (ctx.raw(0), ctx.raw(1), ctx.raw(2))
+                };
+                let bit_shift = (type_mask.trailing_zeros().min(20) * 3) as u64;
+                Some(Ok(current_mask | ((condition & 0x7) << bit_shift)))
             }
-        })())
+            _ => None,
+        }
+    }
+
+    pub(in crate::runtime::engine) fn ldr_find_entry_for_address(
+        &mut self,
+        address: u64,
+        entry_out: u64,
+    ) -> Result<u64, VmError> {
+        let Some(module) = self.core.modules.get_by_address(address) else {
+            if entry_out != 0 {
+                self.write_pointer_value(entry_out, 0)?;
+            }
+            return Ok(STATUS_DLL_NOT_FOUND as u64);
+        };
+        let Some(entry) = self
+            .core
+            .process_env
+            .loader_entry_for_module_base(module.visible_base)?
+        else {
+            if entry_out != 0 {
+                self.write_pointer_value(entry_out, 0)?;
+            }
+            return Ok(STATUS_DLL_NOT_FOUND as u64);
+        };
+        if entry_out != 0 {
+            self.write_pointer_value(entry_out, entry)?;
+        }
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn request_ntdll_process_exit(
+        &mut self,
+        exit_status: u64,
+    ) -> u64 {
+        self.core.exit_code = Some(exit_status as u32);
+        self.core.process_exit_requested = true;
+        self.dispatch.force_native_return = true;
+        exit_status
+    }
+
+    pub(in crate::runtime::engine) fn request_ntdll_thread_exit(
+        &mut self,
+        exit_status: u64,
+    ) -> u64 {
+        self.dispatch.force_native_return = true;
+        exit_status
+    }
+
+    pub(in crate::runtime::engine) fn nt_terminate_process(
+        &mut self,
+        process_handle: u64,
+        exit_status: u64,
+    ) -> Result<u64, VmError> {
+        if self.is_current_process_handle(process_handle) {
+            return Ok(self.request_ntdll_process_exit(exit_status));
+        }
+        Ok(if self.is_known_process_target(process_handle) {
+            STATUS_SUCCESS as u64
+        } else {
+            STATUS_INVALID_HANDLE as u64
+        })
+    }
+
+    pub(in crate::runtime::engine) fn nt_terminate_thread(
+        &mut self,
+        thread_handle: u64,
+        exit_status: u64,
+    ) -> Result<u64, VmError> {
+        if self.is_current_thread_handle(thread_handle) {
+            return Ok(self.request_ntdll_thread_exit(exit_status));
+        }
+        Ok(
+            if self
+                .core
+                .scheduler
+                .thread_tid_for_handle((thread_handle & 0xFFFF_FFFF) as u32)
+                .is_some()
+            {
+                STATUS_SUCCESS as u64
+            } else {
+                STATUS_INVALID_HANDLE as u64
+            },
+        )
+    }
+
+    pub(in crate::runtime::engine) fn ldr_get_procedure_address(
+        &mut self,
+        module_handle: u64,
+        function_name: u64,
+        ordinal: u16,
+        function_address_out: u64,
+    ) -> Result<u64, VmError> {
+        let address = if function_name != 0 {
+            let name = self.read_ansi_string_value(function_name)?;
+            self.core.modules.resolve_export(
+                module_handle,
+                &self.core.config,
+                &mut self.core.hooks,
+                Some(&name),
+                None,
+            )
+        } else if ordinal != 0 {
+            self.core.modules.resolve_export(
+                module_handle,
+                &self.core.config,
+                &mut self.core.hooks,
+                None,
+                Some(ordinal),
+            )
+        } else {
+            0
+        };
+        if function_address_out != 0 {
+            self.write_pointer_value(function_address_out, address)?;
+        }
+        Ok(if address != 0 {
+            STATUS_SUCCESS as u64
+        } else {
+            STATUS_PROCEDURE_NOT_FOUND as u64
+        })
+    }
+
+    pub(in crate::runtime::engine) fn ldr_load_dll(
+        &mut self,
+        _search_path: u64,
+        _load_flags: u64,
+        module_file_name: u64,
+        module_handle_out: u64,
+    ) -> Result<u64, VmError> {
+        let name = self.read_unicode_string_value(module_file_name)?;
+        let existing = self.core.modules.get_loaded(&name).cloned();
+        let module = match self.core.modules.load_runtime_dependency(
+            &name,
+            &self.core.config,
+            &mut self.core.hooks,
+        ) {
+            Ok(module) => module,
+            Err(VmError::ModuleNotFound(_)) => {
+                if module_handle_out != 0 {
+                    self.write_pointer_value(module_handle_out, 0)?;
+                }
+                return Ok(STATUS_DLL_NOT_FOUND as u64);
+            }
+            Err(source) => return Err(source),
+        };
+        let module = self
+            .refresh_module_visible_base(module.base)
+            .unwrap_or(module);
+        if existing.is_none() {
+            self.register_module_image_allocation(self.current_process_space_key(), &module)?;
+            self.run_dynamic_library_attach(&module)?;
+            self.sync_process_environment_modules()?;
+            self.log_module_event("MODULE_LOAD", &module, "LdrLoadDll")?;
+        }
+        let refcount = self
+            .objects
+            .dynamic_library_refs
+            .entry(module.base)
+            .or_insert(0);
+        *refcount = refcount.saturating_add(1);
+        if module_handle_out != 0 {
+            self.write_pointer_value(module_handle_out, module.visible_base)?;
+        }
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn read_ansi_string_value(
+        &self,
+        address: u64,
+    ) -> Result<String, VmError> {
+        if address == 0 {
+            return Ok(String::new());
+        }
+        let length = self.read_u16(address)? as usize;
+        let buffer = if self.core.arch.is_x86() {
+            self.read_u32(address + 4)? as u64
+        } else {
+            self.read_pointer_value(address + 8)?
+        };
+        if buffer == 0 || length == 0 {
+            return Ok(String::new());
+        }
+        Ok(String::from_utf8_lossy(&self.read_bytes_from_memory(buffer, length)?).into_owned())
+    }
+
+    pub(in crate::runtime::engine) fn rtl_create_unicode_string_from_asciiz(
+        &mut self,
+        destination_string: u64,
+        source_string: u64,
+    ) -> Result<u64, VmError> {
+        if destination_string == 0 {
+            return Ok(0);
+        }
+        if source_string == 0 {
+            self.write_unicode_string_descriptor(destination_string, 0, 0, 0)?;
+            return Ok(1);
+        }
+        let text = self.read_c_string_from_memory(source_string)?;
+        let mut bytes = text
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>();
+        let length = bytes.len().min(u16::MAX as usize) as u16;
+        bytes.extend_from_slice(&[0, 0]);
+        let Some(buffer) = self.process_memory.heaps.alloc(
+            self.core.modules.memory_mut(),
+            self.process_memory.heaps.process_heap(),
+            bytes.len().max(2) as u64,
+        ) else {
+            self.write_unicode_string_descriptor(destination_string, 0, 0, 0)?;
+            return Ok(0);
+        };
+        self.core.modules.memory_mut().write(buffer, &bytes)?;
+        self.write_unicode_string_descriptor(destination_string, buffer, length, length + 2)?;
+        Ok(1)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_free_unicode_string(
+        &mut self,
+        unicode_string: u64,
+    ) -> Result<u64, VmError> {
+        if unicode_string == 0 {
+            return Ok(self.active_unicorn_return_value().unwrap_or(0));
+        }
+        let buffer = if self.core.arch.is_x86() {
+            self.read_u32(unicode_string + 4)? as u64
+        } else {
+            self.read_pointer_value(unicode_string + 8)?
+        };
+        if buffer != 0 {
+            let _ = self
+                .process_memory
+                .heaps
+                .free(self.process_memory.heaps.process_heap(), buffer);
+        }
+        self.write_unicode_string_descriptor(unicode_string, 0, 0, 0)?;
+        Ok(self.active_unicorn_return_value().unwrap_or(0))
+    }
+
+    pub(in crate::runtime::engine) fn rtl_init_unicode_string(
+        &mut self,
+        destination_string: u64,
+        source_string: u64,
+    ) -> Result<u64, VmError> {
+        if destination_string == 0 {
+            return Ok(0);
+        }
+        if source_string == 0 {
+            self.write_unicode_string_descriptor(destination_string, 0, 0, 0)?;
+            return Ok(0);
+        }
+        let length = self
+            .read_wide_string_from_memory(source_string)?
+            .encode_utf16()
+            .count()
+            .saturating_mul(2)
+            .min(u16::MAX as usize) as u16;
+        self.write_unicode_string_descriptor(
+            destination_string,
+            source_string,
+            length,
+            length.saturating_add(2),
+        )?;
+        Ok(0)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_int64_to_unicode_string(
+        &mut self,
+        value: u64,
+        base: u32,
+        string: u64,
+    ) -> Result<u64, VmError> {
+        let Some(base) = Self::normalize_numeric_base(base) else {
+            return Ok(STATUS_INVALID_PARAMETER as u64);
+        };
+        if string == 0 {
+            return Ok(STATUS_INVALID_PARAMETER as u64);
+        }
+
+        let text = Self::format_unsigned_integer(value, base);
+        let buffer = if self.core.arch.is_x86() {
+            self.read_u32(string + 4)? as u64
+        } else {
+            self.read_pointer_value(string + 8)?
+        };
+        let maximum_length = self.read_u16(string + 2)? as usize;
+        let encoded = text
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>();
+        if buffer == 0 {
+            return Ok(STATUS_INVALID_PARAMETER as u64);
+        }
+        if encoded.len() > maximum_length {
+            return Ok(STATUS_BUFFER_TOO_SMALL as u64);
+        }
+
+        self.core.modules.memory_mut().write(buffer, &encoded)?;
+        if maximum_length >= encoded.len() + 2 {
+            self.core
+                .modules
+                .memory_mut()
+                .write(buffer + encoded.len() as u64, &[0, 0])?;
+        }
+        self.write_u16(string, encoded.len() as u16)?;
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_integer_to_char(
+        &mut self,
+        value: u32,
+        base: u32,
+        output_length: i32,
+        string: u64,
+    ) -> Result<u64, VmError> {
+        let Some(base) = Self::normalize_numeric_base(base) else {
+            return Ok(STATUS_INVALID_PARAMETER as u64);
+        };
+        if string == 0 {
+            return Ok(STATUS_INVALID_PARAMETER as u64);
+        }
+
+        let text = Self::format_unsigned_integer(value as u64, base);
+        let capacity = output_length.max(0) as usize;
+        // Real Windows checks string length against output length WITHOUT
+        // counting the null terminator.  A buffer of exactly `len` bytes is
+        // sufficient — the conversion succeeds and null termination is
+        // attempted only when there is room.
+        if capacity != 0 && text.len() > capacity {
+            return Ok(STATUS_BUFFER_OVERFLOW as u64);
+        }
+
+        self.core
+            .modules
+            .memory_mut()
+            .write(string, text.as_bytes())?;
+        // Null-terminate only when the output buffer has room.
+        if text.len() < capacity {
+            self.core
+                .modules
+                .memory_mut()
+                .write(string + text.len() as u64, &[0])?;
+        }
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_random_ex(
+        &mut self,
+        seed_address: u64,
+    ) -> Result<u64, VmError> {
+        if seed_address == 0 {
+            return Ok(0);
+        }
+        let seed = self.read_u32(seed_address)?;
+        let next = seed.wrapping_mul(214013).wrapping_add(2_531_011);
+        self.write_u32(seed_address, next)?;
+        Ok(((next >> 16) & 0x7fff) as u64)
+    }
+
+    pub(in crate::runtime::engine) fn write_unicode_string_descriptor(
+        &mut self,
+        address: u64,
+        buffer: u64,
+        length: u16,
+        maximum_length: u16,
+    ) -> Result<(), VmError> {
+        self.write_u16(address, length)?;
+        self.write_u16(address + 2, maximum_length)?;
+        if self.core.arch.is_x86() {
+            self.write_u32(address + 4, buffer as u32)?;
+        } else {
+            self.write_u32(address + 4, 0)?;
+            self.write_pointer_value(address + 8, buffer)?;
+        }
+        Ok(())
+    }
+
+    pub(in crate::runtime::engine) fn normalize_numeric_base(base: u32) -> Option<u32> {
+        match base {
+            0 => Some(10),
+            2 | 8 | 10 | 16 => Some(base),
+            _ => None,
+        }
+    }
+
+    pub(in crate::runtime::engine) fn format_unsigned_integer(value: u64, base: u32) -> String {
+        match base {
+            2 => format!("{value:b}"),
+            8 => format!("{value:o}"),
+            16 => format!("{value:X}"),
+            _ => value.to_string(),
+        }
+    }
+
+    // ── ntdll string/memory helpers ─────────────────────────────────
+
+    pub(in crate::runtime::engine) fn rtl_init_ansi_string(
+        &mut self,
+        destination: u64,
+        source: u64,
+    ) -> Result<u64, VmError> {
+        if destination == 0 {
+            return Ok(0);
+        }
+        if source == 0 {
+            self.write_ansi_string_descriptor(destination, 0, 0, 0)?;
+            return Ok(0);
+        }
+        let text = self.read_c_string_from_memory(source)?;
+        let length = text.len().min(u16::MAX as usize) as u16;
+        self.write_ansi_string_descriptor(destination, source, length, length.saturating_add(1))?;
+        Ok(0)
+    }
+
+    pub(in crate::runtime::engine) fn write_ansi_string_descriptor(
+        &mut self,
+        address: u64,
+        buffer: u64,
+        length: u16,
+        maximum_length: u16,
+    ) -> Result<(), VmError> {
+        self.write_u16(address, length)?;
+        self.write_u16(address + 2, maximum_length)?;
+        if self.core.arch.is_x86() {
+            self.write_u32(address + 4, buffer as u32)?;
+        } else {
+            self.write_u32(address + 4, 0)?;
+            self.write_pointer_value(address + 8, buffer)?;
+        }
+        Ok(())
+    }
+
+    pub(in crate::runtime::engine) fn rtl_append_unicode_to_string(
+        &mut self,
+        destination: u64,
+        source: u64,
+    ) -> Result<u64, VmError> {
+        if destination == 0 || source == 0 {
+            return Ok(self.active_unicorn_return_value().unwrap_or(0));
+        }
+        let append_text = self.read_wide_string_from_memory(source)?;
+        let dest_length = self.read_u16(destination)? as usize;
+        let dest_max_length = self.read_u16(destination + 2)? as usize;
+        let dest_buffer = if self.core.arch.is_x86() {
+            self.read_u32(destination + 4)? as u64
+        } else {
+            self.read_pointer_value(destination + 8)?
+        };
+        if dest_buffer == 0 {
+            return Ok(self.active_unicorn_return_value().unwrap_or(0));
+        }
+        let append_bytes: Vec<u8> = append_text
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        let new_length = dest_length + append_bytes.len();
+        if new_length > dest_max_length {
+            return Ok(STATUS_BUFFER_TOO_SMALL as u64);
+        }
+        self.core
+            .modules
+            .memory_mut()
+            .write(dest_buffer + dest_length as u64, &append_bytes)?;
+        self.write_u16(destination, new_length as u16)?;
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_append_unicode_string_to_string(
+        &mut self,
+        destination: u64,
+        source: u64,
+    ) -> Result<u64, VmError> {
+        if destination == 0 || source == 0 {
+            return Ok(self.active_unicorn_return_value().unwrap_or(0));
+        }
+        let src_length = self.read_u16(source)? as usize;
+        let src_buffer = if self.core.arch.is_x86() {
+            self.read_u32(source + 4)? as u64
+        } else {
+            self.read_pointer_value(source + 8)?
+        };
+        if src_buffer == 0 || src_length == 0 {
+            return Ok(self.active_unicorn_return_value().unwrap_or(0));
+        }
+        let dest_length = self.read_u16(destination)? as usize;
+        let dest_max_length = self.read_u16(destination + 2)? as usize;
+        let dest_buffer = if self.core.arch.is_x86() {
+            self.read_u32(destination + 4)? as u64
+        } else {
+            self.read_pointer_value(destination + 8)?
+        };
+        if dest_buffer == 0 {
+            return Ok(self.active_unicorn_return_value().unwrap_or(0));
+        }
+        let new_length = dest_length + src_length;
+        if new_length > dest_max_length {
+            return Ok(STATUS_BUFFER_TOO_SMALL as u64);
+        }
+        let src_data = self.read_bytes_from_memory(src_buffer, src_length)?;
+        self.core
+            .modules
+            .memory_mut()
+            .write(dest_buffer + dest_length as u64, &src_data)?;
+        self.write_u16(destination, new_length as u16)?;
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_compare_memory_impl(
+        &self,
+        left: u64,
+        right: u64,
+        length: usize,
+    ) -> Result<usize, VmError> {
+        if length == 0 || left == 0 || right == 0 {
+            return Ok(0);
+        }
+        let left_bytes = self.read_bytes_from_memory(left, length)?;
+        let right_bytes = self.read_bytes_from_memory(right, length)?;
+        let matching = left_bytes
+            .iter()
+            .zip(right_bytes.iter())
+            .take_while(|(a, b)| a == b)
+            .count();
+        Ok(matching)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_compare_unicode_string_impl(
+        &mut self,
+        string1: u64,
+        string2: u64,
+        case_insensitive: bool,
+    ) -> Result<u64, VmError> {
+        let s1 = self.read_unicode_string_value(string1)?;
+        let s2 = self.read_unicode_string_value(string2)?;
+        let cmp = if case_insensitive {
+            s1.to_ascii_lowercase().cmp(&s2.to_ascii_lowercase())
+        } else {
+            s1.cmp(&s2)
+        };
+        Ok(match cmp {
+            std::cmp::Ordering::Less => u64::MAX,
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+        })
+    }
+
+    pub(in crate::runtime::engine) fn rtl_equal_unicode_string_impl(
+        &mut self,
+        string1: u64,
+        string2: u64,
+        case_insensitive: bool,
+    ) -> Result<u64, VmError> {
+        let s1 = self.read_unicode_string_value(string1)?;
+        let s2 = self.read_unicode_string_value(string2)?;
+        let equal = if case_insensitive {
+            s1.eq_ignore_ascii_case(&s2)
+        } else {
+            s1 == s2
+        };
+        Ok(if equal { 1u64 } else { 0 })
+    }
+
+    pub(in crate::runtime::engine) fn rtl_ansi_string_to_unicode_string(
+        &mut self,
+        destination: u64,
+        source: u64,
+        allocate: bool,
+    ) -> Result<u64, VmError> {
+        if destination == 0 || source == 0 {
+            return Ok(STATUS_INVALID_PARAMETER as u64);
+        }
+        let ansi_text = self.read_ansi_string_value(source)?;
+        let wide_bytes: Vec<u8> = ansi_text
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        let length = wide_bytes.len().min(u16::MAX as usize) as u16;
+        let buffer = if allocate && !wide_bytes.is_empty() {
+            let Some(buf) = self.process_memory.heaps.alloc(
+                self.core.modules.memory_mut(),
+                self.process_memory.heaps.process_heap(),
+                wide_bytes.len().saturating_add(2) as u64,
+            ) else {
+                self.write_unicode_string_descriptor(destination, 0, 0, 0)?;
+                return Ok(STATUS_INSUFFICIENT_RESOURCES as u64);
+            };
+            self.core.modules.memory_mut().write(buf, &wide_bytes)?;
+            self.core
+                .modules
+                .memory_mut()
+                .write(buf + wide_bytes.len() as u64, &[0u8, 0])?;
+            buf
+        } else {
+            // Use source buffer directly if not allocating
+            0
+        };
+        self.write_unicode_string_descriptor(
+            destination,
+            buffer,
+            length,
+            length.saturating_add(2),
+        )?;
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_unicode_string_to_ansi_string(
+        &mut self,
+        destination: u64,
+        source: u64,
+        allocate: bool,
+    ) -> Result<u64, VmError> {
+        if destination == 0 || source == 0 {
+            return Ok(STATUS_INVALID_PARAMETER as u64);
+        }
+        let unicode_text = self.read_unicode_string_value(source)?;
+        let ansi_bytes = unicode_text.as_bytes();
+        let length = ansi_bytes.len().min(u16::MAX as usize) as u16;
+        let buffer = if allocate && !ansi_bytes.is_empty() {
+            let Some(buf) = self.process_memory.heaps.alloc(
+                self.core.modules.memory_mut(),
+                self.process_memory.heaps.process_heap(),
+                ansi_bytes.len().saturating_add(1) as u64,
+            ) else {
+                self.write_ansi_string_descriptor(destination, 0, 0, 0)?;
+                return Ok(STATUS_INSUFFICIENT_RESOURCES as u64);
+            };
+            self.core.modules.memory_mut().write(buf, ansi_bytes)?;
+            self.core
+                .modules
+                .memory_mut()
+                .write(buf + ansi_bytes.len() as u64, &[0u8])?;
+            buf
+        } else {
+            0
+        };
+        self.write_ansi_string_descriptor(destination, buffer, length, length.saturating_add(1))?;
+        Ok(STATUS_SUCCESS as u64)
+    }
+
+    pub(in crate::runtime::engine) fn rtl_free_ansi_string_impl(
+        &mut self,
+        string: u64,
+    ) -> Result<u64, VmError> {
+        if string == 0 {
+            return Ok(self.active_unicorn_return_value().unwrap_or(0));
+        }
+        let buffer = if self.core.arch.is_x86() {
+            self.read_u32(string + 4)? as u64
+        } else {
+            self.read_pointer_value(string + 8)?
+        };
+        if buffer != 0 {
+            let _ = self
+                .process_memory
+                .heaps
+                .free(self.process_memory.heaps.process_heap(), buffer);
+        }
+        self.write_ansi_string_descriptor(string, 0, 0, 0)?;
+        Ok(self.active_unicorn_return_value().unwrap_or(0))
     }
 }
+
+// Helper constant for ansi-to-unicode conversion
+const STATUS_INSUFFICIENT_RESOURCES: u32 = 0xC000_009A;

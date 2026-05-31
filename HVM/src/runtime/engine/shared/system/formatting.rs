@@ -10,11 +10,11 @@ impl VirtualExecutionEngine {
         if text.is_empty() {
             return Ok(());
         }
-        self.api_logger.log_console_output(
+        self.core.api_logger.log_console_output(
             self.current_process_id(),
             self.current_log_tid(),
-            self.time.current().tick_ms,
-            self.instruction_count,
+            self.dispatch.time.current().tick_ms,
+            self.core.instruction_count,
             source,
             text,
             handle,
@@ -22,14 +22,15 @@ impl VirtualExecutionEngine {
     }
 
     fn read_printf_vararg(&self, cursor: &mut u64, wide: bool) -> Result<u64, VmError> {
-        let width = if wide || self.arch.is_x64() {
+        let width = if wide || self.core.arch.is_x64() {
             8u64
         } else {
             4u64
         };
         let value = if width == 8 {
             u64::from_le_bytes(
-                self.modules
+                self.core
+                    .modules
                     .memory()
                     .read(*cursor, width as usize)?
                     .try_into()
@@ -199,6 +200,7 @@ impl VirtualExecutionEngine {
         let (base_size, ex_size, csd) = if wide {
             (0x114usize, 0x11Cusize, {
                 let mut bytes = self
+                    .core
                     .environment_profile
                     .os_version
                     .csd_version
@@ -211,6 +213,7 @@ impl VirtualExecutionEngine {
         } else {
             (0x94usize, 0x9Cusize, {
                 let mut bytes = self
+                    .core
                     .environment_profile
                     .os_version
                     .csd_version
@@ -221,7 +224,7 @@ impl VirtualExecutionEngine {
                 bytes
             })
         };
-        let version = &self.environment_profile.os_version;
+        let version = &self.core.environment_profile.os_version;
 
         let mut payload = Vec::with_capacity(requested_size);
         payload.extend_from_slice(&(requested_size as u32).to_le_bytes());
@@ -240,7 +243,7 @@ impl VirtualExecutionEngine {
             payload.truncate(requested_size);
         }
         payload.resize(requested_size, 0);
-        self.modules.memory_mut().write(address, &payload)?;
+        self.core.modules.memory_mut().write(address, &payload)?;
         Ok(true)
     }
 }

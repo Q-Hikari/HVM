@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("winhttp.dll", "WinHttpOpen") => true,
@@ -32,17 +32,20 @@ impl VirtualExecutionEngine {
 
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
-                ("winhttp.dll", "WinHttpOpen") => Ok(self.network.internet_open(
-                    &self.read_optional_wide_text(arg(args, 0))?,
-                    arg(args, 1) as u32,
-                    &self.read_optional_wide_text(arg(args, 2))?,
-                    &self.read_optional_wide_text(arg(args, 3))?,
-                ) as u64),
+                ("winhttp.dll", "WinHttpOpen") => {
+                    let handle = self.network_state.network.internet_open(
+                        &self.read_optional_wide_text(ctx.raw(0))?,
+                        ctx.raw(1) as u32,
+                        &self.read_optional_wide_text(ctx.raw(2))?,
+                        &self.read_optional_wide_text(ctx.raw(3))?,
+                    );
+                    Ok(handle as u64)
+                }
                 ("winhttp.dll", "WinHttpConnect") => {
-                    let handle = self.network.internet_connect(
-                        arg(args, 0) as u32,
-                        &self.read_optional_wide_text(arg(args, 1))?,
-                        arg(args, 2) as u16,
+                    let handle = self.network_state.network.internet_connect(
+                        ctx.raw(0) as u32,
+                        &self.read_optional_wide_text(ctx.raw(1))?,
+                        ctx.raw(2) as u16,
                         3,
                         "",
                         "",
@@ -51,22 +54,22 @@ impl VirtualExecutionEngine {
                     Ok(handle as u64)
                 }
                 ("winhttp.dll", "WinHttpOpenRequest") => {
-                    let handle = self.network.open_request(
-                        arg(args, 0) as u32,
-                        non_empty(&self.read_optional_wide_text(arg(args, 1))?).unwrap_or("GET"),
-                        &self.read_optional_wide_text(arg(args, 2))?,
-                        non_empty(&self.read_optional_wide_text(arg(args, 3))?)
-                            .unwrap_or("HTTP/1.1"),
-                        &self.read_optional_wide_text(arg(args, 4))?,
+                    let handle = self.network_state.network.open_request(
+                        ctx.raw(0) as u32,
+                        non_empty(&self.read_optional_wide_text(ctx.raw(1))?).unwrap_or("GET"),
+                        &self.read_optional_wide_text(ctx.raw(2))?,
+                        non_empty(&self.read_optional_wide_text(ctx.raw(3))?).unwrap_or("HTTP/1.1"),
+                        &self.read_optional_wide_text(ctx.raw(4))?,
                         "",
                     );
                     self.apply_configured_http_response(handle)?;
                     Ok(handle as u64)
                 }
                 ("winhttp.dll", "WinHttpAddRequestHeaders") => {
-                    let handle = arg(args, 0) as u32;
-                    let headers = self.read_optional_wide_text(arg(args, 1))?;
+                    let handle = ctx.raw(0) as u32;
+                    let headers = self.read_optional_wide_text(ctx.raw(1))?;
                     Ok(self
+                        .network_state
                         .network
                         .with_request_mut(handle, |request| {
                             request.headers = Self::merge_http_headers(&request.headers, &headers);
@@ -75,14 +78,15 @@ impl VirtualExecutionEngine {
                         .unwrap_or(0))
                 }
                 ("winhttp.dll", "WinHttpSendRequest") => {
-                    let handle = arg(args, 0) as u32;
-                    let headers = self.read_optional_wide_text(arg(args, 1))?;
-                    let optional = if arg(args, 3) == 0 || arg(args, 4) == 0 {
+                    let handle = ctx.raw(0) as u32;
+                    let headers = self.read_optional_wide_text(ctx.raw(1))?;
+                    let optional = if ctx.raw(3) == 0 || ctx.raw(4) == 0 {
                         Vec::new()
                     } else {
-                        self.read_bytes_from_memory(arg(args, 3), arg(args, 4) as usize)?
+                        self.read_bytes_from_memory(ctx.raw(3), ctx.raw(4) as usize)?
                     };
                     let sent = self
+                        .network_state
                         .network
                         .with_request_mut(handle, |request| {
                             request.headers = Self::merge_http_headers(&request.headers, &headers);
@@ -99,13 +103,14 @@ impl VirtualExecutionEngine {
                     Ok(sent)
                 }
                 ("winhttp.dll", "WinHttpWriteData") => {
-                    let handle = arg(args, 0) as u32;
-                    let data = if arg(args, 1) == 0 || arg(args, 2) == 0 {
+                    let handle = ctx.raw(0) as u32;
+                    let data = if ctx.raw(1) == 0 || ctx.raw(2) == 0 {
                         Vec::new()
                     } else {
-                        self.read_bytes_from_memory(arg(args, 1), arg(args, 2) as usize)?
+                        self.read_bytes_from_memory(ctx.raw(1), ctx.raw(2) as usize)?
                     };
                     let written = self
+                        .network_state
                         .network
                         .with_request_mut(handle, |request| {
                             request.request_body.extend_from_slice(&data);
@@ -113,108 +118,117 @@ impl VirtualExecutionEngine {
                         })
                         .map(|_| 1)
                         .unwrap_or(0);
-                    if arg(args, 3) != 0 {
-                        self.write_u32(arg(args, 3), arg(args, 2) as u32)?;
+                    if ctx.raw(3) != 0 {
+                        self.write_u32(ctx.raw(3), ctx.raw(2) as u32)?;
                     }
                     if written != 0 {
                         self.log_http_request_event("WinHttpWriteData", handle)?;
                     }
                     Ok(written)
                 }
-                ("winhttp.dll", "WinHttpReceiveResponse") => {
-                    Ok(self.network.get_request(arg(args, 0) as u32).is_some() as u64)
-                }
+                ("winhttp.dll", "WinHttpReceiveResponse") => Ok(self
+                    .network_state
+                    .network
+                    .get_request(ctx.raw(0) as u32)
+                    .is_some()
+                    as u64),
                 ("winhttp.dll", "WinHttpReadData") => {
                     let data = self
+                        .network_state
                         .network
-                        .request_read(arg(args, 0) as u32, arg(args, 2) as usize);
-                    if arg(args, 1) != 0 && !data.is_empty() {
-                        self.modules.memory_mut().write(arg(args, 1), &data)?;
+                        .request_read(ctx.raw(0) as u32, ctx.raw(2) as usize);
+                    if ctx.raw(1) != 0 && !data.is_empty() {
+                        self.core.modules.memory_mut().write(ctx.raw(1), &data)?;
                     }
-                    if arg(args, 3) != 0 {
-                        self.write_u32(arg(args, 3), data.len() as u32)?;
+                    if ctx.raw(3) != 0 {
+                        self.write_u32(ctx.raw(3), data.len() as u32)?;
                     }
                     Ok(1)
                 }
                 ("winhttp.dll", "WinHttpQueryDataAvailable") => {
-                    if arg(args, 1) != 0 {
+                    if ctx.raw(1) != 0 {
                         self.write_u32(
-                            arg(args, 1),
-                            self.network.request_remaining(arg(args, 0) as u32) as u32,
+                            ctx.raw(1),
+                            self.network_state
+                                .network
+                                .request_remaining(ctx.raw(0) as u32)
+                                as u32,
                         )?;
                     }
                     Ok(1)
                 }
                 ("winhttp.dll", "WinHttpQueryHeaders") => {
                     let Some(value) =
-                        self.winhttp_query_response_value(arg(args, 0) as u32, arg(args, 1) as u32)
+                        self.winhttp_query_response_value(ctx.raw(0) as u32, ctx.raw(1) as u32)
                     else {
                         return Ok(0);
                     };
-                    if arg(args, 4) != 0 {
-                        self.write_u32(arg(args, 4), value.len() as u32)?;
+                    if ctx.raw(4) != 0 {
+                        self.write_u32(ctx.raw(4), value.len() as u32)?;
                     }
-                    if arg(args, 3) != 0 {
-                        self.modules.memory_mut().write(arg(args, 3), &value)?;
+                    if ctx.raw(3) != 0 {
+                        self.core.modules.memory_mut().write(ctx.raw(3), &value)?;
                     }
                     Ok(1)
                 }
                 ("winhttp.dll", "WinHttpSetOption") => Ok(1),
                 ("winhttp.dll", "WinHttpQueryOption") => {
-                    if arg(args, 3) != 0 {
-                        self.write_u32(arg(args, 3), 4)?;
+                    if ctx.raw(3) != 0 {
+                        self.write_u32(ctx.raw(3), 4)?;
                     }
-                    if arg(args, 2) != 0 {
-                        self.write_u32(arg(args, 2), 0)?;
+                    if ctx.raw(2) != 0 {
+                        self.write_u32(ctx.raw(2), 0)?;
                     }
                     Ok(1)
                 }
                 ("winhttp.dll", "WinHttpSetTimeouts") => Ok(1),
                 ("winhttp.dll", "WinHttpGetIEProxyConfigForCurrentUser") => {
-                    let config_ptr = arg(args, 0);
+                    let config_ptr = ctx.raw(0);
                     if config_ptr == 0 {
                         return Ok(0);
                     }
                     self.write_u32(config_ptr, 0)?;
-                    if self.arch.is_x64() {
+                    if self.core.arch.is_x64() {
                         self.write_u32(config_ptr + 4, 0)?;
                     }
-                    let pointer_base = if self.arch.is_x86() {
+                    let pointer_base = if self.core.arch.is_x86() {
                         config_ptr + 4
                     } else {
                         config_ptr + 8
                     };
                     self.write_pointer_value(pointer_base, 0)?;
-                    self.write_pointer_value(pointer_base + self.arch.pointer_size as u64, 0)?;
+                    self.write_pointer_value(pointer_base + self.core.arch.pointer_size as u64, 0)?;
                     self.write_pointer_value(
-                        pointer_base + (self.arch.pointer_size as u64 * 2),
+                        pointer_base + (self.core.arch.pointer_size as u64 * 2),
                         0,
                     )?;
                     self.set_last_error(ERROR_SUCCESS as u32);
                     Ok(1)
                 }
                 ("winhttp.dll", "WinHttpGetProxyForUrl") => {
-                    let info_ptr = arg(args, 3);
+                    let info_ptr = ctx.raw(3);
                     if info_ptr == 0 {
                         return Ok(0);
                     }
                     self.write_u32(info_ptr, WINHTTP_ACCESS_TYPE_NO_PROXY)?;
-                    if self.arch.is_x64() {
+                    if self.core.arch.is_x64() {
                         self.write_u32(info_ptr + 4, 0)?;
                     }
-                    let pointer_base = if self.arch.is_x86() {
+                    let pointer_base = if self.core.arch.is_x86() {
                         info_ptr + 4
                     } else {
                         info_ptr + 8
                     };
                     self.write_pointer_value(pointer_base, 0)?;
-                    self.write_pointer_value(pointer_base + self.arch.pointer_size as u64, 0)?;
+                    self.write_pointer_value(pointer_base + self.core.arch.pointer_size as u64, 0)?;
                     self.set_last_error(ERROR_SUCCESS as u32);
                     Ok(1)
                 }
-                ("winhttp.dll", "WinHttpCloseHandle") => {
-                    Ok(self.network.close_internet_handle(arg(args, 0) as u32) as u64)
-                }
+                ("winhttp.dll", "WinHttpCloseHandle") => Ok(self
+                    .network_state
+                    .network
+                    .close_internet_handle(ctx.raw(0) as u32)
+                    as u64),
                 _ => unreachable!("prechecked extracted dispatch should always match"),
             }
         })())

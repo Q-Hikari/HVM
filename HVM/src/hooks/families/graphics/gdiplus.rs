@@ -1,43 +1,32 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stdcall_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, usize)] = &[
-    ("GdipAlloc", 1),
-    ("GdipBitmapLockBits", 5),
-    ("GdipBitmapUnlockBits", 2),
-    ("GdipCloneImage", 2),
-    ("GdipCreateBitmapFromHBITMAP", 3),
-    ("GdipCreateBitmapFromScan0", 6),
-    ("GdipCreateBitmapFromStream", 2),
-    ("GdipCreateFromHDC", 2),
-    ("GdipDeleteGraphics", 1),
-    ("GdipDisposeImage", 1),
-    ("GdipDrawImageI", 4),
-    ("GdipDrawImageRectI", 6),
-    ("GdipFree", 1),
-    ("GdipGetImageGraphicsContext", 2),
-    ("GdipGetImageHeight", 2),
-    ("GdipGetImagePalette", 3),
-    ("GdipGetImagePaletteSize", 2),
-    ("GdipGetImagePixelFormat", 2),
-    ("GdipGetImageWidth", 2),
-    ("GdipSetInterpolationMode", 2),
-    ("GdiplusShutdown", 1),
-    ("GdiplusStartup", 3),
+const EXPORTS: &[(&str, LogicalAbi)] = &[
+    ("GdipAlloc", LogicalAbi::WinApi),
+    ("GdipBitmapLockBits", LogicalAbi::WinApi),
+    ("GdipBitmapUnlockBits", LogicalAbi::WinApi),
+    ("GdipCloneImage", LogicalAbi::WinApi),
+    ("GdipCreateBitmapFromHBITMAP", LogicalAbi::WinApi),
+    ("GdipCreateBitmapFromScan0", LogicalAbi::WinApi),
+    ("GdipCreateBitmapFromStream", LogicalAbi::WinApi),
+    ("GdipCreateFromHDC", LogicalAbi::WinApi),
+    ("GdipDeleteGraphics", LogicalAbi::WinApi),
+    ("GdipDisposeImage", LogicalAbi::WinApi),
+    ("GdipDrawImageI", LogicalAbi::WinApi),
+    ("GdipDrawImageRectI", LogicalAbi::WinApi),
+    ("GdipFree", LogicalAbi::WinApi),
+    ("GdipGetImageGraphicsContext", LogicalAbi::WinApi),
+    ("GdipGetImageHeight", LogicalAbi::WinApi),
+    ("GdipGetImagePalette", LogicalAbi::WinApi),
+    ("GdipGetImagePaletteSize", LogicalAbi::WinApi),
+    ("GdipGetImagePixelFormat", LogicalAbi::WinApi),
+    ("GdipGetImageWidth", LogicalAbi::WinApi),
+    ("GdipSetInterpolationMode", LogicalAbi::WinApi),
+    ("GdiplusShutdown", LogicalAbi::WinApi),
+    ("GdiplusStartup", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct GdiplusHookLibrary;
-
-impl HookLibrary for GdiplusHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stdcall_definitions("gdiplus.dll", EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_gdiplus_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&GdiplusHookLibrary);
+    registry.register_function_stubs("gdiplus.dll", &EXPORTS);
 }

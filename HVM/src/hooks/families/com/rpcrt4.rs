@@ -1,213 +1,43 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "rpcrt4.dll",
-        "UuidCreate",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidCreateSequential",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidCompare",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidEqual",
-        3,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidIsNil",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidHash",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidFromStringA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidFromStringW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidToStringA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "UuidToStringW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcStringFreeA",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcStringFreeW",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcBindingFromStringBindingA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcBindingFromStringBindingW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcBindingFree",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcBindingSetAuthInfoA",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcBindingSetAuthInfoW",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcBindingSetAuthInfoExW",
-        7,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcStringBindingComposeA",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcStringBindingComposeW",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcStringBindingParseA",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcStringBindingParseW",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "I_RpcAllocate",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "I_RpcFree",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "NdrOleAllocate",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "NdrOleFree",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "NdrAsyncClientCall",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcAsyncInitializeHandle",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcAsyncCompleteCall",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "RpcRaiseException",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "DceErrorInqTextA",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "rpcrt4.dll",
-        "DceErrorInqTextW",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("UuidCreate", LogicalAbi::WinApi),
+    ("UuidCreateSequential", LogicalAbi::WinApi),
+    ("UuidCompare", LogicalAbi::WinApi),
+    ("UuidEqual", LogicalAbi::WinApi),
+    ("UuidIsNil", LogicalAbi::WinApi),
+    ("UuidHash", LogicalAbi::WinApi),
+    ("UuidFromStringA", LogicalAbi::WinApi),
+    ("UuidFromStringW", LogicalAbi::WinApi),
+    ("UuidToStringA", LogicalAbi::WinApi),
+    ("UuidToStringW", LogicalAbi::WinApi),
+    ("RpcStringFreeA", LogicalAbi::WinApi),
+    ("RpcStringFreeW", LogicalAbi::WinApi),
+    ("RpcBindingFromStringBindingA", LogicalAbi::WinApi),
+    ("RpcBindingFromStringBindingW", LogicalAbi::WinApi),
+    ("RpcBindingFree", LogicalAbi::WinApi),
+    ("RpcBindingSetAuthInfoA", LogicalAbi::WinApi),
+    ("RpcBindingSetAuthInfoW", LogicalAbi::WinApi),
+    ("RpcBindingSetAuthInfoExW", LogicalAbi::WinApi),
+    ("RpcStringBindingComposeA", LogicalAbi::WinApi),
+    ("RpcStringBindingComposeW", LogicalAbi::WinApi),
+    ("RpcStringBindingParseA", LogicalAbi::WinApi),
+    ("RpcStringBindingParseW", LogicalAbi::WinApi),
+    ("I_RpcAllocate", LogicalAbi::WinApi),
+    ("I_RpcFree", LogicalAbi::WinApi),
+    ("NdrOleAllocate", LogicalAbi::WinApi),
+    ("NdrOleFree", LogicalAbi::WinApi),
+    ("NdrAsyncClientCall", LogicalAbi::WinApi),
+    ("RpcAsyncInitializeHandle", LogicalAbi::WinApi),
+    ("RpcAsyncCompleteCall", LogicalAbi::WinApi),
+    ("RpcRaiseException", LogicalAbi::WinApi),
+    ("DceErrorInqTextA", LogicalAbi::WinApi),
+    ("DceErrorInqTextW", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Rpcrt4HookLibrary;
-
-impl HookLibrary for Rpcrt4HookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_rpcrt4_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&Rpcrt4HookLibrary);
+    registry.register_function_stubs("rpcrt4.dll", &FUNCTIONS);
+    registry.register_signatures(super::rpcrt4_signatures::RPCRT4_SIGNATURES);
 }

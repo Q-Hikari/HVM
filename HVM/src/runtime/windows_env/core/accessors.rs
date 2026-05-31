@@ -33,4 +33,8 @@ impl WindowsProcessEnvironment {
     pub(in crate::runtime::windows_env) fn pointer_size(&self) -> usize {
         self.arch.pointer_size
     }
+
+    pub fn loader_region_size(&self) -> u64 {
+        ldr_region_size_for_arch(self.arch)
+    }
 }

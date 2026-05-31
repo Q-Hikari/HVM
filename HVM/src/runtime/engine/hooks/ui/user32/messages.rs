@@ -1,103 +1,134 @@
+use crate::hooks::types::LogicalAbi;
+use crate::runtime::engine::abi::{post_return_stack_pointer, select_adapter};
+
 use super::*;
 
 impl VirtualExecutionEngine {
     fn ensure_user32_sendmessage_continue_stub(&mut self) -> u64 {
-        self.hooks
+        self.core
+            .hooks
             .binding_address("user32.dll", "__vm_sendmessage_continue")
             .unwrap_or_else(|| self.bind_hook_for_test("user32.dll", "__vm_sendmessage_continue"))
     }
 
-    fn schedule_active_x64_user32_sendmessage_callback(
+    fn schedule_active_user32_sendmessage_callback(
         &mut self,
         wnd_proc: u64,
         hwnd: u64,
         message: u32,
         w_param: u64,
         l_param: u64,
+        origin_abi: LogicalAbi,
+        origin_argc: usize,
     ) -> Result<(), VmError> {
         let continuation = self.ensure_user32_sendmessage_continue_stub();
         let (api_ptr, uc) = self.active_unicorn_api_and_handle()?;
         let api = unsafe { &*api_ptr };
-        let entry_rsp = unsafe { api.reg_read_raw(uc, UC_X86_REG_RSP) }.map_err(|detail| {
-            VmError::NativeExecution {
-                op: "uc_reg_read(rsp)",
+        let sp_reg = if self.core.arch.is_x64() {
+            UC_X86_REG_RSP
+        } else {
+            UC_X86_REG_ESP
+        };
+        let entry_rsp =
+            unsafe { api.reg_read_raw(uc, sp_reg) }.map_err(|detail| VmError::NativeExecution {
+                op: "uc_reg_read(sp)",
                 detail,
-            }
-        })?;
-        let return_address = unsafe { api.mem_read_raw(uc, entry_rsp, 8) }
-            .map_err(|detail| VmError::NativeExecution {
-                op: "uc_mem_read(stack)",
-                detail,
-            })
-            .map(|bytes| u64::from_le_bytes(bytes.try_into().unwrap()))?;
-        let resume_rsp = entry_rsp.checked_add(8).ok_or(VmError::RuntimeInvariant(
-            "user32 sendmessage resume stack overflow",
-        ))?;
-        let call_rsp = entry_rsp
-            .checked_sub(0x28)
-            .ok_or(VmError::RuntimeInvariant(
-                "user32 sendmessage stack underflow",
-            ))?;
-        let mut frame = [0u8; 0x28];
-        frame[..8].copy_from_slice(&continuation.to_le_bytes());
-        self.modules.memory_mut().write(call_rsp, &frame)?;
-        unsafe { api.mem_write_raw(uc, call_rsp, &frame) }.map_err(|detail| {
-            VmError::NativeExecution {
-                op: "uc_mem_write(user32_sendmessage_continuation)",
-                detail,
-            }
-        })?;
-        for (regid, value, op) in [
-            (UC_X86_REG_RIP, wnd_proc, "uc_reg_write(rip)"),
-            (UC_X86_REG_RSP, call_rsp, "uc_reg_write(rsp)"),
-            (UC_X86_REG_RCX, hwnd, "uc_reg_write(rcx)"),
-            (UC_X86_REG_RDX, message as u64, "uc_reg_write(rdx)"),
-            (UC_X86_REG_R8, w_param, "uc_reg_write(r8)"),
-            (UC_X86_REG_R9, l_param, "uc_reg_write(r9)"),
-        ] {
-            unsafe { api.reg_write_raw(uc, regid, value) }
-                .map_err(|detail| VmError::NativeExecution { op, detail })?;
-        }
-        self.pending_user32_sendmessage_callbacks
+            })?;
+        let ptr_size = self.core.arch.pointer_size as u64;
+        let ra_bytes =
+            unsafe { api.mem_read_raw(uc, entry_rsp, ptr_size as usize) }.map_err(|detail| {
+                VmError::NativeExecution {
+                    op: "uc_mem_read(stack)",
+                    detail,
+                }
+            })?;
+        let return_address = if self.core.arch.is_x64() {
+            u64::from_le_bytes(ra_bytes.try_into().unwrap_or([0; 8]))
+        } else {
+            u32::from_le_bytes(ra_bytes[..4].try_into().unwrap_or([0; 4])) as u64
+        };
+        let resume_rsp =
+            post_return_stack_pointer(&self.core.arch, origin_abi, origin_argc, entry_rsp);
+
+        let args = [hwnd, message as u64, w_param, l_param];
+        let adapter = select_adapter(&self.core.arch, &LogicalAbi::Callback);
+        let _prepared = {
+            let mut reg_read = |regid: i32| unsafe { api.reg_read_raw(uc, regid).map_err(|s| s) };
+            let mut reg_write = |regid: i32, value: u64| unsafe {
+                api.reg_write_raw(uc, regid, value).map_err(|s| s)
+            };
+            let mut mem_write = |addr: u64, data: &[u8]| unsafe {
+                api.mem_write_raw(uc, addr, data).map_err(|s| s)
+            };
+            adapter.prepare_callback_frame(
+                &self.core.arch,
+                wnd_proc,
+                continuation,
+                &args,
+                entry_rsp,
+                &mut reg_read,
+                &mut reg_write,
+                &mut mem_write,
+            )?
+        };
+
+        self.ui
+            .pending_user32_sendmessage_callbacks
             .push(PendingUser32SendMessageCallback {
                 entry_rsp,
                 resume_rsp,
                 return_address,
             });
-        self.defer_api_return = true;
+        self.dispatch.request_resume_at_updated_pc();
         Ok(())
     }
 
-    fn complete_active_x64_user32_sendmessage_callback(
+    fn complete_active_user32_sendmessage_callback(
         &mut self,
         state: PendingUser32SendMessageCallback,
         retval: u64,
     ) -> Result<(), VmError> {
         let (api_ptr, uc) = self.active_unicorn_api_and_handle()?;
         let api = unsafe { &*api_ptr };
-        for (regid, value, op) in [
-            (UC_X86_REG_RAX, retval, "uc_reg_write(rax)"),
-            (UC_X86_REG_RSP, state.resume_rsp, "uc_reg_write(rsp)"),
-            (UC_X86_REG_RIP, state.return_address, "uc_reg_write(rip)"),
-        ] {
-            unsafe { api.reg_write_raw(uc, regid, value) }
-                .map_err(|detail| VmError::NativeExecution { op, detail })?;
+        let adapter = select_adapter(&self.core.arch, &LogicalAbi::Callback);
+        {
+            let mut reg_write = |regid: i32, value: u64| unsafe {
+                api.reg_write_raw(uc, regid, value).map_err(|s| s)
+            };
+            adapter.write_return_value(&self.core.arch, retval, &mut reg_write)?;
         }
-        self.defer_api_return = true;
+        let (sp_reg, pc_reg) = if self.core.arch.is_x64() {
+            (UC_X86_REG_RSP, UC_X86_REG_RIP)
+        } else {
+            (UC_X86_REG_ESP, UC_X86_REG_EIP)
+        };
+        unsafe { api.reg_write_raw(uc, sp_reg, state.resume_rsp) }.map_err(|detail| {
+            VmError::NativeExecution {
+                op: "uc_reg_write(sp)",
+                detail,
+            }
+        })?;
+        unsafe { api.reg_write_raw(uc, pc_reg, state.return_address) }.map_err(|detail| {
+            VmError::NativeExecution {
+                op: "uc_reg_write(pc)",
+                detail,
+            }
+        })?;
+        self.dispatch.request_resume_at_updated_pc();
         Ok(())
     }
 
     pub(super) fn resume_pending_user32_sendmessage_callback(&mut self) -> Result<u64, VmError> {
-        let callback_result = if self.arch.is_x64() && unicorn_context_active() {
+        let callback_result = if unicorn_context_active() {
             self.active_unicorn_return_value()?
         } else {
             0
         };
-        let Some(state) = self.pending_user32_sendmessage_callbacks.pop() else {
+        let Some(state) = self.ui.pending_user32_sendmessage_callbacks.pop() else {
             return Ok(callback_result);
         };
-        if self.arch.is_x64() && unicorn_context_active() {
-            self.complete_active_x64_user32_sendmessage_callback(state, callback_result)?;
+        if unicorn_context_active() {
+            self.complete_active_user32_sendmessage_callback(state, callback_result)?;
         }
         Ok(callback_result)
     }
@@ -131,7 +162,7 @@ impl VirtualExecutionEngine {
             message,
             w_param,
             l_param,
-            time: self.time.current().tick_ms.min(u32::MAX as u64) as u32,
+            time: self.dispatch.time.current().tick_ms.min(u32::MAX as u64) as u32,
             point_x: x,
             point_y: y,
             hook_code,
@@ -204,7 +235,7 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(None);
         }
-        let message = if self.arch.is_x86() {
+        let message = if self.core.arch.is_x86() {
             User32MessageRecord {
                 thread_id: self.user32_current_thread_id(),
                 hwnd: self.read_u32(address)? as u64,
@@ -240,7 +271,7 @@ impl VirtualExecutionEngine {
         if address == 0 {
             return Ok(());
         }
-        let bytes = if self.arch.is_x86() {
+        let bytes = if self.core.arch.is_x86() {
             let mut bytes = vec![0u8; 32];
             bytes[0..4].copy_from_slice(&(message.hwnd as u32).to_le_bytes());
             bytes[4..8].copy_from_slice(&message.message.to_le_bytes());
@@ -261,7 +292,7 @@ impl VirtualExecutionEngine {
             bytes[40..44].copy_from_slice(&message.point_y.to_le_bytes());
             bytes
         };
-        Ok(self.modules.memory_mut().write(address, &bytes)?)
+        Ok(self.core.modules.memory_mut().write(address, &bytes)?)
     }
 
     pub(super) fn user32_note_window_activity(
@@ -285,7 +316,7 @@ impl VirtualExecutionEngine {
             l_param as u64,
             MSGF_DIALOGBOX,
         );
-        Self::user32_queue_message(&mut self.user32_state.thread_messages, record);
+        Self::user32_queue_message(&mut self.ui.user32_state.thread_messages, record);
         Ok(())
     }
 
@@ -295,6 +326,8 @@ impl VirtualExecutionEngine {
         message: u32,
         w_param: u64,
         l_param: u64,
+        origin_abi: LogicalAbi,
+        origin_argc: usize,
     ) -> Result<u64, VmError> {
         let resolved_hwnd = if (hwnd & 0xFFFF_FFFF) != 0 {
             (hwnd & 0xFFFF_FFFF) as u32
@@ -306,13 +339,15 @@ impl VirtualExecutionEngine {
             self.set_last_error(ERROR_SUCCESS as u32);
             return Ok(0);
         }
-        if self.arch.is_x64() && unicorn_context_active() {
-            self.schedule_active_x64_user32_sendmessage_callback(
+        if unicorn_context_active() {
+            self.schedule_active_user32_sendmessage_callback(
                 wnd_proc,
                 resolved_hwnd as u64,
                 message,
                 w_param,
                 l_param,
+                origin_abi,
+                origin_argc,
             )?;
             return Ok(0);
         }
@@ -338,6 +373,7 @@ impl VirtualExecutionEngine {
     ) -> Option<User32MessageRecord> {
         self.user32_ensure_poll_message(thread_id);
         let queue = self
+            .ui
             .user32_state
             .thread_messages
             .entry(thread_id)
@@ -360,9 +396,12 @@ impl VirtualExecutionEngine {
         max_filter: u32,
         remove: bool,
     ) -> Result<u64, VmError> {
-        let _profile = self.runtime_profiler.start_scope("user32.peek_message");
-        self.user32_state.peek_message_calls =
-            self.user32_state.peek_message_calls.saturating_add(1);
+        let _profile = self
+            .core
+            .runtime_profiler
+            .start_scope("user32.peek_message");
+        self.ui.user32_state.peek_message_calls =
+            self.ui.user32_state.peek_message_calls.saturating_add(1);
         let thread_id = self.user32_current_thread_id();
         self.user32_pump_pending_hook_messages(thread_id, 2)?;
         let message =
@@ -372,7 +411,7 @@ impl VirtualExecutionEngine {
             return Ok(1);
         }
         if lp_msg != 0 {
-            self.modules.memory_mut().write(lp_msg, &[0u8; 28])?;
+            self.core.modules.memory_mut().write(lp_msg, &[0u8; 28])?;
         }
         Ok(0)
     }
@@ -384,10 +423,11 @@ impl VirtualExecutionEngine {
         min_filter: u32,
         max_filter: u32,
     ) -> Result<u64, VmError> {
-        let _profile = self.runtime_profiler.start_scope("user32.get_message");
-        self.user32_state.get_message_calls = self.user32_state.get_message_calls.saturating_add(1);
+        let _profile = self.core.runtime_profiler.start_scope("user32.get_message");
+        self.ui.user32_state.get_message_calls =
+            self.ui.user32_state.get_message_calls.saturating_add(1);
         let thread_id = self.user32_current_thread_id();
-        let _ = self.scheduler.consume_wait_result();
+        let _ = self.core.scheduler.consume_wait_result();
         self.user32_pump_pending_hook_messages(thread_id, 2)?;
         if let Some(message) =
             self.user32_take_message(thread_id, hwnd_filter, min_filter, max_filter, true)
@@ -395,28 +435,36 @@ impl VirtualExecutionEngine {
             self.user32_write_message_to_memory(lp_msg, &message)?;
             return Ok((message.message != WM_QUIT) as u64);
         }
-        if self.scheduler.current_tid().is_some() {
-            let _ = self.scheduler.sleep_current_thread(
-                self.time.current().tick_ms,
+        if self.core.scheduler.current_tid().is_some() {
+            let _ = self.core.scheduler.sleep_current_thread(
+                self.dispatch.time.current().tick_ms,
                 self.user32_message_wait_delay_ms(thread_id),
                 false,
+                true,
             );
             self.request_thread_yield("user32_get_message_wait", true);
             return Ok(0);
         }
         let message = self.user32_idle_message(thread_id);
-        self.user32_state.synthetic_idle_messages =
-            self.user32_state.synthetic_idle_messages.saturating_add(1);
+        self.ui.user32_state.synthetic_idle_messages = self
+            .ui
+            .user32_state
+            .synthetic_idle_messages
+            .saturating_add(1);
         self.user32_write_message_to_memory(lp_msg, &message)?;
         Ok(1)
     }
 
     pub(super) fn user32_translate_message(&mut self) -> u64 {
         let _profile = self
+            .core
             .runtime_profiler
             .start_scope("user32.translate_message");
-        self.user32_state.translate_message_calls =
-            self.user32_state.translate_message_calls.saturating_add(1);
+        self.ui.user32_state.translate_message_calls = self
+            .ui
+            .user32_state
+            .translate_message_calls
+            .saturating_add(1);
         1
     }
 
@@ -424,9 +472,15 @@ impl VirtualExecutionEngine {
         &mut self,
         lp_msg: u64,
     ) -> Result<u64, VmError> {
-        let _profile = self.runtime_profiler.start_scope("user32.dispatch_message");
-        self.user32_state.dispatch_message_calls =
-            self.user32_state.dispatch_message_calls.saturating_add(1);
+        let _profile = self
+            .core
+            .runtime_profiler
+            .start_scope("user32.dispatch_message");
+        self.ui.user32_state.dispatch_message_calls = self
+            .ui
+            .user32_state
+            .dispatch_message_calls
+            .saturating_add(1);
         let thread_id = self.user32_current_thread_id();
         self.user32_pump_pending_hook_messages(thread_id, 1)?;
         if let Some(message) = self.user32_read_message_from_memory(lp_msg)? {
@@ -441,6 +495,8 @@ impl VirtualExecutionEngine {
                 message.message,
                 message.w_param,
                 message.l_param,
+                LogicalAbi::WinApi,
+                1,
             );
         }
         Ok(0)
@@ -450,7 +506,26 @@ impl VirtualExecutionEngine {
         let thread_id = self.user32_current_thread_id();
         let message =
             self.user32_message_record(thread_id, 0, WM_QUIT, exit_code as u64, 0, MSGF_DIALOGBOX);
-        Self::user32_queue_message(&mut self.user32_state.thread_messages, message);
+        Self::user32_queue_message(&mut self.ui.user32_state.thread_messages, message);
         Ok(0)
+    }
+
+    pub(super) fn user32_post_thread_message(
+        &mut self,
+        thread_id: u32,
+        message: u32,
+        w_param: u64,
+        l_param: u64,
+    ) -> Result<u64, VmError> {
+        let target_thread = if thread_id != 0 {
+            thread_id
+        } else {
+            self.user32_current_thread_id()
+        };
+        let record =
+            self.user32_message_record(target_thread, 0, message, w_param, l_param, MSGF_DIALOGBOX);
+        Self::user32_queue_message(&mut self.ui.user32_state.thread_messages, record);
+        self.set_last_error(ERROR_SUCCESS as u32);
+        Ok(1)
     }
 }

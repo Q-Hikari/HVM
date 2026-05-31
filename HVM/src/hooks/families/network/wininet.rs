@@ -1,165 +1,34 @@
-use crate::hooks::base::HookLibrary;
 use crate::hooks::registry::HookRegistry;
-use crate::hooks::stub::stub_definitions;
+use crate::hooks::types::LogicalAbi;
 
-const EXPORTS: &[(&str, &str, usize, crate::hooks::base::CallConv)] = &[
-    (
-        "wininet.dll",
-        "InternetOpenA",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetOpenW",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetConnectA",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetConnectW",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetOpenUrlA",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetOpenUrlW",
-        6,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "HttpOpenRequestA",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "HttpOpenRequestW",
-        8,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "HttpSendRequestA",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "HttpSendRequestW",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetCanonicalizeUrlA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetCanonicalizeUrlW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetReadFile",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetCloseHandle",
-        1,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetSetOptionA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetSetOptionW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetQueryOptionA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetQueryOptionW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetCrackUrlA",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetCrackUrlW",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetGetConnectedState",
-        2,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "InternetQueryDataAvailable",
-        4,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "HttpQueryInfoA",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
-    (
-        "wininet.dll",
-        "HttpQueryInfoW",
-        5,
-        crate::hooks::base::CallConv::Stdcall,
-    ),
+static FUNCTIONS: &[(&str, LogicalAbi)] = &[
+    ("InternetOpenA", LogicalAbi::WinApi),
+    ("InternetOpenW", LogicalAbi::WinApi),
+    ("InternetConnectA", LogicalAbi::WinApi),
+    ("InternetConnectW", LogicalAbi::WinApi),
+    ("InternetOpenUrlA", LogicalAbi::WinApi),
+    ("InternetOpenUrlW", LogicalAbi::WinApi),
+    ("HttpOpenRequestA", LogicalAbi::WinApi),
+    ("HttpOpenRequestW", LogicalAbi::WinApi),
+    ("HttpSendRequestA", LogicalAbi::WinApi),
+    ("HttpSendRequestW", LogicalAbi::WinApi),
+    ("InternetCanonicalizeUrlA", LogicalAbi::WinApi),
+    ("InternetCanonicalizeUrlW", LogicalAbi::WinApi),
+    ("InternetReadFile", LogicalAbi::WinApi),
+    ("InternetCloseHandle", LogicalAbi::WinApi),
+    ("InternetSetOptionA", LogicalAbi::WinApi),
+    ("InternetSetOptionW", LogicalAbi::WinApi),
+    ("InternetQueryOptionA", LogicalAbi::WinApi),
+    ("InternetQueryOptionW", LogicalAbi::WinApi),
+    ("InternetCrackUrlA", LogicalAbi::WinApi),
+    ("InternetCrackUrlW", LogicalAbi::WinApi),
+    ("InternetGetConnectedState", LogicalAbi::WinApi),
+    ("InternetQueryDataAvailable", LogicalAbi::WinApi),
+    ("HttpQueryInfoA", LogicalAbi::WinApi),
+    ("HttpQueryInfoW", LogicalAbi::WinApi),
 ];
-
-/// Collects the generated hook definitions for this DLL family.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct WininetHookLibrary;
-
-impl HookLibrary for WininetHookLibrary {
-    fn collect(&self) -> Vec<crate::hooks::base::HookDefinition> {
-        stub_definitions(EXPORTS)
-    }
-}
 
 /// Registers the generated hook definitions for this DLL family.
 pub fn register_wininet_hooks(registry: &mut HookRegistry) {
-    registry.register_library(&WininetHookLibrary);
+    registry.register_function_stubs("wininet.dll", &FUNCTIONS);
 }

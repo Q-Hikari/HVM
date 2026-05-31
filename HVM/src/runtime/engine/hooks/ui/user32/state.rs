@@ -63,7 +63,7 @@ pub(super) struct User32WindowRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::runtime::engine) struct User32State {
+pub(crate) struct User32State {
     pub(super) desktop_window: Option<u32>,
     pub(super) active_window: Option<u32>,
     pub(super) shell_window: Option<u32>,
@@ -147,10 +147,50 @@ impl User32State {
             (value != 0).then_some(value)
         }
 
+        fn handle_reserved(
+            handle: u32,
+            windows: &BTreeMap<u32, User32WindowRecord>,
+            desktop: Option<u32>,
+            active: Option<u32>,
+            shell: Option<u32>,
+        ) -> bool {
+            handle == 0
+                || windows.contains_key(&handle)
+                || Some(handle) == desktop
+                || Some(handle) == active
+                || Some(handle) == shell
+        }
+
+        let mut windows = BTreeMap::new();
+        let desktop = maybe_handle(profile.display.desktop_window_handle);
+        let active = maybe_handle(profile.display.active_window_handle);
+        let shell = maybe_handle(profile.display.shell_window_handle);
+        let mut next_generated_handle = 0x0010_0100u32;
+        for configured in &profile.display.windows {
+            let mut handle = configured.handle;
+            while handle_reserved(handle, &windows, desktop, active, shell) {
+                handle = next_generated_handle;
+                next_generated_handle = next_generated_handle.saturating_add(0x10);
+            }
+
+            windows.insert(
+                handle,
+                User32WindowRecord {
+                    handle,
+                    class_name: configured.class_name.trim().to_string(),
+                    wnd_proc: 0,
+                    title: configured.title.trim().to_string(),
+                    parent: configured.parent_handle,
+                    owner_thread: configured.owner_thread_id,
+                    instance: configured.instance,
+                },
+            );
+        }
+
         User32State {
-            desktop_window: maybe_handle(profile.display.desktop_window_handle),
-            active_window: maybe_handle(profile.display.active_window_handle),
-            shell_window: maybe_handle(profile.display.shell_window_handle),
+            desktop_window: desktop,
+            active_window: active,
+            shell_window: shell,
             default_dc: maybe_handle(profile.display.default_dc_handle),
             default_icon: None,
             default_cursor: None,
@@ -178,7 +218,7 @@ impl User32State {
             timers: BTreeMap::new(),
             registered_classes: BTreeMap::new(),
             class_atoms: BTreeMap::new(),
-            windows: BTreeMap::new(),
+            windows,
             thread_messages: BTreeMap::new(),
             pending_hook_messages: BTreeMap::new(),
         }
@@ -187,17 +227,18 @@ impl User32State {
 
 impl VirtualExecutionEngine {
     pub(super) fn user32_current_thread_id(&self) -> u32 {
-        self.scheduler
+        self.core
+            .scheduler
             .current_tid()
-            .or(self.main_thread_tid)
+            .or(self.core.main_thread_tid)
             .unwrap_or(0)
     }
 
     pub(in crate::runtime::engine) fn user32_active_timer_count(&self) -> u64 {
-        self.user32_state.timers.len() as u64
+        self.ui.user32_state.timers.len() as u64
     }
 
     pub(in crate::runtime::engine) fn user32_active_hook_count(&self) -> u64 {
-        self.user32_state.hooks.len() as u64
+        self.ui.user32_state.hooks.len() as u64
     }
 }

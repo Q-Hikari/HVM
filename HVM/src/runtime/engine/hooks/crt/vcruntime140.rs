@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("vcruntime140.dll", "memcpy") => true,
@@ -19,12 +19,12 @@ impl VirtualExecutionEngine {
         Some((|| -> Result<u64, VmError> {
             match (module_name, function) {
                 ("vcruntime140.dll", "memcpy") => {
-                    self.copy_memory_block(arg(args, 0), arg(args, 1), arg(args, 2) as usize)
+                    self.copy_memory_block(ctx.raw(0), ctx.raw(1), ctx.raw(2) as usize)
                 }
                 ("vcruntime140.dll", "memchr") => {
-                    let address = arg(args, 0);
-                    let needle = arg(args, 1) as u8;
-                    let size = arg(args, 2) as usize;
+                    let address = ctx.raw(0);
+                    let needle = ctx.raw(1) as u8;
+                    let size = ctx.raw(2) as usize;
                     if address == 0 || size == 0 {
                         return Ok(0);
                     }

@@ -5,7 +5,7 @@ impl VirtualExecutionEngine {
         &mut self,
         module_name: &str,
         function: &str,
-        args: &[u64],
+        ctx: &HookContext<'_>,
     ) -> Option<Result<u64, VmError>> {
         let handled = match (module_name, function) {
             ("rpcrt4.dll", "UuidCreate") => true,
@@ -20,15 +20,15 @@ impl VirtualExecutionEngine {
             match (module_name, function) {
                 ("rpcrt4.dll", "UuidCreate") => {
                     let guid = self.next_guid_bytes_le(4);
-                    if arg(args, 0) != 0 {
-                        self.modules.memory_mut().write(arg(args, 0), &guid)?;
+                    if ctx.raw(0) != 0 {
+                        self.core.modules.memory_mut().write(ctx.raw(0), &guid)?;
                     }
                     Ok(RPC_S_OK)
                 }
                 ("rpcrt4.dll", "UuidCreateSequential") => {
                     let guid = self.next_guid_bytes_le(1);
-                    if arg(args, 0) != 0 {
-                        self.modules.memory_mut().write(arg(args, 0), &guid)?;
+                    if ctx.raw(0) != 0 {
+                        self.core.modules.memory_mut().write(ctx.raw(0), &guid)?;
                     }
                     Ok(RPC_S_UUID_LOCAL_ONLY)
                 }

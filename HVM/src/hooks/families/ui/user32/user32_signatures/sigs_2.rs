@@ -1,0 +1,1012 @@
+use crate::hooks::signature::{HookSignature, ParamSpec, ReturnSpec};
+use crate::hooks::types::{HookFlags, LogicalAbi, ParamDirection::*, ParamType::*};
+
+pub(super) static USER32_SIGS_2: &[HookSignature] = &[
+    // ── Drawing (text) ───────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "DrawTextExW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hdc", Handle),
+            ParamSpec::with_dir("lpchText", PWStr, InOut),
+            ParamSpec::new("cchText", I32),
+            ParamSpec::with_dir("lprc", OpaqueStructPtr("RECT"), InOut),
+            ParamSpec::new("dwDTFormat", Hex32),
+            ParamSpec::new("lpDTParams", OpaqueStructPtr("DRAWTEXTPARAMS")),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "DrawTextW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hdc", Handle),
+            ParamSpec::new("lpchText", PCWStr),
+            ParamSpec::new("cchText", I32),
+            ParamSpec::with_dir("lprc", OpaqueStructPtr("RECT"), InOut),
+            ParamSpec::new("format", Hex32),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "FillRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDC", Handle),
+            ParamSpec::new("lprc", OpaqueStructPtr("RECT")),
+            ParamSpec::new("hbr", Handle),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "FrameRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDC", Handle),
+            ParamSpec::new("lprc", OpaqueStructPtr("RECT")),
+            ParamSpec::new("hbr", Handle),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    // ── Clipboard ────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "EmptyClipboard",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window (enable / state) ──────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "EnableMenuItem",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hMenu", Handle),
+            ParamSpec::new("uIDEnableItem", U32),
+            ParamSpec::new("uEnable", Hex32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "EnableScrollBar",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("wSBflags", U32),
+            ParamSpec::new("wArrows", Hex32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "EnableWindow",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("bEnable", Bool32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window Position ──────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "EndDeferWindowPos",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWinPosInfo", Handle)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Dialog ───────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "EndDialog",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDlg", Handle),
+            ParamSpec::new("nResult", PointerSizedInt),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Display / Monitor ────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "EnumDisplayMonitors",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hdc", Handle),
+            ParamSpec::new("lprcClip", OpaqueStructPtr("RECT")),
+            ParamSpec::new("lpfnEnum", FunctionPtr),
+            ParamSpec::new("dwData", PointerSizedInt),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Rect ─────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "EqualRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("lprc1", OpaqueStructPtr("RECT")),
+            ParamSpec::new("lprc2", OpaqueStructPtr("RECT")),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── System ───────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "ExitWindowsEx",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("uFlags", Hex32),
+            ParamSpec::new("dwReason", Hex32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Keyboard ─────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetAsyncKeyState",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("vKey", I32)],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetKeyboardLayout",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("idThread", U32)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetKeyboardState",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::with_dir("lpKeyState", GuestPtr, Out)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetKeyNameTextW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("lParam", I32),
+            ParamSpec::new("lpString", PWStr),
+            ParamSpec::new("cchSize", I32),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetKeyState",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("nVirtKey", I32)],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window (capture / focus / popup) ─────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetCapture",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetFocus",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetLastActivePopup",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Window Class ─────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetClassInfoExW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInstance", ModuleHandle),
+            ParamSpec::new("lpszClass", PCWStr),
+            ParamSpec::with_dir("lpwcx", OpaqueStructPtr("WNDCLASSEXW"), Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetClassInfoW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInstance", ModuleHandle),
+            ParamSpec::new("lpszClass", PCWStr),
+            ParamSpec::with_dir("lpwcx", OpaqueStructPtr("WNDCLASSW"), Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetClassLongW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("nIndex", I32),
+        ],
+        ret: ReturnSpec::U32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetClassNameW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("lpClassName", PWStr),
+            ParamSpec::new("nMaxCount", I32),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    // ── Control / Dialog helpers ─────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetComboBoxInfo",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWndCombo", Handle),
+            ParamSpec::with_dir("pcbi", OpaqueStructPtr("COMBOBOXINFO"), Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetDlgCtrlID",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetDlgItem",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDlg", Handle),
+            ParamSpec::new("nIDDlgItem", I32),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetDoubleClickTime",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::U32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetCaretBlinkTime",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::U32,
+        flags: HookFlags::empty(),
+    },
+    // ── Gesture ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetGestureInfo",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hGestureInfo", Handle),
+            ParamSpec::with_dir("pGestureInfo", OpaqueStructPtr("GESTUREINFO"), Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Icon ─────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetIconInfo",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hIcon", Handle),
+            ParamSpec::with_dir("piconinfo", OpaqueStructPtr("ICONINFO"), Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Menu ─────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenu",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenuCheckMarkDimensions",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenuDefaultItem",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hMenu", Handle),
+            ParamSpec::new("fByPosition", U32),
+            ParamSpec::new("gmdiFlags", Hex32),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenuItemCount",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hMenu", Handle)],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenuItemID",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hMenu", Handle), ParamSpec::new("nPos", I32)],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenuItemInfoW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hMenu", Handle),
+            ParamSpec::new("uItem", U32),
+            ParamSpec::new("fByPosition", Bool32),
+            ParamSpec::with_dir("lpmii", OpaqueStructPtr("MENUITEMINFOW"), InOut),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenuState",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hMenu", Handle),
+            ParamSpec::new("uId", U32),
+            ParamSpec::new("uFlags", Hex32),
+        ],
+        ret: ReturnSpec::U32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMenuStringW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hMenu", Handle),
+            ParamSpec::new("uIDItem", U32),
+            ParamSpec::new("lpString", PWStr),
+            ParamSpec::new("cchMax", I32),
+            ParamSpec::new("flags", Hex32),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    // ── Message (pos) ───────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMessagePos",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::U32,
+        flags: HookFlags::empty(),
+    },
+    // ── Message ─────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMessageTime",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    // ── Monitor ─────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetMonitorInfoW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hMonitor", Handle),
+            ParamSpec::with_dir("lpmi", OpaqueStructPtr("MONITORINFO"), Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Dialog ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetNextDlgGroupItem",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDlg", Handle),
+            ParamSpec::new("hCtl", Handle),
+            ParamSpec::new("bPrevious", Bool32),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetNextDlgTabItem",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDlg", Handle),
+            ParamSpec::new("hCtl", Handle),
+            ParamSpec::new("bPrevious", Bool32),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Window Station ──────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetProcessWindowStation",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Window Property ─────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetPropW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("lpString", PCWStr),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Scroll ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetScrollInfo",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("nBar", I32),
+            ParamSpec::with_dir("lpsi", OpaqueStructPtr("SCROLLINFO"), InOut),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetScrollPos",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle), ParamSpec::new("nBar", I32)],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetScrollRange",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("nBar", I32),
+            ParamSpec::with_dir("lpMinPos", GuestPtr, Out),
+            ParamSpec::with_dir("lpMaxPos", GuestPtr, Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetShellWindow",
+        abi: LogicalAbi::WinApi,
+        params: &[],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Menu ────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetSubMenu",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hMenu", Handle), ParamSpec::new("nPos", I32)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── System ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetSysColor",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("nIndex", I32)],
+        ret: ReturnSpec::U32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetSysColorBrush",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("nIndex", I32)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Menu ────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetSystemMenu",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("bRevert", Bool32),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Window ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetTopWindow",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    // ── Rect ────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetUpdateRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::with_dir("lpRect", OpaqueStructPtr("RECT"), Out),
+            ParamSpec::new("bErase", Bool32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window Station ──────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetUserObjectInformationA",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hObj", Handle),
+            ParamSpec::new("nIndex", I32),
+            ParamSpec::with_dir("pvInfo", GuestPtr, Out),
+            ParamSpec::new("nLength", U32),
+            ParamSpec::with_dir("lpnLengthNeeded", GuestPtr, Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetUserObjectInformationW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hObj", Handle),
+            ParamSpec::new("nIndex", I32),
+            ParamSpec::with_dir("pvInfo", GuestPtr, Out),
+            ParamSpec::new("nLength", U32),
+            ParamSpec::with_dir("lpnLengthNeeded", GuestPtr, Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetWindow",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle), ParamSpec::new("uCmd", U32)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetWindowDC",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetWindowLongPtrW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("nIndex", I32),
+        ],
+        ret: ReturnSpec::PointerSizedInt,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetWindowLongW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("nIndex", I32),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "GetWindowPlacement",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::with_dir("lpwndpl", OpaqueStructPtr("WINDOWPLACEMENT"), Out),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Region ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetWindowRgn",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::with_dir("hRgn", Handle, InOut),
+        ],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GetWindowTextLengthW",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::I32,
+        flags: HookFlags::empty(),
+    },
+    // ── Drawing ─────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "GrayStringW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDC", Handle),
+            ParamSpec::new("hBrush", Handle),
+            ParamSpec::new("lpOutputFunc", FunctionPtr),
+            ParamSpec::new("lParam", PointerSizedInt),
+            ParamSpec::new("wParam", PointerSizedUInt),
+            ParamSpec::new("nXStart", I32),
+            ParamSpec::new("nYStart", I32),
+            ParamSpec::new("nWidth", I32),
+            ParamSpec::new("nHeight", I32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Caret ───────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "HideCaret",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Rect ────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "InflateRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::with_dir("lprc", OpaqueStructPtr("RECT"), InOut),
+            ParamSpec::new("dx", I32),
+            ParamSpec::new("dy", I32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Menu ────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "InsertMenuItemW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hmenu", Handle),
+            ParamSpec::new("uItem", U32),
+            ParamSpec::new("fByPosition", Bool32),
+            ParamSpec::new("lpmii", OpaqueStructPtr("MENUITEMINFOW")),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "InsertMenuW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hMenu", Handle),
+            ParamSpec::new("uPosition", U32),
+            ParamSpec::new("uFlags", Hex32),
+            ParamSpec::new("uIDNewItem", PointerSizedUInt),
+            ParamSpec::new("lpNewItem", PCWStr),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Rect ────────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "IntersectRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::with_dir("lprcDst", OpaqueStructPtr("RECT"), Out),
+            ParamSpec::new("lprcSrc1", OpaqueStructPtr("RECT")),
+            ParamSpec::new("lprcSrc2", OpaqueStructPtr("RECT")),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Rect / Region ───────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "InvalidateRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("lpRect", OpaqueStructPtr("RECT")),
+            ParamSpec::new("bErase", Bool32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "InvalidateRgn",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWnd", Handle),
+            ParamSpec::new("hRgn", Handle),
+            ParamSpec::new("bErase", Bool32),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "InvertRect",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDC", Handle),
+            ParamSpec::new("lprc", OpaqueStructPtr("RECT")),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Character ───────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "IsCharAlphaNumericW",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("ch", Hex32)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "IsCharLowerW",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("ch", Hex32)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Window ──────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "IsChild",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hWndParent", Handle),
+            ParamSpec::new("hWnd", Handle),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Clipboard ───────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "IsClipboardFormatAvailable",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("format", U32)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Message ─────────────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "IsDialogMessageW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDlg", Handle),
+            ParamSpec::new("lpMsg", OpaqueStructPtr("MSG")),
+        ],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Control / Dialog ────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "IsDlgButtonChecked",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hDlg", Handle),
+            ParamSpec::new("nIDButton", I32),
+        ],
+        ret: ReturnSpec::U32,
+        flags: HookFlags::empty(),
+    },
+    // ══════════════════════════════════════════════════════════════════════
+    // Batch 4 – Window state queries, resource loading, message helpers,
+    //           monitor APIs, menu manipulation, and misc UI functions
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── Window state queries ─────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "IsIconic",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "IsMenu",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hMenu", Handle)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "IsRectEmpty",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("lprc", OpaqueStructPtr("RECT"))],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "IsWindowEnabled",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "IsZoomed",
+        abi: LogicalAbi::WinApi,
+        params: &[ParamSpec::new("hWnd", Handle)],
+        ret: ReturnSpec::Bool32,
+        flags: HookFlags::empty(),
+    },
+    // ── Resource loading ─────────────────────────────────────────────────
+    HookSignature {
+        module: "user32.dll",
+        function: "LoadAcceleratorsW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInstance", ModuleHandle),
+            ParamSpec::new("lpTableName", PCWStr),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "LoadBitmapW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInstance", ModuleHandle),
+            ParamSpec::new("lpBitmapName", PCWStr),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "LoadCursorA",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInstance", ModuleHandle),
+            ParamSpec::new("lpCursorName", PCStr),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "LoadIconA",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInstance", ModuleHandle),
+            ParamSpec::new("lpIconName", PCStr),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "LoadImageW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInst", ModuleHandle),
+            ParamSpec::new("name", PCWStr),
+            ParamSpec::new("type", U32),
+            ParamSpec::new("cx", I32),
+            ParamSpec::new("cy", I32),
+            ParamSpec::new("fuLoad", Hex32),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+    HookSignature {
+        module: "user32.dll",
+        function: "LoadMenuW",
+        abi: LogicalAbi::WinApi,
+        params: &[
+            ParamSpec::new("hInstance", ModuleHandle),
+            ParamSpec::new("lpMenuName", PCWStr),
+        ],
+        ret: ReturnSpec::Pointer,
+        flags: HookFlags::empty(),
+    },
+];

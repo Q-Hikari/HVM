@@ -14,6 +14,7 @@ use crate::models::RunStopReason;
 pub struct RuntimeProfiler {
     output_path: Option<PathBuf>,
     sections: BTreeMap<&'static str, RuntimeProfileCounter>,
+    counters: BTreeMap<&'static str, u64>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -71,6 +72,7 @@ impl RuntimeProfiler {
         Self {
             output_path,
             sections: BTreeMap::new(),
+            counters: BTreeMap::new(),
         }
     }
 
@@ -131,6 +133,23 @@ impl RuntimeProfiler {
             let right_ns = right["total_ns"].as_u64().unwrap_or(0);
             right_ns.cmp(&left_ns)
         });
+        let mut counters = self
+            .counters
+            .iter()
+            .map(|(name, value)| {
+                json!({
+                    "name": name,
+                    "value": value,
+                })
+            })
+            .collect::<Vec<_>>();
+        counters.sort_by(|left, right| {
+            let left_value = left["value"].as_u64().unwrap_or(0);
+            let right_value = right["value"].as_u64().unwrap_or(0);
+            right_value
+                .cmp(&left_value)
+                .then_with(|| left["name"].as_str().cmp(&right["name"].as_str()))
+        });
 
         let report = json!({
             "timing_model": "inclusive_sections",
@@ -140,6 +159,7 @@ impl RuntimeProfiler {
             "instructions_per_second": instructions_per_second,
             "stop_reason": stop_reason.as_str(),
             "sections": sections,
+            "counters": counters,
         });
 
         if let Some(parent) = path.parent() {
@@ -169,6 +189,22 @@ impl RuntimeProfiler {
         counter.calls = counter.calls.saturating_add(1);
         counter.total_ns = counter.total_ns.saturating_add(elapsed_ns);
         counter.max_ns = counter.max_ns.max(elapsed_ns);
+    }
+
+    pub fn add_counter(&mut self, name: &'static str, delta: u64) {
+        if !self.enabled() || delta == 0 {
+            return;
+        }
+        let counter = self.counters.entry(name).or_default();
+        *counter = counter.saturating_add(delta);
+    }
+
+    pub fn set_counter_max(&mut self, name: &'static str, value: u64) {
+        if !self.enabled() {
+            return;
+        }
+        let counter = self.counters.entry(name).or_default();
+        *counter = (*counter).max(value);
     }
 }
 
