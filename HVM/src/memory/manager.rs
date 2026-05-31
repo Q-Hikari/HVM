@@ -1,3 +1,10 @@
+use std::collections::BTreeMap;
+
+use smallvec::SmallVec;
+
+use rand::rngs::StdRng;
+use rand::{RngCore, SeedableRng};
+
 use crate::arch::{ArchSpec, X86_ARCH};
 use crate::error::MemoryError;
 use crate::runtime::unicorn::{
@@ -5,7 +12,7 @@ use crate::runtime::unicorn::{
     UC_PROT_WRITE as UC_NATIVE_PROT_WRITE,
 };
 
-/// Matches the emulated page size used by the Python memory manager.
+/// Emulated page size (4 KB).
 pub const PAGE_SIZE: u64 = 0x1000;
 
 /// Read permission bit for emulated regions.
@@ -16,148 +23,7 @@ pub const PROT_WRITE: u32 = 0x2;
 
 /// Execute permission bit for emulated regions.
 pub const PROT_EXEC: u32 = 0x4;
-
-const MT_N: usize = 624;
-const MT_M: usize = 397;
-const MT_MATRIX_A: u32 = 0x9908_B0DF;
-const MT_UPPER_MASK: u32 = 0x8000_0000;
-const MT_LOWER_MASK: u32 = 0x7FFF_FFFF;
-
-#[derive(Debug, Clone)]
-struct PythonMt19937 {
-    state: [u32; MT_N],
-    index: usize,
-}
-
-impl PythonMt19937 {
-    fn new(seed: u32) -> Self {
-        let mut rng = Self {
-            state: [0; MT_N],
-            index: MT_N,
-        };
-        rng.init_by_array(&[seed]);
-        rng
-    }
-
-    fn init_genrand(&mut self, seed: u32) {
-        self.state[0] = seed;
-        for i in 1..MT_N {
-            let previous = self.state[i - 1];
-            self.state[i] = 1_812_433_253u32
-                .wrapping_mul(previous ^ (previous >> 30))
-                .wrapping_add(i as u32);
-        }
-        self.index = MT_N;
-    }
-
-    fn init_by_array(&mut self, init_key: &[u32]) {
-        self.init_genrand(19_650_218);
-        let mut i = 1usize;
-        let mut j = 0usize;
-        let mut k = MT_N.max(init_key.len());
-        while k > 0 {
-            let previous = self.state[i - 1];
-            self.state[i] = (self.state[i] ^ (previous ^ (previous >> 30)).wrapping_mul(1_664_525))
-                .wrapping_add(init_key[j])
-                .wrapping_add(j as u32);
-            i += 1;
-            j += 1;
-            if i >= MT_N {
-                self.state[0] = self.state[MT_N - 1];
-                i = 1;
-            }
-            if j >= init_key.len() {
-                j = 0;
-            }
-            k -= 1;
-        }
-        k = MT_N - 1;
-        while k > 0 {
-            let previous = self.state[i - 1];
-            self.state[i] = (self.state[i]
-                ^ (previous ^ (previous >> 30)).wrapping_mul(1_566_083_941))
-            .wrapping_sub(i as u32);
-            i += 1;
-            if i >= MT_N {
-                self.state[0] = self.state[MT_N - 1];
-                i = 1;
-            }
-            k -= 1;
-        }
-        self.state[0] = 0x8000_0000;
-        self.index = MT_N;
-    }
-
-    fn next_u32(&mut self) -> u32 {
-        if self.index >= MT_N {
-            self.twist();
-        }
-        let mut value = self.state[self.index];
-        self.index += 1;
-        value ^= value >> 11;
-        value ^= (value << 7) & 0x9D2C_5680;
-        value ^= (value << 15) & 0xEFC6_0000;
-        value ^= value >> 18;
-        value
-    }
-
-    fn getrandbits(&mut self, bits: u32) -> u64 {
-        if bits == 0 {
-            return 0;
-        }
-        if bits <= 32 {
-            return (self.next_u32() >> (32 - bits)) as u64;
-        }
-        let words = ((bits - 1) / 32) + 1;
-        let mut result = 0u64;
-        for word_index in 0..words {
-            let chunk_bits = if word_index == 0 {
-                bits - 32 * (words - 1)
-            } else {
-                32
-            };
-            let mut chunk = self.next_u32();
-            if chunk_bits < 32 {
-                chunk >>= 32 - chunk_bits;
-            }
-            result = (result << chunk_bits) | chunk as u64;
-        }
-        result
-    }
-
-    fn rand_below(&mut self, upper_bound: u64) -> u64 {
-        debug_assert!(upper_bound > 0);
-        let bits = u64::BITS - upper_bound.leading_zeros();
-        loop {
-            let candidate = self.getrandbits(bits);
-            if candidate < upper_bound {
-                return candidate;
-            }
-        }
-    }
-
-    fn twist(&mut self) {
-        for index in 0..(MT_N - MT_M) {
-            let value =
-                (self.state[index] & MT_UPPER_MASK) | (self.state[index + 1] & MT_LOWER_MASK);
-            self.state[index] = self.state[index + MT_M]
-                ^ (value >> 1)
-                ^ if value & 1 != 0 { MT_MATRIX_A } else { 0 };
-        }
-        for index in (MT_N - MT_M)..(MT_N - 1) {
-            let value =
-                (self.state[index] & MT_UPPER_MASK) | (self.state[index + 1] & MT_LOWER_MASK);
-            self.state[index] = self.state[index + MT_M - MT_N]
-                ^ (value >> 1)
-                ^ if value & 1 != 0 { MT_MATRIX_A } else { 0 };
-        }
-        let value = (self.state[MT_N - 1] & MT_UPPER_MASK) | (self.state[0] & MT_LOWER_MASK);
-        self.state[MT_N - 1] =
-            self.state[MT_M - 1] ^ (value >> 1) ^ if value & 1 != 0 { MT_MATRIX_A } else { 0 };
-        self.index = 0;
-    }
-}
-
+const X86_LOW_FALLBACK_ALLOC_BASE: u64 = 0x1000_0000;
 /// Captures one mapped memory region and its backing bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryRegion {
@@ -165,7 +31,7 @@ pub struct MemoryRegion {
     pub size: u64,
     pub perms: u32,
     pub tag: String,
-    data: Vec<u8>,
+    data: Option<Vec<u8>>,
 }
 
 impl MemoryRegion {
@@ -187,8 +53,8 @@ pub struct MemoryLayout {
 #[derive(Debug)]
 pub struct MemoryManager {
     layout: MemoryLayout,
-    rng: PythonMt19937,
-    pub regions: Vec<MemoryRegion>,
+    rng: StdRng,
+    pub regions: BTreeMap<u64, MemoryRegion>,
     pub history: Vec<(u64, u64)>,
     native_backend: Option<NativeBackend>,
 }
@@ -208,14 +74,14 @@ impl MemoryManager {
                 stack_size: arch.stack_size,
                 alloc_base: arch.alloc_base,
             },
-            rng: PythonMt19937::new(0xC0DE_C0DE),
-            regions: Vec::new(),
+            rng: StdRng::seed_from_u64(0xC0DE_C0DE),
+            regions: BTreeMap::new(),
             history: Vec::new(),
             native_backend: None,
         }
     }
 
-    /// Builds a test-friendly x86 memory manager that mirrors the Python defaults.
+    /// Builds a test-friendly x86 memory manager.
     pub fn for_tests() -> Self {
         Self::for_arch(&X86_ARCH)
     }
@@ -223,6 +89,11 @@ impl MemoryManager {
     /// Returns the active memory-layout constants used for stack and allocation placement.
     pub fn layout(&self) -> MemoryLayout {
         self.layout
+    }
+
+    /// Overrides the reserved stack size while preserving the existing stack placement.
+    pub fn set_stack_size(&mut self, stack_size: u64) {
+        self.layout.stack_size = align_up(stack_size.max(PAGE_SIZE), PAGE_SIZE);
     }
 
     /// Returns whether the requested range is currently unmapped.
@@ -243,15 +114,17 @@ impl MemoryManager {
             return Err(MemoryError::OverlappingRegion { base, size });
         }
         self.map_region_native(base, size, perms)?;
-        let index = self.insert_index(base);
         self.regions.insert(
-            index,
+            base,
             MemoryRegion {
                 base,
                 size,
                 perms,
                 tag: tag.to_string(),
-                data: vec![0; size as usize],
+                data: self
+                    .native_backend
+                    .is_none()
+                    .then(|| vec![0; size as usize]),
             },
         );
         let history_index = self.history.partition_point(|(start, _)| *start < base);
@@ -263,25 +136,35 @@ impl MemoryManager {
     /// Updates the protection flags for an exact region mapping.
     pub fn protect(&mut self, base: u64, size: u64, perms: u32) -> Result<(), MemoryError> {
         let start = base & !(PAGE_SIZE - 1);
-        let size = align_up(size.max(1), PAGE_SIZE);
-        let end = start.saturating_add(size);
-        let mut index = self
-            .region_index_for_address(start)
-            .unwrap_or_else(|| self.insert_index(start));
-        if self
-            .regions
-            .get(index)
-            .map(|region| start >= region.end())
-            .unwrap_or(false)
-        {
-            index += 1;
-        }
-        let first = index;
-        let mut cursor = start;
-        let mut replacement = Vec::new();
+        let aligned_size = align_up(size.max(1), PAGE_SIZE);
+        let end = start.saturating_add(aligned_size);
 
+        // Collect overlapping regions: those whose base < end AND whose end > start.
+        let keys: Vec<u64> = self
+            .regions
+            .range(..end)
+            .filter(|(_, r)| r.end() > start)
+            .map(|(k, _)| *k)
+            .collect();
+
+        if keys.is_empty() {
+            return Err(MemoryError::MissingRegion {
+                address: start,
+                size: aligned_size,
+            });
+        }
+
+        // Remove old regions, collect them for slicing.
+        let mut old: Vec<MemoryRegion> = Vec::with_capacity(keys.len());
+        for key in &keys {
+            old.push(self.regions.remove(key).expect("key came from iterator"));
+        }
+
+        // Build replacement regions from the splice plan.
+        let mut cursor = start;
+        let mut region_idx = 0;
         while cursor < end {
-            let region = self.regions.get(index).ok_or(MemoryError::MissingRegion {
+            let region = old.get(region_idx).ok_or(MemoryError::MissingRegion {
                 address: cursor,
                 size: end.saturating_sub(cursor),
             })?;
@@ -300,58 +183,55 @@ impl MemoryManager {
                 });
             }
             if overlap_start > region.base {
-                replacement.push(Self::slice_region(
-                    region,
-                    region.base,
-                    overlap_start,
-                    region.perms,
-                ));
+                let sliced = Self::slice_region(region, region.base, overlap_start, region.perms);
+                self.regions.insert(sliced.base, sliced);
             }
-            replacement.push(Self::slice_region(
-                region,
-                overlap_start,
-                overlap_end,
-                perms,
-            ));
+            let sliced = Self::slice_region(region, overlap_start, overlap_end, perms);
+            self.regions.insert(sliced.base, sliced);
             if overlap_end < region.end() {
-                replacement.push(Self::slice_region(
-                    region,
-                    overlap_end,
-                    region.end(),
-                    region.perms,
-                ));
+                let sliced = Self::slice_region(region, overlap_end, region.end(), region.perms);
+                self.regions.insert(sliced.base, sliced);
             }
             cursor = overlap_end;
-            index += 1;
+            region_idx += 1;
         }
 
-        self.protect_region_native(start, size, perms)?;
-        self.regions.splice(first..index, replacement);
+        self.protect_region_native(start, aligned_size, perms)?;
         Ok(())
     }
 
     /// Removes an exact region mapping from the table.
     pub fn unmap(&mut self, base: u64, size: u64) -> Result<(), MemoryError> {
         let start = base & !(PAGE_SIZE - 1);
-        let size = align_up(size.max(1), PAGE_SIZE);
-        let end = start.saturating_add(size);
-        let mut index = self
-            .region_index_for_address(start)
-            .unwrap_or_else(|| self.insert_index(start));
-        if self
-            .regions
-            .get(index)
-            .map(|region| start >= region.end())
-            .unwrap_or(false)
-        {
-            index += 1;
-        }
-        let first = index;
-        let mut cursor = start;
-        let mut replacement = Vec::new();
+        let aligned_size = align_up(size.max(1), PAGE_SIZE);
+        let end = start.saturating_add(aligned_size);
 
+        // Collect overlapping regions: those whose base < end AND whose end > start.
+        let keys: Vec<u64> = self
+            .regions
+            .range(..end)
+            .filter(|(_, r)| r.end() > start)
+            .map(|(k, _)| *k)
+            .collect();
+
+        if keys.is_empty() {
+            return Err(MemoryError::MissingRegion {
+                address: start,
+                size: aligned_size,
+            });
+        }
+
+        // Remove old regions, collect them for slicing.
+        let mut old: Vec<MemoryRegion> = Vec::with_capacity(keys.len());
+        for key in &keys {
+            old.push(self.regions.remove(key).expect("key came from iterator"));
+        }
+
+        // Build replacement regions (keep non-overlapping head/tail).
+        let mut cursor = start;
+        let mut region_idx = 0;
         while cursor < end {
-            let region = self.regions.get(index).ok_or(MemoryError::MissingRegion {
+            let region = old.get(region_idx).ok_or(MemoryError::MissingRegion {
                 address: cursor,
                 size: end.saturating_sub(cursor),
             })?;
@@ -369,28 +249,19 @@ impl MemoryManager {
                     size: end.saturating_sub(cursor),
                 });
             }
-            if region.base < overlap_start {
-                replacement.push(Self::slice_region(
-                    region,
-                    region.base,
-                    overlap_start,
-                    region.perms,
-                ));
+            if overlap_start > region.base {
+                let sliced = Self::slice_region(region, region.base, overlap_start, region.perms);
+                self.regions.insert(sliced.base, sliced);
             }
             if overlap_end < region.end() {
-                replacement.push(Self::slice_region(
-                    region,
-                    overlap_end,
-                    region.end(),
-                    region.perms,
-                ));
+                let sliced = Self::slice_region(region, overlap_end, region.end(), region.perms);
+                self.regions.insert(sliced.base, sliced);
             }
             cursor = overlap_end;
-            index += 1;
+            region_idx += 1;
         }
 
-        self.unmap_region_native(start, size)?;
-        self.regions.splice(first..index, replacement);
+        self.unmap_region_native(start, aligned_size)?;
         Ok(())
     }
 
@@ -413,7 +284,7 @@ impl MemoryManager {
         let alloc_span = self.allocation_span();
         let slots = alloc_span / PAGE_SIZE;
         for _ in 0..0x20_000 {
-            let candidate = probe + self.rng.rand_below(slots) * PAGE_SIZE;
+            let candidate = probe + (self.rng.next_u64() % slots) * PAGE_SIZE;
             if self.is_free(candidate, size, avoid_history) {
                 return self.map_region(candidate, size, PROT_READ | PROT_WRITE | PROT_EXEC, tag);
             }
@@ -430,10 +301,36 @@ impl MemoryManager {
             }
             candidate = next;
         }
-        Err(MemoryError::OutOfMemory { size })
+        if self.layout.alloc_base <= u32::MAX as u64
+            && X86_LOW_FALLBACK_ALLOC_BASE < self.layout.alloc_base
+        {
+            let mut candidate = align_up(X86_LOW_FALLBACK_ALLOC_BASE, PAGE_SIZE);
+            let limit = self.layout.alloc_base.saturating_sub(size);
+            while candidate <= limit {
+                if self.is_free(candidate, size, avoid_history) {
+                    return self.map_region(
+                        candidate,
+                        size,
+                        PROT_READ | PROT_WRITE | PROT_EXEC,
+                        tag,
+                    );
+                }
+                let next = candidate.saturating_add(PAGE_SIZE);
+                if next <= candidate {
+                    break;
+                }
+                candidate = next;
+            }
+        }
+        Err(MemoryError::OutOfMemory {
+            size,
+            tag: Some(tag.to_string()),
+            preferred,
+            avoid_history: Some(avoid_history),
+        })
     }
 
-    /// Allocates the primary stack using the Python x86 default placement when available.
+    /// Allocates the primary stack using the default x86 placement.
     pub fn allocate_stack(&mut self) -> Result<(u64, u64), MemoryError> {
         let base = self.layout.stack_base - self.layout.stack_size;
         if self.is_free(base, self.layout.stack_size, false) {
@@ -452,8 +349,7 @@ impl MemoryManager {
     /// Finds the mapped region that fully contains the requested range.
     pub fn find_region(&self, address: u64, size: u64) -> Option<&MemoryRegion> {
         let end = address.checked_add(size.max(1))?;
-        let index = self.region_index_for_address(address)?;
-        let region = self.regions.get(index)?;
+        let region = self.regions.range(..=address).next_back()?.1;
         if end <= region.end() {
             Some(region)
         } else {
@@ -471,20 +367,22 @@ impl MemoryManager {
         let chunks = self.range_chunks(address, (data.len() as u64).max(1))?;
         self.write_native(address, data)?;
         let mut written = 0usize;
-        for (index, offset, chunk_len) in chunks {
+        for (key, offset, chunk_len) in chunks {
             if written >= data.len() {
                 break;
             }
             let copy_len = chunk_len.min(data.len() - written);
             let region = self
                 .regions
-                .get_mut(index)
+                .get_mut(&key)
                 .ok_or(MemoryError::MissingRegion {
                     address,
                     size: (data.len() as u64).max(1),
                 })?;
-            region.data[offset..offset + copy_len]
-                .copy_from_slice(&data[written..written + copy_len]);
+            if let Some(backing) = region.data.as_mut() {
+                backing[offset..offset + copy_len]
+                    .copy_from_slice(&data[written..written + copy_len]);
+            }
             written += copy_len;
         }
         Ok(())
@@ -494,21 +392,54 @@ impl MemoryManager {
     pub fn write_mirror(&mut self, address: u64, data: &[u8]) -> Result<(), MemoryError> {
         let chunks = self.range_chunks(address, (data.len() as u64).max(1))?;
         let mut written = 0usize;
-        for (index, offset, chunk_len) in chunks {
+        for (key, offset, chunk_len) in chunks {
             if written >= data.len() {
                 break;
             }
             let copy_len = chunk_len.min(data.len() - written);
             let region = self
                 .regions
-                .get_mut(index)
+                .get_mut(&key)
                 .ok_or(MemoryError::MissingRegion {
                     address,
                     size: (data.len() as u64).max(1),
                 })?;
-            region.data[offset..offset + copy_len]
-                .copy_from_slice(&data[written..written + copy_len]);
+            if let Some(backing) = region.data.as_mut() {
+                backing[offset..offset + copy_len]
+                    .copy_from_slice(&data[written..written + copy_len]);
+            }
             written += copy_len;
+        }
+        Ok(())
+    }
+
+    /// Fast path for native write-back when the caller already knows the range
+    /// fits entirely inside one mapped region.
+    pub fn write_mirror_contiguous(
+        &mut self,
+        address: u64,
+        data: &[u8],
+    ) -> Result<(), MemoryError> {
+        let size = (data.len() as u64).max(1);
+        let end = address
+            .checked_add(size)
+            .ok_or(MemoryError::MissingRegion { address, size })?;
+        let key = self
+            .regions
+            .range(..=address)
+            .next_back()
+            .map(|(k, _)| *k)
+            .ok_or(MemoryError::MissingRegion { address, size })?;
+        let region = self
+            .regions
+            .get_mut(&key)
+            .ok_or(MemoryError::MissingRegion { address, size })?;
+        if end > region.end() {
+            return Err(MemoryError::MissingRegion { address, size });
+        }
+        if let Some(backing) = region.data.as_mut() {
+            let offset = (address - region.base) as usize;
+            backing[offset..offset + data.len()].copy_from_slice(data);
         }
         Ok(())
     }
@@ -517,28 +448,33 @@ impl MemoryManager {
     pub fn read(&self, address: u64, size: usize) -> Result<Vec<u8>, MemoryError> {
         if let Some(backend) = self.native_backend {
             let api = unsafe { &*backend.api };
+            let unicorn = unsafe { api.bind(backend.handle) };
             let mut bytes = vec![0u8; size];
-            unsafe { api.mem_read_into_raw(backend.handle, address, &mut bytes) }.map_err(
-                |detail| MemoryError::NativeBackend {
+            unicorn
+                .mem_read_into(address, &mut bytes)
+                .map_err(|detail| MemoryError::NativeBackend {
                     op: "uc_mem_read",
                     detail,
-                },
-            )?;
+                })?;
             return Ok(bytes);
         }
         let chunks = self.range_chunks(address, (size as u64).max(1))?;
         let mut bytes = Vec::with_capacity(size);
         let mut remaining = size;
-        for (index, offset, chunk_len) in chunks {
+        for (key, offset, chunk_len) in chunks {
             if remaining == 0 {
                 break;
             }
             let copy_len = chunk_len.min(remaining);
-            let region = self.regions.get(index).ok_or(MemoryError::MissingRegion {
+            let region = self.regions.get(&key).ok_or(MemoryError::MissingRegion {
                 address,
                 size: (size as u64).max(1),
             })?;
-            bytes.extend_from_slice(&region.data[offset..offset + copy_len]);
+            let backing = region.data.as_ref().ok_or(MemoryError::MissingRegion {
+                address,
+                size: (size as u64).max(1),
+            })?;
+            bytes.extend_from_slice(&backing[offset..offset + copy_len]);
             remaining -= copy_len;
         }
         Ok(bytes)
@@ -548,28 +484,33 @@ impl MemoryManager {
     pub fn read_fixed<const N: usize>(&self, address: u64) -> Result<[u8; N], MemoryError> {
         if let Some(backend) = self.native_backend {
             let api = unsafe { &*backend.api };
+            let unicorn = unsafe { api.bind(backend.handle) };
             let mut bytes = [0u8; N];
-            unsafe { api.mem_read_into_raw(backend.handle, address, &mut bytes) }.map_err(
-                |detail| MemoryError::NativeBackend {
+            unicorn
+                .mem_read_into(address, &mut bytes)
+                .map_err(|detail| MemoryError::NativeBackend {
                     op: "uc_mem_read",
                     detail,
-                },
-            )?;
+                })?;
             return Ok(bytes);
         }
         let mut bytes = [0u8; N];
         let chunks = self.range_chunks(address, (N as u64).max(1))?;
         let mut read = 0usize;
-        for (index, offset, chunk_len) in chunks {
+        for (key, offset, chunk_len) in chunks {
             if read >= N {
                 break;
             }
             let copy_len = chunk_len.min(N - read);
-            let region = self.regions.get(index).ok_or(MemoryError::MissingRegion {
+            let region = self.regions.get(&key).ok_or(MemoryError::MissingRegion {
                 address,
                 size: (N as u64).max(1),
             })?;
-            bytes[read..read + copy_len].copy_from_slice(&region.data[offset..offset + copy_len]);
+            let backing = region.data.as_ref().ok_or(MemoryError::MissingRegion {
+                address,
+                size: (N as u64).max(1),
+            })?;
+            bytes[read..read + copy_len].copy_from_slice(&backing[offset..offset + copy_len]);
             read += copy_len;
         }
         Ok(bytes)
@@ -593,6 +534,11 @@ impl MemoryManager {
     /// Attaches a live Unicorn backend so subsequent memory operations hit native state directly.
     pub fn attach_native(&mut self, api: *const UnicornApi, handle: *mut UcEngine) {
         self.native_backend = Some(NativeBackend { api, handle });
+        // Once Unicorn owns the authoritative guest memory, drop the Rust-side mirror to avoid
+        // keeping a second full copy of every mapped region in RSS.
+        for region in self.regions.values_mut() {
+            region.data = None;
+        }
     }
 
     /// Detaches any live Unicorn backend and falls back to the local mirror only.
@@ -602,53 +548,64 @@ impl MemoryManager {
 
     fn overlaps_regions(&self, base: u64, size: u64) -> bool {
         let end = base.saturating_add(size);
-        let index = self.insert_index(base);
-        self.regions
-            .get(index)
-            .map(|region| region.base < end)
+        // Check the region at or just after `base`.
+        if self
+            .regions
+            .range(base..)
+            .next()
+            .map(|(_, r)| r.base < end)
             .unwrap_or(false)
-            || index
-                .checked_sub(1)
-                .and_then(|previous| self.regions.get(previous))
-                .map(|region| base < region.end())
-                .unwrap_or(false)
+        {
+            return true;
+        }
+        // Check the region just before `base` — it may extend past `base`.
+        self.regions
+            .range(..base)
+            .next_back()
+            .map(|(_, r)| base < r.end())
+            .unwrap_or(false)
     }
 
     fn overlaps_history(&self, base: u64, size: u64) -> bool {
-        let end = base + size;
-        self.history
-            .iter()
-            .any(|(other_base, other_end)| base < *other_end && *other_base < end)
-    }
-
-    fn insert_index(&self, base: u64) -> usize {
-        self.regions.partition_point(|region| region.base < base)
-    }
-
-    fn region_index_for_address(&self, address: u64) -> Option<usize> {
-        let index = self
-            .regions
-            .partition_point(|region| region.base <= address);
-        index.checked_sub(1)
+        let end = base.saturating_add(size);
+        // history is sorted by base — use binary search to find the starting point
+        let idx = self
+            .history
+            .partition_point(|(other_base, _)| *other_base < base);
+        // Check the entry just before (its range may extend past our base)
+        if idx > 0 {
+            let (prev_base, prev_end) = &self.history[idx - 1];
+            if base < *prev_end && *prev_base < end {
+                return true;
+            }
+        }
+        // Check entries at or after the starting point until their base >= our end
+        for (other_base, other_end) in &self.history[idx..] {
+            if *other_base >= end {
+                break;
+            }
+            if base < *other_end {
+                return true;
+            }
+        }
+        false
     }
 
     fn range_chunks(
         &self,
         address: u64,
         size: u64,
-    ) -> Result<Vec<(usize, usize, usize)>, MemoryError> {
+    ) -> Result<SmallVec<[(u64, usize, usize); 4]>, MemoryError> {
         let end = address
             .checked_add(size)
             .ok_or(MemoryError::MissingRegion { address, size })?;
-        let mut chunks = Vec::new();
+        let mut chunks = SmallVec::new();
         let mut cursor = address;
         while cursor < end {
-            let index = self
-                .region_index_for_address(cursor)
-                .ok_or(MemoryError::MissingRegion { address, size })?;
-            let region = self
+            let (&key, region) = self
                 .regions
-                .get(index)
+                .range(..=cursor)
+                .next_back()
                 .ok_or(MemoryError::MissingRegion { address, size })?;
             if cursor < region.base {
                 return Err(MemoryError::MissingRegion { address, size });
@@ -658,7 +615,7 @@ impl MemoryManager {
                 return Err(MemoryError::MissingRegion { address, size });
             }
             chunks.push((
-                index,
+                key,
                 (cursor - region.base) as usize,
                 (chunk_end - cursor) as usize,
             ));
@@ -683,7 +640,10 @@ impl MemoryManager {
             size: size as u64,
             perms,
             tag: region.tag.clone(),
-            data: region.data[offset..offset + size].to_vec(),
+            data: region
+                .data
+                .as_ref()
+                .map(|backing| backing[offset..offset + size].to_vec()),
         }
     }
 
@@ -692,12 +652,13 @@ impl MemoryManager {
             return Ok(());
         };
         let api = unsafe { &*backend.api };
-        unsafe { api.mem_write_raw(backend.handle, address, data) }.map_err(|detail| {
-            MemoryError::NativeBackend {
+        let unicorn = unsafe { api.bind(backend.handle) };
+        unicorn
+            .mem_write(address, data)
+            .map_err(|detail| MemoryError::NativeBackend {
                 op: "uc_mem_write",
                 detail,
-            }
-        })
+            })
     }
 
     fn map_region_native(&self, base: u64, size: u64, perms: u32) -> Result<(), MemoryError> {
@@ -705,12 +666,13 @@ impl MemoryManager {
             return Ok(());
         };
         let api = unsafe { &*backend.api };
-        unsafe { api.mem_map_raw(backend.handle, base, size, unicorn_prot(perms)) }.map_err(
-            |detail| MemoryError::NativeBackend {
+        let unicorn = unsafe { api.bind(backend.handle) };
+        unicorn
+            .mem_map(base, size, unicorn_prot(perms))
+            .map_err(|detail| MemoryError::NativeBackend {
                 op: "uc_mem_map",
                 detail,
-            },
-        )
+            })
     }
 
     fn protect_region_native(&self, base: u64, size: u64, perms: u32) -> Result<(), MemoryError> {
@@ -718,12 +680,13 @@ impl MemoryManager {
             return Ok(());
         };
         let api = unsafe { &*backend.api };
-        unsafe { api.mem_protect_raw(backend.handle, base, size, unicorn_prot(perms)) }.map_err(
-            |detail| MemoryError::NativeBackend {
+        let unicorn = unsafe { api.bind(backend.handle) };
+        unicorn
+            .mem_protect(base, size, unicorn_prot(perms))
+            .map_err(|detail| MemoryError::NativeBackend {
                 op: "uc_mem_protect",
                 detail,
-            },
-        )
+            })
     }
 
     fn unmap_region_native(&self, base: u64, size: u64) -> Result<(), MemoryError> {
@@ -731,12 +694,13 @@ impl MemoryManager {
             return Ok(());
         };
         let api = unsafe { &*backend.api };
-        unsafe { api.mem_unmap_raw(backend.handle, base, size) }.map_err(|detail| {
-            MemoryError::NativeBackend {
+        let unicorn = unsafe { api.bind(backend.handle) };
+        unicorn
+            .mem_unmap(base, size)
+            .map_err(|detail| MemoryError::NativeBackend {
                 op: "uc_mem_unmap",
                 detail,
-            }
-        })
+            })
     }
 }
 
@@ -761,26 +725,6 @@ pub fn align_up(value: u64, alignment: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::PythonMt19937;
-
-    #[test]
-    fn python_mt19937_matches_python_getrandbits_reference() {
-        let mut rng = PythonMt19937::new(0xC0DE_C0DE);
-        let expected = [
-            0x8AA1_15A0u64,
-            0x6417_0D35,
-            0xFC20_10DB,
-            0x6593_1D9D,
-            0x2106_2F94,
-            0xB5B5_658E,
-            0x7641_B930,
-            0x8033_0E53,
-        ];
-        for value in expected {
-            assert_eq!(rng.getrandbits(32), value);
-        }
-    }
-
     #[test]
     fn protect_splits_regions_for_subrange_updates() {
         let mut memory = super::MemoryManager::for_tests();
@@ -798,22 +742,17 @@ mod tests {
             .protect(base + 0x1000, 0x1000, super::PROT_READ)
             .unwrap();
 
-        assert_eq!(memory.regions.len(), 3);
-        assert_eq!(memory.regions[0].base, base);
-        assert_eq!(memory.regions[0].size, 0x1000);
-        assert_eq!(
-            memory.regions[0].perms,
-            super::PROT_READ | super::PROT_WRITE
-        );
-        assert_eq!(memory.regions[1].base, base + 0x1000);
-        assert_eq!(memory.regions[1].size, 0x1000);
-        assert_eq!(memory.regions[1].perms, super::PROT_READ);
-        assert_eq!(memory.regions[2].base, base + 0x2000);
-        assert_eq!(memory.regions[2].size, 0x1000);
-        assert_eq!(
-            memory.regions[2].perms,
-            super::PROT_READ | super::PROT_WRITE
-        );
+        let regions: Vec<&super::MemoryRegion> = memory.regions.values().collect();
+        assert_eq!(regions.len(), 3);
+        assert_eq!(regions[0].base, base);
+        assert_eq!(regions[0].size, 0x1000);
+        assert_eq!(regions[0].perms, super::PROT_READ | super::PROT_WRITE);
+        assert_eq!(regions[1].base, base + 0x1000);
+        assert_eq!(regions[1].size, 0x1000);
+        assert_eq!(regions[1].perms, super::PROT_READ);
+        assert_eq!(regions[2].base, base + 0x2000);
+        assert_eq!(regions[2].size, 0x1000);
+        assert_eq!(regions[2].perms, super::PROT_READ | super::PROT_WRITE);
         assert_eq!(memory.read(base + 0x1000, 5).unwrap(), b"split");
     }
 
@@ -865,7 +804,7 @@ mod tests {
     }
 
     #[test]
-    fn x86_reserve_window_matches_python_compatibility_span() {
+    fn x86_reserve_window_matches_default_span() {
         let memory = super::MemoryManager::for_tests();
         assert_eq!(memory.allocation_span(), 0x20_000_000);
     }
@@ -874,5 +813,49 @@ mod tests {
     fn x64_reserve_window_expands_beyond_legacy_512mb_span() {
         let memory = super::MemoryManager::for_arch(&crate::arch::X64_ARCH);
         assert_eq!(memory.allocation_span(), 0x1_0000_0000);
+    }
+
+    #[test]
+    fn x86_reserve_falls_back_below_primary_high_arena() {
+        let mut memory = super::MemoryManager::for_tests();
+        memory.regions.insert(
+            memory.layout.alloc_base,
+            super::MemoryRegion {
+                base: memory.layout.alloc_base,
+                size: memory.allocation_span(),
+                perms: super::PROT_READ,
+                tag: "occupied-high-arena".to_string(),
+                data: None,
+            },
+        );
+
+        let reserved = memory
+            .reserve(super::PAGE_SIZE, None, "fallback", false)
+            .expect("x86 reserve should fall back into the lower arena");
+
+        assert!(reserved >= super::X86_LOW_FALLBACK_ALLOC_BASE);
+        assert!(reserved < memory.layout.alloc_base);
+    }
+
+    #[test]
+    fn attach_native_releases_local_region_backing() {
+        let mut memory = super::MemoryManager::for_tests();
+        let base = memory
+            .map_region(
+                0x2000,
+                super::PAGE_SIZE,
+                super::PROT_READ | super::PROT_WRITE,
+                "backed",
+            )
+            .unwrap();
+        memory.write(base, &[0x41, 0x42, 0x43]).unwrap();
+        assert!(memory.regions.get(&0x2000).unwrap().data.is_some());
+
+        memory.attach_native(std::ptr::null(), std::ptr::null_mut());
+
+        assert!(memory
+            .regions
+            .iter()
+            .all(|(_, region)| region.data.is_none()));
     }
 }

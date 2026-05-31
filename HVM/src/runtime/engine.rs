@@ -1,5 +1,5 @@
 use std::cell::Cell;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::ffi::c_void;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -12,22 +12,24 @@ use goblin::pe::PE;
 use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
 use serde_json::{json, Map};
+use smallvec::SmallVec;
 
 use crate::arch::{arch_spec, ArchSpec};
 use crate::config::{EngineConfig, EntryArgument, HttpResponseHeader, VolumeMount};
 use crate::environment_profile::EnvironmentProfile;
-use crate::error::VmError;
-use crate::hooks::base::{CallConv, HookDefinition};
+use crate::error::{ConfigError, VmError};
 use crate::hooks::families::core::ntdll::{
+    STATUS_BUFFER_OVERFLOW, STATUS_BUFFER_TOO_SMALL, STATUS_DLL_NOT_FOUND,
     STATUS_INFO_LENGTH_MISMATCH, STATUS_INVALID_FILE_FOR_SECTION, STATUS_INVALID_HANDLE,
     STATUS_INVALID_INFO_CLASS, STATUS_INVALID_PAGE_PROTECTION, STATUS_INVALID_PARAMETER,
-    STATUS_OBJECT_NAME_EXISTS, STATUS_SUCCESS,
+    STATUS_OBJECT_NAME_EXISTS, STATUS_PROCEDURE_NOT_FOUND, STATUS_SUCCESS,
 };
 use crate::hooks::families::shell_services::shell32::{
     SEE_MASK_NOCLOSEPROCESS, SHELL_EXECUTE_SUCCESS,
 };
 use crate::hooks::register_all_family_hooks;
 use crate::hooks::registry::HookRegistry;
+use crate::hooks::signature::HookSignature;
 use crate::managers::crypto_manager::CryptoManager;
 use crate::managers::device_manager::DeviceManager;
 use crate::managers::file_mapping_manager::FileMappingManager;
@@ -40,14 +42,18 @@ use crate::managers::registry_manager::RegistryManager;
 use crate::managers::service_manager::ServiceManager;
 use crate::managers::time_manager::TimeManager;
 use crate::managers::tls_manager::TlsManager;
-use crate::memory::manager::{MemoryManager, PAGE_SIZE, PROT_EXEC, PROT_READ, PROT_WRITE};
+use crate::memory::manager::{PAGE_SIZE, PROT_EXEC, PROT_READ, PROT_WRITE};
 use crate::models::{ModuleRecord, RunResult, RunStopReason};
 use crate::pe::imports::collect_import_bindings;
-use crate::runtime::api_logger::{AddressRef, ApiLogArg, ApiLogger};
-use crate::runtime::gbk_compat::python_gbk_pair_is_valid;
+use crate::runtime::api_logger::{
+    AddressRef, ApiExecutionContext, ApiLogArg, ApiLogger, ApiStackWord,
+};
+use crate::runtime::gbk_compat::gbk_pair_is_valid;
 use crate::runtime::profiler::RuntimeProfiler;
 use crate::runtime::scheduler::{ThreadScheduler, WAIT_IO_COMPLETION};
-use crate::runtime::thread_context::{deserialize_register_context, serialize_register_context};
+use crate::runtime::thread_context::{
+    deserialize_register_context, register_file_to_map, serialize_register_context, RegisterFile,
+};
 use crate::runtime::unicorn::{
     UcEngine, UnicornApi, X86Mmr, UC_PROT_EXEC, UC_PROT_READ, UC_PROT_WRITE, UC_X86_REG_CS,
     UC_X86_REG_DS, UC_X86_REG_EAX, UC_X86_REG_EBP, UC_X86_REG_EBX, UC_X86_REG_ECX, UC_X86_REG_EDI,
@@ -60,7 +66,14 @@ use crate::runtime::unicorn::{
 };
 use crate::runtime::windows_env::WindowsProcessEnvironment;
 
-include!("engine/module_list.rs");
+mod abi;
+mod constants;
+mod core_helpers;
+mod entry_helpers;
+mod hook_context;
+mod hook_value;
+pub(super) use hook_context::HookContext;
+pub(super) use hook_value::HookValue;
 #[path = "engine/hooks/com/mod.rs"]
 mod com;
 #[path = "engine/hooks/core/mod.rs"]
@@ -73,8 +86,14 @@ mod device;
 mod family_dispatch;
 #[path = "engine/hooks/graphics/mod.rs"]
 mod graphics;
+mod lifecycle_helpers;
+mod logging_helpers;
+mod memory_dump_helpers;
+mod native_call_helpers;
+mod native_unicorn_call_helpers;
 #[path = "engine/hooks/network/mod.rs"]
 mod network;
+mod protected_fetch;
 #[path = "engine/hooks/security/mod.rs"]
 mod security;
 #[path = "engine/shared/mod.rs"]
@@ -83,633 +102,61 @@ mod shared;
 mod shell_services;
 #[path = "engine/hooks/ui/mod.rs"]
 mod ui;
+mod unicorn_helpers;
+mod utilities;
+mod x86_interpreter_helpers;
 
-use shared::RemoteShellcodeThread;
+use protected_fetch::ProtectedFetchDecision;
 use ui::User32State;
 use utilities::{
-    arg, compare_ci, detect_runtime_architecture, is_std_handle, non_empty, seek_file, unicorn_prot,
+    compare_ci, detect_runtime_architecture, is_std_handle, non_empty, seek_file, unicorn_prot,
+    ArgAccess,
 };
 use x86_interpreter_helpers::X86State;
 
-const DLL_PROCESS_ATTACH: u64 = 1;
-const DLL_PROCESS_DETACH: u64 = 0;
-const DLL_THREAD_ATTACH: u64 = 2;
-const DLL_THREAD_DETACH: u64 = 3;
-const PROCESS_HANDLE_PSEUDO: u64 = 0xFFFF_FFFF;
-const SHELL_PROCESS_SPACE_KEY_BASE: u64 = 1u64 << 32;
-const STD_INPUT_HANDLE: u64 = 0xFFFF_FFF6;
-const STD_OUTPUT_HANDLE: u64 = 0xFFFF_FFF5;
-const STD_ERROR_HANDLE: u64 = 0xFFFF_FFF4;
-const FILE_TYPE_CHAR: u64 = 0x0002;
-const DEFAULT_CONSOLE_MODE: u32 = 0x0007;
-const STARTUPINFO_SIZE_X86: u32 = 68;
-const STARTUPINFO_SIZE_X64: u32 = 104;
-const WAIT_TIMEOUT: u64 = 0x102;
-const ERROR_SUCCESS: u64 = 0;
-const ERROR_ACCESS_DENIED: u64 = 5;
-const ERROR_INSUFFICIENT_BUFFER: u64 = 122;
-const ERROR_ALREADY_EXISTS: u64 = 183;
-const ERROR_BAD_LENGTH: u64 = 24;
-const ERROR_BUFFER_OVERFLOW: u64 = 111;
-const ERROR_ENVVAR_NOT_FOUND: u64 = 203;
-const ERROR_FILE_NOT_FOUND: u64 = 2;
-const ERROR_INVALID_HANDLE: u64 = 6;
-const ERROR_INVALID_ADDRESS: u64 = 487;
-const ERROR_INVALID_LEVEL: u64 = 124;
-const ERROR_INVALID_PARAMETER: u64 = 87;
-const ERROR_INVALID_SERVICE_CONTROL: u64 = 1052;
-const ERROR_NO_DATA: u64 = 232;
-const ERROR_NO_SUCH_DOMAIN: u64 = 1355;
-const ERROR_NOT_OWNER: u64 = 288;
-const ERROR_SERVICE_ALREADY_RUNNING: u64 = 1056;
-const ERROR_SERVICE_CANNOT_ACCEPT_CTRL: u64 = 1061;
-const ERROR_SERVICE_DOES_NOT_EXIST: u64 = 1060;
-const ERROR_SERVICE_NOT_ACTIVE: u64 = 1062;
-const ERROR_NO_MORE_FILES: u64 = 18;
-const ERROR_MORE_DATA: u64 = 234;
-const ERROR_NO_MORE_ITEMS: u64 = 259;
-const STILL_ACTIVE: u64 = 259;
-const ERROR_TIMEOUT: u64 = 1460;
-const E_INVALIDARG_HRESULT: u64 = 0x8007_0057;
-const REGDB_E_CLASSNOTREG_HRESULT: u64 = 0x8004_0154;
-const RPC_S_OK: u64 = 0;
-const RPC_S_UUID_LOCAL_ONLY: u64 = 1824;
-const TH32CS_SNAPPROCESS: u64 = 0x0000_0002;
-const PROCESS_BASIC_INFORMATION_CLASS: u64 = 0;
-const PROCESS_IMAGE_FILE_NAME_CLASS: u64 = 27;
-const SYSTEM_BASIC_INFORMATION_CLASS: u64 = 0;
-const SYSTEM_PROCESS_INFORMATION_CLASS: u64 = 5;
-const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: u64 = 0x0000_0004;
-const CSTR_LESS_THAN: u64 = 1;
-const CSTR_EQUAL: u64 = 2;
-const CSTR_GREATER_THAN: u64 = 3;
-const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x0000_0010;
-const FILE_ATTRIBUTE_NORMAL: u32 = 0x0000_0080;
-const INVALID_FILE_ATTRIBUTES: u64 = u32::MAX as u64;
-const MEM_RELEASE: u64 = 0x0000_8000;
-const MEM_DECOMMIT: u64 = 0x0000_4000;
-const MEM_COMMIT: u32 = 0x1000;
-const MEM_RESERVE: u32 = 0x2000;
-const MEM_FREE: u32 = 0x10000;
-const MEM_PRIVATE: u32 = 0x20000;
-const MEM_MAPPED: u32 = 0x40000;
-const MEM_IMAGE: u32 = 0x0100_0000;
-const MUI_LANGUAGE_ID: u32 = 0x0000_0004;
-const MUI_LANGUAGE_NAME: u32 = 0x0000_0008;
-const PAGE_NOACCESS: u32 = 0x01;
-const PAGE_READONLY: u32 = 0x02;
-const PAGE_READWRITE: u32 = 0x04;
-const PAGE_WRITECOPY: u32 = 0x08;
-const PAGE_EXECUTE: u32 = 0x10;
-const PAGE_EXECUTE_READ: u32 = 0x20;
-const PAGE_EXECUTE_READWRITE: u32 = 0x40;
-const PAGE_EXECUTE_WRITECOPY: u32 = 0x80;
-const PAGE_GUARD: u32 = 0x100;
-const FILE_MAP_COPY: u32 = 0x0001;
-const FILE_MAP_WRITE: u32 = 0x0002;
-const FILE_MAP_READ: u32 = 0x0004;
-const INVALID_HANDLE_VALUE: u64 = u32::MAX as u64;
-const HEAP_ZERO_MEMORY: u64 = 0x0000_0008;
-const LMEM_ZEROINIT: u64 = 0x0000_0040;
-const MEMORY_BASIC_INFORMATION_CLASS: u64 = 0;
-const SEC_IMAGE: u32 = 0x0100_0000;
-const VARIANT_SIZE_X86: usize = 16;
-const VARIANT_SIZE_X64: usize = 24;
-const TIME_ZONE_ID_UNKNOWN: u64 = 0;
-const FORMAT_MESSAGE_ALLOCATE_BUFFER: u64 = 0x0000_0100;
-const CSIDL_VALUE_MASK: u32 = 0x00FF;
-const CSIDL_DESKTOP: u32 = 0x0000;
-const CSIDL_PROGRAMS: u32 = 0x0002;
-const CSIDL_PERSONAL: u32 = 0x0005;
-const CSIDL_STARTUP: u32 = 0x0007;
-const CSIDL_STARTMENU: u32 = 0x000B;
-const CSIDL_DESKTOPDIRECTORY: u32 = 0x0010;
-const CSIDL_FONTS: u32 = 0x0014;
-const CSIDL_COMMON_STARTMENU: u32 = 0x0016;
-const CSIDL_COMMON_PROGRAMS: u32 = 0x0017;
-const CSIDL_COMMON_STARTUP: u32 = 0x0018;
-const CSIDL_COMMON_DESKTOPDIRECTORY: u32 = 0x0019;
-const CSIDL_APPDATA: u32 = 0x001A;
-const CSIDL_LOCAL_APPDATA: u32 = 0x001C;
-const CSIDL_COMMON_APPDATA: u32 = 0x0023;
-const CSIDL_WINDOWS: u32 = 0x0024;
-const CSIDL_SYSTEM: u32 = 0x0025;
-const CSIDL_PROGRAM_FILES: u32 = 0x0026;
-const CSIDL_MYPICTURES: u32 = 0x0027;
-const CSIDL_PROFILE: u32 = 0x0028;
-const CSIDL_SYSTEMX86: u32 = 0x0029;
-const CSIDL_PROGRAM_FILESX86: u32 = 0x002A;
-const CSIDL_PROGRAM_FILES_COMMON: u32 = 0x002B;
-const CSIDL_PROGRAM_FILES_COMMONX86: u32 = 0x002C;
-const AF_INET: u16 = 2;
-const SOCKET_ERROR: u64 = u32::MAX as u64;
-const INVALID_SOCKET: u64 = u32::MAX as u64;
-const FIONBIO: u64 = 0x8004_667E;
-const GUID_RNG_SEED: u64 = 0xC0DE_CAFE_4755_4944;
-const NATIVE_PROGRESS_INTERVAL_INSTRUCTIONS: u64 = 250_000;
-const NATIVE_PROGRESS_TOP_BLOCK_LIMIT: usize = 8;
-const NATIVE_LOOP_HISTORY_BLOCKS: usize = 128;
-const NATIVE_LOOP_MIN_PERIOD_BLOCKS: usize = 2;
-const NATIVE_LOOP_MAX_PERIOD_BLOCKS: usize = 24;
-const NATIVE_LOOP_MIN_REPEATS: u64 = 3;
-const NATIVE_LOOP_PHASE_DELTA_LIMIT: usize = 8;
-const EMULATED_TIME_PROGRESS_INTERVAL_INSTRUCTIONS: u64 = 1_024;
-const MSVCRT_FMODE_OFFSET: u64 = 0x00;
-const MSVCRT_COMMODE_OFFSET: u64 = 0x04;
-const MSVCRT_APP_TYPE_OFFSET: u64 = 0x08;
-const MSVCRT_CONTROLFP_OFFSET: u64 = 0x0C;
-const MSVCRT_USER_MATHERR_OFFSET: u64 = 0x10;
-const MSVCRT_ERRNO_OFFSET: u64 = 0x18;
-const MSVCRT_ACMDLN_PTR_OFFSET: u64 = 0x20;
-const MSVCRT_ARGV_ARRAY_OFFSET: u64 = 0x40;
-const MSVCRT_ENVP_ARRAY_OFFSET: u64 = 0x80;
-const MSVCRT_ONEXIT_TABLE_OFFSET: u64 = 0x100;
-const MSVCRT_STRERROR_BUFFER_OFFSET: u64 = 0x200;
-const MSVCRT_DEFAULT_CONTROLFP: u32 = 0x0009_001F;
-const WINDOWS_TO_UNIX_EPOCH_100NS: u64 = 116_444_736_000_000_000;
-const WINHTTP_QUERY_CONTENT_LENGTH: u32 = 5;
-const WINHTTP_QUERY_STATUS_CODE: u32 = 19;
-const WINHTTP_QUERY_STATUS_TEXT: u32 = 20;
-const WINHTTP_QUERY_RAW_HEADERS_CRLF: u32 = 22;
-const WINHTTP_QUERY_FLAG_NUMBER: u32 = 0x2000_0000;
-const WINHTTP_ACCESS_TYPE_NO_PROXY: u32 = 1;
-const SC_STATUS_PROCESS_INFO: u64 = 0;
-const SERVICE_CONFIG_DESCRIPTION: u64 = 1;
-const SERVICE_CONFIG_FAILURE_ACTIONS: u64 = 2;
-const SERVICE_CONFIG_DELAYED_AUTO_START_INFO: u64 = 3;
-const SERVICE_CONFIG_FAILURE_ACTIONS_FLAG: u64 = 4;
-const SERVICE_CONFIG_SERVICE_SID_INFO: u64 = 5;
-const SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO: u64 = 6;
-const SERVICE_CONFIG_PRESHUTDOWN_INFO: u64 = 7;
-const SERVICE_ACTIVE: u32 = 0x0000_0001;
-const SERVICE_INACTIVE: u32 = 0x0000_0002;
-const SERVICE_STATE_ALL: u32 = SERVICE_ACTIVE | SERVICE_INACTIVE;
-const SERVICE_STOPPED: u32 = 0x0000_0001;
-const SERVICE_RUNNING: u32 = 0x0000_0004;
-const SERVICE_PAUSED: u32 = 0x0000_0007;
-const SERVICE_ACCEPT_STOP: u32 = 0x0000_0001;
-const SERVICE_ACCEPT_PAUSE_CONTINUE: u32 = 0x0000_0002;
-const SERVICE_ACCEPT_SHUTDOWN: u32 = 0x0000_0004;
-const SERVICE_CONTROL_STOP: u32 = 0x0000_0001;
-const SERVICE_CONTROL_PAUSE: u32 = 0x0000_0002;
-const SERVICE_CONTROL_CONTINUE: u32 = 0x0000_0003;
-const SERVICE_CONTROL_INTERROGATE: u32 = 0x0000_0004;
-const SERVICE_CONTROL_SHUTDOWN: u32 = 0x0000_0005;
-const SERVICE_CONTROL_PRESHUTDOWN: u32 = 0x0000_000F;
-const EXCEPTION_CONTINUE_EXECUTION_FILTER: i32 = -1;
-const EXCEPTION_CONTINUE_SEARCH_FILTER: i32 = 0;
-const EXCEPTION_EXECUTE_HANDLER_FILTER: i32 = 1;
-const MSVC_CXX_EXCEPTION: u32 = 0xE06D_7363;
-const STARTUP_BASELINE_MODULES: &[&str] = &[
-    "ntdll.dll",
-    "kernel32.dll",
-    "lpk.dll",
-    "usp10.dll",
-    "kernelbase.dll",
-    "shlwapi.dll",
-    "shell32.dll",
-    "user32.dll",
-    "gdi32.dll",
-    "advapi32.dll",
-    "msvcrt.dll",
-    "ws2_32.dll",
-    "psapi.dll",
-];
+use constants::*;
 
-#[derive(Debug)]
-struct FileHandleState {
-    file: std::fs::File,
-    path: String,
-    writable: bool,
-}
+mod state;
+use state::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct FindFileEntry {
-    file_name: String,
-    attributes: u32,
-    size: u64,
-}
+// DispatchState: no Default — guid_rng needs seed, services/devices need constructors
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct FindHandleState {
-    entries: Vec<FindFileEntry>,
-    cursor: usize,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct VolumeFindHandleState {
-    entries: Vec<String>,
-    cursor: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DeviceHandleState {
-    path: String,
-    physical_drive_index: Option<u32>,
-    position: u64,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct SetupDeviceInfoSetState {
-    devices: Vec<u32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct MountedVolume {
-    host_path: std::path::PathBuf,
-    guest_path: String,
-    guest_components: Vec<String>,
-    recursive: bool,
-    host_is_dir: bool,
-    priority: u8,
-}
-
-#[derive(Debug, Default, Clone)]
-struct MsvcrtOnExitTable {
-    storage: Option<u64>,
-    capacity: usize,
-    functions: Vec<u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SyntheticProcessIdentity {
-    pid: u32,
-    parent_pid: u32,
-    image_path: String,
-    command_line: String,
-    current_directory: String,
-}
-
-impl SyntheticProcessIdentity {
-    fn image_name(&self) -> String {
-        let text = if self.image_path.is_empty() {
-            self.command_line.as_str()
-        } else {
-            self.image_path.as_str()
-        };
-        text.rsplit(['\\', '/'])
-            .find(|part| !part.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| text.to_string())
-    }
-
-    fn display_path(&self) -> String {
-        if self.image_path.is_empty() {
-            self.command_line.clone()
-        } else {
-            self.image_path.clone()
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ToolhelpProcessEntry {
-    pid: u32,
-    parent_pid: u32,
-    thread_count: u32,
-    image_name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ToolhelpProcessSnapshot {
-    entries: Vec<ToolhelpProcessEntry>,
-    next_index: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct VirtualAllocationSegment {
-    base: u64,
-    size: u64,
-    state: u32,
-    protect: u32,
-}
-
-impl VirtualAllocationSegment {
-    fn end(&self) -> u64 {
-        self.base + self.size
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct VirtualAllocationRecord {
-    allocation_base: u64,
-    allocation_size: u64,
-    allocation_protect: u32,
-    allocation_type: u32,
-    region_type: u32,
-    segments: Vec<VirtualAllocationSegment>,
-}
-
-impl VirtualAllocationRecord {
-    fn end(&self) -> u64 {
-        self.allocation_base + self.allocation_size
-    }
-
-    fn contains(&self, address: u64) -> bool {
-        self.allocation_base <= address && address < self.end()
-    }
-
-    fn segment_for_address(&self, address: u64) -> Option<&VirtualAllocationSegment> {
-        self.segments
-            .iter()
-            .find(|segment| segment.base <= address && address < segment.end())
-    }
-
-    fn replace_range(&mut self, start: u64, size: u64, state: u32, protect: u32) -> bool {
-        let end = start.saturating_add(size);
-        if start < self.allocation_base || end > self.end() || start >= end {
-            return false;
-        }
-
-        let mut cursor = start;
-        let mut replacement = Vec::with_capacity(self.segments.len() + 2);
-        for segment in &self.segments {
-            if segment.end() <= start || segment.base >= end {
-                replacement.push(*segment);
-                continue;
-            }
-
-            let overlap_start = segment.base.max(start);
-            let overlap_end = segment.end().min(end);
-            if overlap_start > cursor {
-                return false;
-            }
-            if segment.base < overlap_start {
-                replacement.push(VirtualAllocationSegment {
-                    base: segment.base,
-                    size: overlap_start - segment.base,
-                    state: segment.state,
-                    protect: segment.protect,
-                });
-            }
-            replacement.push(VirtualAllocationSegment {
-                base: overlap_start,
-                size: overlap_end - overlap_start,
-                state,
-                protect,
-            });
-            if overlap_end < segment.end() {
-                replacement.push(VirtualAllocationSegment {
-                    base: overlap_end,
-                    size: segment.end() - overlap_end,
-                    state: segment.state,
-                    protect: segment.protect,
-                });
-            }
-            cursor = overlap_end;
-        }
-        if cursor != end {
-            return false;
-        }
-        self.segments = Self::merge_segments(replacement);
-        true
-    }
-
-    fn merge_segments(segments: Vec<VirtualAllocationSegment>) -> Vec<VirtualAllocationSegment> {
-        let mut merged: Vec<VirtualAllocationSegment> = Vec::with_capacity(segments.len());
-        for segment in segments.into_iter().filter(|segment| segment.size != 0) {
-            if let Some(previous) = merged.last_mut() {
-                if previous.end() == segment.base
-                    && previous.state == segment.state
-                    && previous.protect == segment.protect
-                {
-                    previous.size += segment.size;
-                    continue;
-                }
-            }
-            merged.push(segment);
-        }
-        merged
-    }
-}
-
-#[derive(Debug)]
-struct SyntheticProcessSpace {
-    memory: MemoryManager,
-    process_env: WindowsProcessEnvironment,
-    modules: Vec<ModuleRecord>,
-    virtual_allocations: BTreeMap<u64, VirtualAllocationRecord>,
-}
-
-impl SyntheticProcessSpace {
-    fn new(arch: &'static ArchSpec) -> Self {
-        Self {
-            memory: MemoryManager::for_arch(arch),
-            process_env: WindowsProcessEnvironment::for_tests(arch),
-            modules: Vec::new(),
-            virtual_allocations: BTreeMap::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EntryInvocation {
-    NativeEntrypoint,
-    Export,
-}
-
-#[derive(Debug, Clone)]
-struct PendingContextRestore {
-    context_address: u64,
-    registers: BTreeMap<String, u64>,
-}
-
-#[derive(Debug, Clone)]
-struct PendingX86SehUnwind {
-    context_address: u64,
-    registers: BTreeMap<String, u64>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PendingMsvcrtInitterm {
-    entry_rsp: u64,
-    resume_rsp: u64,
-    return_address: u64,
-    next_cursor: u64,
-    last: u64,
-    stop_on_nonzero: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PendingUser32TimerCallback {
-    entry_rsp: u64,
-    resume_rsp: u64,
-    return_address: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PendingUser32SendMessageCallback {
-    entry_rsp: u64,
-    resume_rsp: u64,
-    return_address: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RuntimeEnvironmentVariable {
-    name: String,
-    value: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct MutexState {
-    owner_tid: Option<u32>,
-    recursion_count: u32,
-    abandoned: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DynamicCodeWriteObservation {
-    source: String,
-    remote: bool,
-    source_buffer: u64,
-    target_address: u64,
-    size: u64,
-    dump_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DynamicCodeProtectObservation {
-    source: String,
-    remote: bool,
-    address: u64,
-    size: u64,
-    old_protect: u32,
-    new_protect: u32,
-    became_executable: bool,
-    dump_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DynamicCodeThreadObservation {
-    trigger: String,
-    tid: u32,
-    handle: u32,
-    start_address: u64,
-    parameter: u64,
-    state: String,
-    dump_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DynamicCodeRegionActivity {
-    process_key: u64,
-    allocation_base: u64,
-    region_base: u64,
-    region_size: u64,
-    region_type: u32,
-    last_stage: String,
-    write: Option<DynamicCodeWriteObservation>,
-    protect: Option<DynamicCodeProtectObservation>,
-    thread: Option<DynamicCodeThreadObservation>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ImageHashBaseline {
-    capture_size: u64,
-    hash: u64,
-}
-
-/// Owns the Rust runtime scaffold that will replace the Python virtual execution engine.
+/// Owns the virtual execution engine and its subsystems.
 #[derive(Debug)]
 pub struct VirtualExecutionEngine {
-    arch: &'static ArchSpec,
-    config: EngineConfig,
-    environment_profile: EnvironmentProfile,
-    hooks: HookRegistry,
-    modules: ModuleManager,
-    scheduler: ThreadScheduler,
-    process_env: WindowsProcessEnvironment,
-    processes: ProcessManager,
-    registry: RegistryManager,
-    file_mappings: FileMappingManager,
-    api_logger: ApiLogger,
-    runtime_profiler: RuntimeProfiler,
-    api_call_counts: BTreeMap<String, u64>,
-    main_module: Option<ModuleRecord>,
-    entry_module: Option<ModuleRecord>,
-    parent_process: Option<SyntheticProcessIdentity>,
-    entry_address: Option<u64>,
-    entry_arguments: Vec<u64>,
-    entry_invocation: EntryInvocation,
-    entry_module_requires_attach: bool,
-    command_line: String,
-    current_directory: std::path::PathBuf,
-    current_directory_host: std::path::PathBuf,
-    environment_variables: BTreeMap<String, RuntimeEnvironmentVariable>,
-    main_thread_tid: Option<u32>,
-    instruction_count: u64,
-    exit_code: Option<u32>,
-    stop_reason: Option<RunStopReason>,
-    process_exit_requested: bool,
-    last_error: u32,
-    top_level_exception_filter: u64,
-    tls: TlsManager,
-    time: TimeManager,
-    heaps: HeapManager,
-    devices: DeviceManager,
-    network: NetworkManager,
-    services: ServiceManager,
-    crypto: CryptoManager,
-    http_response_rule_hits: BTreeMap<usize, u64>,
-    wts_server_handles: BTreeSet<u32>,
-    mutex_handles: BTreeSet<u32>,
-    mutex_handle_targets: BTreeMap<u32, u32>,
-    mutex_states: BTreeMap<u32, MutexState>,
-    named_mutexes: BTreeMap<String, u32>,
-    dynamic_library_refs: BTreeMap<u64, u32>,
-    startup_pinned_modules: BTreeSet<u64>,
-    attached_process_modules: BTreeSet<u64>,
-    pending_thread_attach: BTreeSet<u32>,
-    started_threads: BTreeSet<u32>,
-    process_handles: BTreeMap<u32, u32>,
-    process_spaces: BTreeMap<u64, SyntheticProcessSpace>,
-    virtual_allocations: BTreeMap<u64, VirtualAllocationRecord>,
-    process_snapshots: BTreeMap<u32, ToolhelpProcessSnapshot>,
-    device_handles: BTreeMap<u32, DeviceHandleState>,
-    setup_device_sets: BTreeMap<u32, SetupDeviceInfoSetState>,
-    mounted_volumes: Vec<MountedVolume>,
-    token_handles: BTreeSet<u32>,
-    next_file_handle: u32,
-    next_object_handle: u32,
-    file_handles: BTreeMap<u32, FileHandleState>,
-    find_handles: BTreeMap<u32, FindHandleState>,
-    volume_find_handles: BTreeMap<u32, VolumeFindHandleState>,
-    global_atoms: BTreeMap<u16, String>,
-    next_atom: u16,
-    inet_ntoa_buffer: Option<u64>,
-    shell_imalloc: Option<u64>,
-    user32_state: User32State,
-    msvcrt_globals_base: Option<u64>,
-    msvcrt_onexit_tables: BTreeMap<u64, MsvcrtOnExitTable>,
-    msvcrt_rand_seed: u32,
-    guid_rng: StdRng,
-    native_trace: NativeTraceState,
-    memory_dump_sequence: u64,
-    dynamic_code_activities: BTreeMap<(u64, u64), DynamicCodeRegionActivity>,
-    image_hash_baselines: BTreeMap<(u64, u64), ImageHashBaseline>,
-    remote_shellcode_threads: BTreeMap<u32, RemoteShellcodeThread>,
-    pending_context_restore: Option<PendingContextRestore>,
-    pending_x86_seh_unwind: Option<PendingX86SehUnwind>,
-    pending_msvcrt_initterm: Vec<PendingMsvcrtInitterm>,
-    pending_user32_timer_callbacks: Vec<PendingUser32TimerCallback>,
-    pending_user32_sendmessage_callbacks: Vec<PendingUser32SendMessageCallback>,
-    defer_api_return: bool,
-    thread_yield_requested: bool,
-    force_native_return: bool,
-    startup_sequence_completed: bool,
-    loaded: bool,
-    native_return_sentinel: u64,
-    unicorn: Option<Box<UnicornApi>>,
-    unicorn_handle: Option<*mut UcEngine>,
-    unicorn_block_hook_installed: bool,
-    unicorn_code_hook_installed: bool,
-    unicorn_mem_write_hook_installed: bool,
-    unicorn_mem_prot_hook_installed: bool,
-    unicorn_mem_unmapped_hook_installed: bool,
+    core: EngineCore,
+    sync: SyncState,
+    handles: HandleState,
+    process_memory: ProcessMemoryState,
+    objects: SyncObjectsState,
+    network_state: NetworkState,
+    ui: UiState,
+    crt: CrtState,
+    exception: ExceptionState,
+    trace: NativeTraceSubsystem,
+    unicorn_state: UnicornState,
+    dispatch: DispatchState,
+    behavior: crate::sandbox_result::BehaviorCollector,
 }
 
 impl VirtualExecutionEngine {
-    /// Builds a new Rust virtual execution engine from the Python-compatible config shape.
+    fn debug_load_stage(&self, stage: &str) {
+        if std::env::var_os("HVM_DEBUG_LOAD_STAGE").is_none() {
+            return;
+        }
+        eprintln!(
+            "[LOAD_STAGE] {stage} arch={} loaded={} modules={} current_tid={} main_tid={} teb=0x{:X} dirty_env={}",
+            self.core.arch.name,
+            self.core.loaded,
+            self.core.modules.loaded_modules().len(),
+            self.core.scheduler.current_tid().unwrap_or(0),
+            self.core.main_thread_tid.unwrap_or(0),
+            self.core.process_env.current_teb(),
+            self.core.process_env.is_dirty(),
+        );
+    }
+
+    /// Builds a new engine from the given configuration.
     pub fn new(mut config: EngineConfig) -> Result<Self, VmError> {
         let arch = detect_runtime_architecture(&config.main_module)?;
         let mut environment_profile = match config.environment_profile.as_ref() {
@@ -731,6 +178,19 @@ impl VirtualExecutionEngine {
         let mut hooks = HookRegistry::for_tests();
         register_all_family_hooks(&mut hooks);
         let mut modules = ModuleManager::for_arch(arch);
+        if let Some(stack_reserve_size) = config.stack_reserve_size {
+            if stack_reserve_size >= arch.stack_base {
+                return Err(ConfigError::InvalidField {
+                    field: "stack_reserve_size",
+                    detail: format!(
+                        "0x{stack_reserve_size:X} must be smaller than stack_base 0x{:X}",
+                        arch.stack_base
+                    ),
+                }
+                .into());
+            }
+            modules.memory_mut().set_stack_size(stack_reserve_size);
+        }
         let heaps = HeapManager::new(modules.memory_mut())?;
         let mut registry = RegistryManager::new();
         environment_profile.apply_to_registry(&mut registry)?;
@@ -749,125 +209,137 @@ impl VirtualExecutionEngine {
                 .reserve(PAGE_SIZE, None, "thread_exit_sentinel", true)?;
         modules.memory_mut().write(thread_exit_sentinel, &[0xC3])?;
 
+        let api_logger = ApiLogger::new(&config)?;
+        let runtime_profiler = RuntimeProfiler::from_env(&config);
+        let observation_checkpoints = config.observation_checkpoints.clone();
+        let tick_ms_base = environment_profile.time.tick_ms_base;
+        let debug_pc_probes = parse_debug_pc_probes_from_env();
+
         Ok(Self {
-            arch,
-            api_logger: ApiLogger::new(&config)?,
-            runtime_profiler: RuntimeProfiler::from_env(&config),
-            api_call_counts: BTreeMap::new(),
-            config,
-            environment_profile,
-            hooks,
-            modules,
-            scheduler: ThreadScheduler::for_tests(),
-            process_env: WindowsProcessEnvironment::for_tests(arch),
-            processes: ProcessManager::for_tests(),
-            registry,
-            file_mappings: FileMappingManager::new(),
-            main_module: None,
-            entry_module: None,
-            parent_process: None,
-            entry_address: None,
-            entry_arguments: Vec::new(),
-            entry_invocation: EntryInvocation::NativeEntrypoint,
-            entry_module_requires_attach: false,
-            command_line: String::new(),
-            current_directory: std::path::PathBuf::new(),
-            current_directory_host: std::path::PathBuf::new(),
-            environment_variables: BTreeMap::new(),
-            main_thread_tid: None,
-            instruction_count: 0,
-            exit_code: None,
-            stop_reason: None,
-            process_exit_requested: false,
-            last_error: 0,
-            top_level_exception_filter: 0,
-            tls: TlsManager::new(),
-            time: TimeManager::default(),
-            heaps,
-            devices: DeviceManager::new(),
-            network: NetworkManager::new(HandleTable::new(0xC000)),
-            services: ServiceManager::new(HandleTable::new(0xE000), service_inventory),
-            crypto: CryptoManager::new(HandleTable::new(0xD000)),
-            http_response_rule_hits: BTreeMap::new(),
-            wts_server_handles: BTreeSet::new(),
-            mutex_handles: BTreeSet::new(),
-            mutex_handle_targets: BTreeMap::new(),
-            mutex_states: BTreeMap::new(),
-            named_mutexes: BTreeMap::new(),
-            dynamic_library_refs: BTreeMap::new(),
-            startup_pinned_modules: BTreeSet::new(),
-            attached_process_modules: BTreeSet::new(),
-            pending_thread_attach: BTreeSet::new(),
-            started_threads: BTreeSet::new(),
-            process_handles: BTreeMap::new(),
-            process_spaces: BTreeMap::new(),
-            virtual_allocations: BTreeMap::new(),
-            process_snapshots: BTreeMap::new(),
-            device_handles: BTreeMap::new(),
-            setup_device_sets: BTreeMap::new(),
-            mounted_volumes,
-            token_handles: BTreeSet::new(),
-            next_file_handle: 0x1000,
-            next_object_handle: 0x8004,
-            file_handles: BTreeMap::new(),
-            find_handles: BTreeMap::new(),
-            volume_find_handles: BTreeMap::new(),
-            global_atoms: BTreeMap::new(),
-            next_atom: 0xC000,
-            inet_ntoa_buffer: None,
-            shell_imalloc: None,
-            user32_state,
-            msvcrt_globals_base: None,
-            msvcrt_onexit_tables: BTreeMap::new(),
-            msvcrt_rand_seed: 1,
-            guid_rng: StdRng::seed_from_u64(GUID_RNG_SEED),
-            native_trace: NativeTraceState::default(),
-            memory_dump_sequence: 0,
-            dynamic_code_activities: BTreeMap::new(),
-            image_hash_baselines: BTreeMap::new(),
-            remote_shellcode_threads: BTreeMap::new(),
-            pending_context_restore: None,
-            pending_x86_seh_unwind: None,
-            pending_msvcrt_initterm: Vec::new(),
-            pending_user32_timer_callbacks: Vec::new(),
-            pending_user32_sendmessage_callbacks: Vec::new(),
-            defer_api_return: false,
-            thread_yield_requested: false,
-            force_native_return: false,
-            startup_sequence_completed: false,
-            loaded: false,
-            native_return_sentinel,
-            unicorn: UnicornApi::load_default().ok().map(Box::new),
-            unicorn_handle: None,
-            unicorn_block_hook_installed: false,
-            unicorn_code_hook_installed: false,
-            unicorn_mem_write_hook_installed: false,
-            unicorn_mem_prot_hook_installed: false,
-            unicorn_mem_unmapped_hook_installed: false,
+            core: EngineCore {
+                arch,
+                config,
+                environment_profile,
+                hooks,
+                modules,
+                scheduler: ThreadScheduler::for_tests(),
+                process_env: WindowsProcessEnvironment::for_tests(arch),
+                processes: ProcessManager::for_tests(),
+                registry,
+                api_logger,
+                runtime_profiler,
+                api_call_counts: BTreeMap::new(),
+                loaded: false,
+                instruction_count: 0,
+                emu_floor_instructions: 0,
+                instructions_since_time_advance: 0,
+                exit_code: None,
+                stop_reason: None,
+                process_exit_requested: false,
+                startup_sequence_completed: false,
+                native_return_sentinel,
+                main_module: None,
+                entry_module: None,
+                parent_process: None,
+                entry_address: None,
+                entry_arguments: Vec::new(),
+                entry_invocation: EntryInvocation::NativeEntrypoint,
+                entry_module_requires_attach: false,
+                command_line: String::new(),
+                dll_directory: None,
+                current_directory: std::path::PathBuf::new(),
+                current_directory_host: std::path::PathBuf::new(),
+                environment_variables: BTreeMap::new(),
+                main_thread_tid: None,
+                last_error: 0,
+                observation_checkpoints,
+                next_checkpoint_index: 0,
+                debug_pc_probes,
+            },
+            sync: SyncState::default(),
+            handles: HandleState::default(),
+            process_memory: ProcessMemoryState {
+                virtual_allocations: BTreeMap::new(),
+                process_handles: HashMap::new(),
+                process_spaces: HashMap::new(),
+                synthetic_process_identities: Vec::new(),
+                process_snapshots: HashMap::new(),
+                file_mappings: FileMappingManager::new(),
+                heaps,
+            },
+            objects: SyncObjectsState {
+                mounted_volumes,
+                ..SyncObjectsState::default()
+            },
+            network_state: NetworkState {
+                network: NetworkManager::new(HandleTable::new(0xC000)),
+                crypto: CryptoManager::new(HandleTable::new(0xD000)),
+                http_response_rule_hits: BTreeMap::new(),
+                dns: DnsMap::new(),
+                inet_ntoa_buffer: None,
+                consecutive_empty_selects: 0,
+                socket_event_masks: BTreeMap::new(),
+                socket_event_handles: BTreeMap::new(),
+            },
+            ui: UiState {
+                user32_state,
+                ..UiState::default()
+            },
+            crt: CrtState::default(),
+            exception: ExceptionState::default(),
+            trace: NativeTraceSubsystem::default(),
+            unicorn_state: UnicornState {
+                unicorn: UnicornApi::load_default().ok().map(Box::new),
+                ..UnicornState::default()
+            },
+            dispatch: DispatchState {
+                api_flow_control: ApiFlowControl::Continue,
+                preserve_blocked_api_frame: false,
+                force_native_return: false,
+                api_log_context_override: None,
+                active_hook_context: None,
+                recovered_guest_exception_in_hook: None,
+                pending_hook_return_override: None,
+                guid_rng: StdRng::seed_from_u64(GUID_RNG_SEED),
+                tls: TlsManager::new(),
+                time: TimeManager::with_tick_ms_base(tick_ms_base),
+                devices: DeviceManager::new(),
+                services: ServiceManager::new(HandleTable::new(0xE000), service_inventory),
+                suppress_last_api_pc: None,
+                suppress_last_api_target: None,
+                suppress_api_count: 0,
+                pending_ldr_enum_callbacks: Vec::new(),
+                com_message_filter: 0,
+                completed_init_once: HashSet::new(),
+            },
+            behavior: crate::sandbox_result::BehaviorCollector::default(),
         })
     }
 
     /// Loads the configured main module and initializes the primary scheduler thread once.
     pub fn load(&mut self) -> Result<&ModuleRecord, VmError> {
-        if !self.loaded {
-            let configured_main_path = self.config.main_module.clone();
-            let process_image_path = self.config.process_image_path().to_path_buf();
-            let entry_module_path = self.config.entry_module_path().to_path_buf();
-            let process_image = self.modules.load_runtime_main(
+        if !self.core.loaded {
+            self.debug_load_stage("load:start");
+            let configured_main_path = self.core.config.main_module.clone();
+            let process_image_path = self.core.config.process_image_path().to_path_buf();
+            let entry_module_path = self.core.config.entry_module_path().to_path_buf();
+            let process_image = self.core.modules.load_runtime_main(
                 process_image_path.clone(),
-                &self.config,
-                &mut self.hooks,
+                &self.core.config,
+                &mut self.core.hooks,
             )?;
+            self.debug_load_stage("load:process_image_loaded");
             self.log_module_event("MODULE_LOAD", &process_image, "process_image")?;
             let configured_main_module = if configured_main_path == process_image_path {
                 process_image.clone()
             } else {
-                let module = self.modules.load_runtime_main(
+                let module = self.core.modules.load_runtime_main(
                     configured_main_path.clone(),
-                    &self.config,
-                    &mut self.hooks,
+                    &self.core.config,
+                    &mut self.core.hooks,
                 )?;
                 self.log_module_event("MODULE_LOAD", &module, "configured_main")?;
+                self.debug_load_stage("load:configured_main_loaded");
                 module
             };
             let entry_module = if entry_module_path == process_image_path {
@@ -875,40 +347,50 @@ impl VirtualExecutionEngine {
             } else if entry_module_path == configured_main_path {
                 configured_main_module.clone()
             } else {
-                let module = self.modules.load_runtime_main(
+                let module = self.core.modules.load_runtime_main(
                     entry_module_path.clone(),
-                    &self.config,
-                    &mut self.hooks,
+                    &self.core.config,
+                    &mut self.core.hooks,
                 )?;
                 self.log_module_event("MODULE_LOAD", &module, "entry_module")?;
+                self.debug_load_stage("load:entry_module_loaded");
                 module
             };
             self.ensure_supported_execution_architecture(&configured_main_module, "load")?;
             self.ensure_supported_execution_architecture(&entry_module, "load")?;
+            self.debug_load_stage("load:architecture_checked");
             self.preload_startup_baseline_modules()?;
-            for preload in self.config.preload_modules.clone() {
-                let module = self.modules.load_runtime_dependency(
+            self.debug_load_stage("load:baseline_preloaded");
+            let preloads = self.core.config.preload_modules.clone();
+            for preload in &preloads {
+                let module = self.core.modules.load_runtime_dependency(
                     &preload,
-                    &self.config,
-                    &mut self.hooks,
+                    &self.core.config,
+                    &mut self.core.hooks,
                 )?;
                 self.log_module_event("MODULE_LOAD", &module, "preload")?;
             }
-            self.reserve_python_process_env_footprint()?;
-            self.process_env =
-                WindowsProcessEnvironment::from_reserved(self.modules.memory(), self.arch)?;
-            self.entry_invocation = if self.config.uses_export_entry() {
+            self.debug_load_stage("load:preloads_loaded");
+            self.reserve_process_env_footprint()?;
+            self.debug_load_stage("load:process_env_reserved");
+            self.core.process_env = WindowsProcessEnvironment::from_reserved(
+                self.core.modules.memory(),
+                self.core.arch,
+            )?;
+            self.debug_load_stage("load:process_env_created");
+            self.core.entry_invocation = if self.core.config.uses_export_entry() {
                 EntryInvocation::Export
             } else {
                 EntryInvocation::NativeEntrypoint
             };
-            self.entry_module_requires_attach = self.entry_invocation == EntryInvocation::Export
+            self.core.entry_module_requires_attach = self.core.entry_invocation
+                == EntryInvocation::Export
                 && Self::module_looks_like_dll(&entry_module);
-            self.entry_address = Some(self.resolve_entry_address(&entry_module)?);
-            self.entry_arguments = self.prepare_entry_arguments(&entry_module)?;
+            self.core.entry_address = Some(self.resolve_entry_address(&entry_module)?);
+            self.core.entry_arguments = self.prepare_entry_arguments(&entry_module)?;
             let runtime_process_image_path =
-                if !self.environment_profile.machine.image_path.is_empty() {
-                    self.environment_profile.machine.image_path.clone()
+                if !self.core.environment_profile.machine.image_path.is_empty() {
+                    self.core.environment_profile.machine.image_path.clone()
                 } else {
                     process_image
                         .path
@@ -916,20 +398,27 @@ impl VirtualExecutionEngine {
                         .map(|path| path.to_string_lossy().to_string())
                         .unwrap_or_else(|| process_image.name.clone())
                 };
-            self.command_line = if !self.environment_profile.machine.command_line.is_empty() {
-                self.environment_profile.machine.command_line.clone()
-            } else if !self.config.command_line.is_empty() {
-                self.config.command_line.clone()
+            self.core.command_line = if !self
+                .core
+                .environment_profile
+                .machine
+                .command_line
+                .is_empty()
+            {
+                self.core.environment_profile.machine.command_line.clone()
+            } else if !self.core.config.command_line.is_empty() {
+                self.core.config.command_line.clone()
             } else {
                 runtime_process_image_path.clone()
             };
-            self.current_directory = if !self
+            self.core.current_directory = if !self
+                .core
                 .environment_profile
                 .machine
                 .current_directory
                 .is_empty()
             {
-                std::path::PathBuf::from(&self.environment_profile.machine.current_directory)
+                std::path::PathBuf::from(&self.core.environment_profile.machine.current_directory)
             } else {
                 process_image
                     .path
@@ -942,95 +431,113 @@ impl VirtualExecutionEngine {
                     })
                     .to_path_buf()
             };
-            self.current_directory_host = self
-                .resolve_absolute_runtime_path(&self.current_directory.to_string_lossy())
-                .unwrap_or_else(|| self.current_directory.clone());
+            self.core.current_directory_host = self
+                .resolve_absolute_runtime_path(&self.core.current_directory.to_string_lossy())
+                .unwrap_or_else(|| self.core.current_directory.clone());
             self.ensure_virtual_windows_layout()?;
-            self.parent_process = self.build_parent_process_identity();
+            self.core.parent_process = self.build_parent_process_identity();
             let dll_path = self.build_process_dll_path();
             let tmp_directory = self.temporary_directory_path();
             self.initialize_runtime_environment_variables(&dll_path, &tmp_directory)?;
             let environment = self.runtime_environment_entries();
-            self.process_env
+            self.core
+                .process_env
                 .configure_process_parameters_with_runtime_details_and_environment(
                     &runtime_process_image_path,
-                    &self.command_line,
-                    &self.current_directory.to_string_lossy(),
+                    &self.core.command_line,
+                    &self.core.current_directory.to_string_lossy(),
                     &dll_path,
                     &environment,
                 )?;
-            self.process_env.sync_image_base(process_image.base);
+            self.debug_load_stage("load:process_parameters_configured");
+            self.core.process_env.sync_image_base(process_image.base);
+            self.core
+                .process_env
+                .sync_process_heap(self.process_memory.heaps.process_heap() as u64);
+            self.refresh_all_visible_bases();
             self.sync_process_environment_modules()?;
+            self.debug_load_stage("load:env_modules_synced");
             self.refresh_known_data_imports()?;
+            self.debug_load_stage("load:data_imports_refreshed");
+            self.patch_synthetic_stubs_with_real_prologues()?;
+            self.debug_load_stage("load:synthetic_prologues_patched");
             let main_thread = self
+                .core
                 .scheduler
                 .register_main_thread_with_parameter(
-                    self.entry_address.unwrap_or(entry_module.entrypoint),
-                    self.entry_arguments.first().copied().unwrap_or(0),
+                    self.core.entry_address.unwrap_or(entry_module.entrypoint),
+                    self.core.entry_arguments.first().copied().unwrap_or(0),
                 )
-                .unwrap();
+                .ok_or(VmError::RuntimeInvariant("failed to register main thread"))?;
+            self.debug_load_stage("load:main_thread_registered");
             let (stack_limit, stack_top, stack_base) = {
-                let memory = self.modules.memory_mut();
+                let memory = self.core.modules.memory_mut();
                 let (stack_allocation_base, stack_top) = memory.allocate_stack()?;
                 let stack_base = stack_allocation_base + memory.layout().stack_size;
                 (stack_allocation_base, stack_top, stack_base)
             };
+            self.debug_load_stage("load:stack_allocated");
             let stack_limit = self.register_initial_thread_stack_allocation(
                 self.current_process_space_key(),
                 stack_limit,
                 stack_base,
                 stack_top,
             )?;
+            self.debug_load_stage("load:stack_registered");
             let thread_context = self
+                .core
                 .process_env
                 .allocate_thread_teb(stack_base, stack_limit)?;
-            self.process_env.sync_teb_client_id(
+            self.debug_load_stage("load:teb_allocated");
+            self.core.process_env.sync_teb_client_id(
                 thread_context.teb_base,
                 self.current_process_id(),
                 main_thread.tid,
             );
             self.initialize_scheduler_thread_context(main_thread.tid, thread_context, stack_top)?;
-            if self.entry_invocation == EntryInvocation::Export && self.arch.is_x86() {
+            self.debug_load_stage("load:scheduler_thread_initialized");
+            if self.core.entry_invocation == EntryInvocation::Export && self.core.arch.is_x86() {
                 let mut registers = self
+                    .core
                     .scheduler
                     .thread_snapshot(main_thread.tid)
                     .ok_or(VmError::RuntimeInvariant("main thread snapshot missing"))?
                     .registers;
-                let saved_esp = registers
-                    .get("esp")
-                    .copied()
-                    .ok_or(VmError::RuntimeInvariant("main thread ESP missing"))?;
-                let mut frame = Vec::with_capacity((self.entry_arguments.len() + 1) * 4);
-                frame.extend_from_slice(&(self.native_return_sentinel as u32).to_le_bytes());
-                for value in &self.entry_arguments {
+                let saved_esp = registers.esp;
+                let mut frame = Vec::with_capacity((self.core.entry_arguments.len() + 1) * 4);
+                frame.extend_from_slice(&(self.core.native_return_sentinel as u32).to_le_bytes());
+                for value in &self.core.entry_arguments {
                     frame.extend_from_slice(&(*value as u32).to_le_bytes());
                 }
                 let new_esp = saved_esp
                     .checked_sub(frame.len() as u64)
                     .ok_or(VmError::RuntimeInvariant("native call stack underflow"))?;
-                self.modules.memory_mut().write(new_esp, &frame)?;
-                registers.insert("esp".to_string(), new_esp);
-                registers.insert(
-                    "eip".to_string(),
-                    self.entry_address.unwrap_or(entry_module.entrypoint),
-                );
-                self.scheduler
+                self.core.modules.memory_mut().write(new_esp, &frame)?;
+                registers.esp = new_esp;
+                registers.eip = self.core.entry_address.unwrap_or(entry_module.entrypoint);
+                self.core
+                    .scheduler
                     .set_thread_registers(main_thread.tid, registers)
                     .ok_or(VmError::RuntimeInvariant(
                         "failed to seed x86 export bootstrap frame",
                     ))?;
             }
-            self.scheduler
-                .switch_to(main_thread.tid, &mut self.process_env)
-                .unwrap();
+            self.core
+                .scheduler
+                .switch_to(main_thread.tid, &mut self.core.process_env)
+                .ok_or(VmError::RuntimeInvariant(
+                    "failed to switch scheduler to main thread",
+                ))?;
+            self.debug_load_stage("load:scheduler_switched");
             self.sync_native_support_state()?;
-            self.main_thread_tid = Some(main_thread.tid);
+            self.debug_load_stage("load:native_support_synced");
+            self.core.main_thread_tid = Some(main_thread.tid);
             self.log_thread_event(
                 "THREAD_CREATE",
                 main_thread.tid,
                 main_thread.handle,
-                self.entry_address.unwrap_or(entry_module.entrypoint),
-                self.entry_arguments.first().copied().unwrap_or(0),
+                self.core.entry_address.unwrap_or(entry_module.entrypoint),
+                self.core.entry_arguments.first().copied().unwrap_or(0),
                 "ready",
             )?;
             self.log_thread_entry_dump_if_dynamic(
@@ -1038,12 +545,12 @@ impl VirtualExecutionEngine {
                 "THREAD_CREATE",
                 main_thread.tid,
                 main_thread.handle,
-                self.entry_address.unwrap_or(entry_module.entrypoint),
-                self.entry_arguments.first().copied().unwrap_or(0),
+                self.core.entry_address.unwrap_or(entry_module.entrypoint),
+                self.core.entry_arguments.first().copied().unwrap_or(0),
                 "ready",
             )?;
-            self.main_module = Some(process_image);
-            self.entry_module = Some(entry_module);
+            self.core.main_module = Some(process_image);
+            self.core.entry_module = Some(entry_module);
             for module in self
                 .current_process_modules()
                 .into_iter()
@@ -1051,21 +558,25 @@ impl VirtualExecutionEngine {
             {
                 self.register_module_image_allocation(self.current_process_space_key(), &module)?;
             }
-            self.loaded = true;
+            self.core.loaded = true;
         }
 
-        Ok(self.main_module.as_ref().unwrap())
+        Ok(self
+            .core
+            .main_module
+            .as_ref()
+            .ok_or(VmError::RuntimeInvariant("main module not set after load"))?)
     }
 
-    /// Runs the minimal Rust execution flow and returns Python-compatible summary fields.
+    /// Runs the engine and returns execution results.
     pub fn run(&mut self) -> Result<RunResult, VmError> {
         let run_started = std::time::Instant::now();
         let main_module = self.load()?.clone();
-        let entrypoint = self.entry_address.unwrap_or(main_module.entrypoint);
+        let entrypoint = self.core.entry_address.unwrap_or(main_module.entrypoint);
         self.reset_run_observation();
-        if self.unicorn.is_some() {
+        if self.unicorn_state.unicorn.is_some() {
             self.run_native_main()?;
-        } else if self.arch.is_x64() {
+        } else if self.core.arch.is_x64() {
             return Err(VmError::NativeExecution {
                 op: "run",
                 detail: "x64 execution requires a native Unicorn backend".to_string(),
@@ -1073,9 +584,9 @@ impl VirtualExecutionEngine {
         } else {
             self.run_interpreter_scheduler_main()?;
         }
-        if self.exit_code.is_none() {
-            if let Some(main_tid) = self.main_thread_tid {
-                self.exit_code = self.scheduler.thread_exit_code(main_tid).flatten();
+        if self.core.exit_code.is_none() {
+            if let Some(main_tid) = self.core.main_thread_tid {
+                self.core.exit_code = self.core.scheduler.thread_exit_code(main_tid).flatten();
             }
         }
         let stop_reason = self.resolve_run_stop_reason();
@@ -1086,159 +597,243 @@ impl VirtualExecutionEngine {
         self.log_exit_executable_allocation_dumps(stop_reason.as_str())?;
         self.log_run_stop(stop_reason)?;
         self.log_process_exit(stop_reason.as_str())?;
-        self.api_logger.flush()?;
+        self.log_final_summary(stop_reason)?;
+        self.core.api_logger.flush()?;
 
         let result = RunResult {
             entrypoint,
-            instructions: self.instruction_count,
+            instructions: self.core.instruction_count + self.core.emu_floor_instructions,
             stopped: true,
-            exit_code: self.exit_code,
+            exit_code: self.core.exit_code,
             stop_reason,
         };
-        self.runtime_profiler.emit_report(
-            run_started.elapsed(),
+        let wall_duration = run_started.elapsed();
+        if let Err(e) = self.core.runtime_profiler.emit_report(
+            wall_duration,
             result.instructions,
             result.stop_reason,
-        )?;
+        ) {
+            eprintln!("[PROFILER_ERROR] emit_report failed: {e}");
+            // Don't propagate profiler errors — the run result is still valid.
+        }
         Ok(result)
+    }
+
+    /// Runs the engine and returns both the basic `RunResult` and a structured `SandboxResult`
+    /// suitable for JSON serialization by the sandbox `analyze` command.
+    pub fn run_with_result(
+        &mut self,
+        sample_hash: &str,
+        sample_size: u64,
+        timestamp: &str,
+    ) -> Result<(RunResult, crate::sandbox_result::SandboxResult), VmError> {
+        use crate::sandbox_result::*;
+
+        let run_started = std::time::Instant::now();
+        self.behavior.enabled = true;
+
+        let run_result = self.run()?;
+        let execution_time_ms = run_started.elapsed().as_millis() as u64;
+
+        let status = match run_result.stop_reason {
+            RunStopReason::InstructionBudgetExhausted => status::TIMEOUT,
+            RunStopReason::UnsupportedHook => status::COMPLETED,
+            RunStopReason::ProcessExit
+            | RunStopReason::MainThreadTerminated
+            | RunStopReason::AllThreadsTerminated
+            | RunStopReason::RunComplete
+            | RunStopReason::SchedulerIdle
+            | RunStopReason::MemoryAccessViolation => status::COMPLETED,
+        };
+
+        let arch_name = if self.core.arch.is_x64() {
+            "x64"
+        } else {
+            "x86"
+        };
+
+        // Drain the in-memory behavior collector.
+        let behavior = std::mem::take(&mut self.behavior);
+
+        let sandbox_result = SandboxResult {
+            sample_hash: sample_hash.to_string(),
+            sample_size,
+            arch: arch_name.to_string(),
+            timestamp: timestamp.to_string(),
+            execution_time_ms,
+            hvm_version: env!("CARGO_PKG_VERSION").to_string(),
+            status: status.to_string(),
+            exit_code: run_result.exit_code,
+            stop_reason: run_result.stop_reason.as_str().to_string(),
+            instruction_count: run_result.instructions,
+            error_message: None,
+            api_calls: Vec::new(),
+            network_events: behavior.network_events,
+            file_operations: behavior.file_operations,
+            registry_operations: behavior.registry_operations,
+            process_operations: behavior.process_operations,
+            dropped_files: behavior.dropped_files,
+            console_output: behavior.console_output,
+            pe_info: None,
+        };
+
+        Ok((run_result, sandbox_result))
     }
 
     /// Returns the loaded main module when the runtime has been initialized.
     pub fn main_module(&self) -> Option<&ModuleRecord> {
-        self.main_module.as_ref()
+        self.core.main_module.as_ref()
     }
 
     /// Returns the loaded execution module when it differs from the process image.
     pub fn entry_module(&self) -> Option<&ModuleRecord> {
-        self.entry_module.as_ref()
+        self.core.entry_module.as_ref()
     }
 
     /// Returns the resolved execution address after load.
     pub fn entry_address(&self) -> Option<u64> {
-        self.entry_address
+        self.core.entry_address
     }
 
     /// Returns the prepared argument vector used for the effective entry invocation.
     pub fn entry_arguments(&self) -> &[u64] {
-        &self.entry_arguments
+        &self.core.entry_arguments
     }
 
     /// Returns the synthetic export registry wired into the current engine.
     pub fn hooks(&self) -> &HookRegistry {
-        &self.hooks
+        &self.core.hooks
     }
 
     /// Returns the scheduler owned by the current engine.
     pub fn scheduler(&self) -> &ThreadScheduler {
-        &self.scheduler
+        &self.core.scheduler
+    }
+
+    /// Returns the total number of instructions executed so far,
+    /// including both BLOCK-hook estimates and emu_count floor contributions.
+    pub fn instruction_count(&self) -> u64 {
+        self.core.instruction_count + self.core.emu_floor_instructions
+    }
+
+    /// Returns the stored entrypoint address (panics if unset — should only be called after `new`).
+    pub fn entrypoint(&self) -> u64 {
+        self.core.entry_address.unwrap_or(0)
     }
 
     /// Returns mutable scheduler access for runtime hook dispatch tests.
     pub fn scheduler_mut(&mut self) -> &mut ThreadScheduler {
-        &mut self.scheduler
+        &mut self.core.scheduler
     }
 
     /// Returns the process-environment mirror owned by the current engine.
     pub fn process_env(&self) -> &WindowsProcessEnvironment {
-        &self.process_env
+        &self.core.process_env
     }
 
     /// Returns the child-process manager owned by the current engine.
     pub fn processes(&self) -> &ProcessManager {
-        &self.processes
+        &self.core.processes
     }
 
     /// Returns the module manager owned by the current engine.
     pub fn modules(&self) -> &ModuleManager {
-        &self.modules
+        &self.core.modules
     }
 
     /// Returns the effective command line the Rust runtime will expose after load.
     pub fn command_line(&self) -> &str {
-        &self.command_line
+        &self.core.command_line
     }
 
     /// Returns the registered main-thread identifier once the engine has loaded.
     pub fn main_thread_tid(&self) -> Option<u32> {
-        self.main_thread_tid
+        self.core.main_thread_tid
     }
 
     /// Returns the registered main-thread handle once the engine has loaded.
     pub fn main_thread_handle(&self) -> Option<u32> {
-        let tid = self.main_thread_tid?;
-        self.scheduler
+        let tid = self.core.main_thread_tid?;
+        self.core
+            .scheduler
             .thread_snapshot(tid)
             .map(|thread| thread.handle)
     }
 
     /// Returns the synthetic return address used to terminate the primary x86 thread cleanly.
     pub fn main_thread_exit_sentinel(&self) -> u64 {
-        self.native_return_sentinel
+        self.core.native_return_sentinel
     }
 
     /// Returns the effective current directory derived during load.
     pub fn current_directory(&self) -> &std::path::Path {
-        &self.current_directory
+        &self.core.current_directory
     }
 
     /// Returns whether a native Unicorn backend is available for current-process execution.
     pub fn has_native_unicorn(&self) -> bool {
-        self.unicorn.is_some()
+        self.unicorn_state.unicorn.is_some()
     }
 
     /// Returns the active Win32 last-error value mirrored into the current TEB.
     pub fn last_error(&self) -> u32 {
-        self.last_error
+        self.core.last_error
     }
 
     /// Returns the process heap handle exposed by the runtime.
     pub fn process_heap_handle(&self) -> u32 {
-        self.heaps.process_heap()
+        self.process_memory.heaps.process_heap()
     }
 
     /// Returns the heap manager owned by the current engine.
     pub fn heap_manager(&self) -> &HeapManager {
-        &self.heaps
+        &self.process_memory.heaps
     }
 
     /// Returns the device manager owned by the current engine.
     pub fn device_manager(&self) -> &DeviceManager {
-        &self.devices
+        &self.dispatch.devices
     }
 
     /// Returns the registry manager owned by the current engine.
     pub fn registry_manager(&self) -> &RegistryManager {
-        &self.registry
+        &self.core.registry
     }
 
     /// Returns the network manager owned by the current engine.
     pub fn network_manager(&self) -> &NetworkManager {
-        &self.network
+        &self.network_state.network
     }
 
     /// Returns mutable network-manager access for runtime integration tests.
     pub fn network_manager_mut(&mut self) -> &mut NetworkManager {
-        &mut self.network
+        &mut self.network_state.network
     }
 
     /// Returns the crypto manager owned by the current engine.
     pub fn crypto_manager(&self) -> &CryptoManager {
-        &self.crypto
+        &self.network_state.crypto
     }
 
     /// Returns mutable crypto-manager access for runtime integration tests.
     pub fn crypto_manager_mut(&mut self) -> &mut CryptoManager {
-        &mut self.crypto
+        &mut self.network_state.crypto
     }
 
     /// Updates the active Win32 last-error value and mirrors it into the current TEB.
     pub fn set_last_error(&mut self, value: u32) {
-        self.last_error = value;
-        self.process_env.sync_last_error(value);
-        let teb_last_error =
-            self.process_env.current_teb() + self.process_env.offsets().teb_last_error as u64;
-        if self.modules.memory().is_range_mapped(teb_last_error, 4) {
+        self.core.last_error = value;
+        self.core.process_env.sync_last_error(value);
+        let teb_last_error = self.core.process_env.current_teb()
+            + self.core.process_env.offsets().teb_last_error as u64;
+        if self
+            .core
+            .modules
+            .memory()
+            .is_range_mapped(teb_last_error, 4)
+        {
             let _ = self
+                .core
                 .modules
                 .memory_mut()
                 .write(teb_last_error, &value.to_le_bytes());
@@ -1248,26 +843,44 @@ impl VirtualExecutionEngine {
     }
 
     fn record_instruction_retired(&mut self) {
-        self.instruction_count = self.instruction_count.saturating_add(1);
-        if self.instruction_count % EMULATED_TIME_PROGRESS_INTERVAL_INSTRUCTIONS == 0 {
-            self.time.advance(1);
+        self.record_instructions_retired(1);
+    }
+
+    fn record_instructions_retired(&mut self, count: u64) {
+        if count == 0 {
+            return;
+        }
+        self.core.instruction_count = self.core.instruction_count.wrapping_add(count);
+        let since = self
+            .core
+            .instructions_since_time_advance
+            .wrapping_add(count);
+        if since >= EMULATED_TIME_PROGRESS_INTERVAL_INSTRUCTIONS {
+            let advances = since / EMULATED_TIME_PROGRESS_INTERVAL_INSTRUCTIONS;
+            self.core.instructions_since_time_advance =
+                since % EMULATED_TIME_PROGRESS_INTERVAL_INSTRUCTIONS;
+            self.dispatch.time.advance(advances);
+        } else {
+            self.core.instructions_since_time_advance = since;
         }
     }
 
     fn remaining_run_budget(&self) -> u64 {
-        self.config
+        self.core
+            .config
             .max_instructions
             .max(1)
-            .saturating_sub(self.instruction_count)
+            .saturating_sub(self.core.instruction_count)
     }
 
     /// Binds one hook stub explicitly so runtime dispatch tests do not depend on sample imports.
     pub fn bind_hook_for_test(&mut self, module: &str, function: &str) -> u64 {
-        let stub = self.hooks.bind_stub(module, function);
+        let stub = self.core.hooks.bind_stub(module, function);
         let page = stub & !(PAGE_SIZE - 1);
-        let page_was_mapped = self.modules.memory().is_range_mapped(page, PAGE_SIZE);
+        let page_was_mapped = self.core.modules.memory().is_range_mapped(page, PAGE_SIZE);
         if !page_was_mapped {
-            self.modules
+            self.core
+                .modules
                 .memory_mut()
                 .map_region(
                     page,
@@ -1277,7 +890,8 @@ impl VirtualExecutionEngine {
                 )
                 .expect("failed to map hook test stub page");
         }
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(
                 stub,
@@ -1287,7 +901,10 @@ impl VirtualExecutionEngine {
                 ],
             )
             .expect("failed to write hook test stub bytes");
-        if let (Some(unicorn), Some(uc)) = (self.unicorn.as_deref(), self.unicorn_handle) {
+        if let (Some(unicorn), Some(uc)) = (
+            self.unicorn_state.unicorn.as_deref(),
+            self.unicorn_state.unicorn_handle,
+        ) {
             if !page_was_mapped {
                 unsafe {
                     unicorn.mem_map_raw(
@@ -1318,7 +935,8 @@ impl VirtualExecutionEngine {
 
     /// Allocates one executable page for native-execution smoke tests.
     pub fn allocate_executable_test_page(&mut self, preferred: u64) -> Result<u64, VmError> {
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .reserve(PAGE_SIZE, Some(preferred), "native:test_page", false)
             .map_err(VmError::from)
@@ -1326,21 +944,94 @@ impl VirtualExecutionEngine {
 
     /// Writes raw machine code or test bytes into the emulated address space.
     pub fn write_test_bytes(&mut self, address: u64, bytes: &[u8]) -> Result<(), VmError> {
-        self.modules
+        self.core
+            .modules
             .memory_mut()
             .write(address, bytes)
             .map_err(VmError::from)?;
         self.propagate_file_mapping_write(self.current_process_space_key(), address, bytes)
     }
 
+    /// Refreshes visible bases for all currently loaded modules, applying any
+    /// configured `module_visible_bases` overrides before the PEB/LDR structures
+    /// are materialized into guest memory.  After updating bases, re-registers
+    /// every real export with the hook dispatcher so both mapped-base and
+    /// visible-base address variants are bound.
+    fn refresh_all_visible_bases(&mut self) {
+        let bases: Vec<u64> = self
+            .core
+            .modules
+            .loaded_modules()
+            .iter()
+            .map(|m| m.base)
+            .collect();
+        for base in &bases {
+            self.refresh_module_visible_base(*base);
+        }
+        // Fix up import thunk values in visible aliases after all bases are set.
+        // Import thunks are not covered by PE relocation tables, so they need
+        // explicit adjustment from mapped to visible addresses.
+        let names: Vec<String> = self.core.modules.module_names();
+        for name in &names {
+            self.core
+                .modules
+                .fixup_visible_alias_import_thunks(name, &self.core.hooks);
+        }
+        self.core
+            .modules
+            .rebind_all_real_exports(&mut self.core.hooks);
+    }
+
+    pub(super) fn refresh_module_visible_base(&mut self, mapped_base: u64) -> Option<ModuleRecord> {
+        let module = self.core.modules.get_by_base(mapped_base).cloned()?;
+        let configured_visible_base = self
+            .core
+            .environment_profile
+            .module_visible_bases
+            .get(&module.name.to_ascii_lowercase())
+            .copied()
+            .filter(|visible_base| *visible_base != 0)
+            .unwrap_or(module.visible_base);
+        if configured_visible_base == module.visible_base {
+            return Some(module);
+        }
+        if !self
+            .core
+            .modules
+            .set_visible_base(mapped_base, configured_visible_base)
+        {
+            return Some(module);
+        }
+        // After the visible base changes, the visible alias was created from
+        // fresh file bytes.  Fix up import thunks (not covered by PE reloc
+        // tables) so the visible alias IAT mirrors the mapped-image IAT, and
+        // re-bind all real exports so the hook registry learns the new
+        // visible-base address variants.
+        let storage_name = self
+            .core
+            .modules
+            .get_by_base(mapped_base)
+            .map(|m| m.name.clone())
+            .unwrap_or_default();
+        if !storage_name.is_empty() {
+            self.core
+                .modules
+                .fixup_visible_alias_import_thunks(&storage_name, &self.core.hooks);
+            self.core
+                .modules
+                .rebind_all_real_exports(&mut self.core.hooks);
+        }
+        self.core.modules.get_by_base(mapped_base).cloned()
+    }
+
     /// Executes one x86 native call using the current main-thread stack frame and returns EAX.
     pub fn call_native_for_test(&mut self, address: u64, args: &[u64]) -> Result<u64, VmError> {
         self.load()?;
-        if self.hooks.is_bound_address(address) {
+        if self.core.hooks.is_bound_address(address) {
             return self.dispatch_bound_stub(address, args);
         }
-        if self.arch.is_x64() {
-            if self.unicorn.is_some() && !unicorn_context_active() {
+        if self.core.arch.is_x64() {
+            if self.unicorn_state.unicorn.is_some() && !unicorn_context_active() {
                 self.call_x64_native_with_unicorn(address, args)
             } else {
                 Err(VmError::NativeExecution {
@@ -1348,7 +1039,7 @@ impl VirtualExecutionEngine {
                     detail: "x64 execution requires a native Unicorn backend".to_string(),
                 })
             }
-        } else if self.unicorn.is_some() && !unicorn_context_active() {
+        } else if self.unicorn_state.unicorn.is_some() && !unicorn_context_active() {
             self.call_x86_native_with_unicorn(address, args)
         } else {
             self.call_x86_native_interpreter(address, args)
@@ -1357,7 +1048,7 @@ impl VirtualExecutionEngine {
 
     /// Flushes buffered API and console logs so integration tests can inspect emitted traces.
     pub fn flush_api_logs_for_test(&mut self) -> Result<(), VmError> {
-        self.api_logger.flush()
+        self.core.api_logger.flush()
     }
 
     pub fn log_exit_executable_allocation_dumps_for_test(
@@ -1380,18 +1071,164 @@ impl VirtualExecutionEngine {
     }
 
     fn reset_run_observation(&mut self) {
-        self.stop_reason = None;
-        self.process_exit_requested = false;
-        self.native_trace.reset();
+        self.core.stop_reason = None;
+        self.core.process_exit_requested = false;
+        self.trace.native_trace.reset();
+        self.core.next_checkpoint_index = 0;
+    }
+
+    fn check_observation_checkpoints(&mut self) -> Result<(), VmError> {
+        while self.core.next_checkpoint_index < self.core.observation_checkpoints.len() {
+            let target_icount = self.core.observation_checkpoints[self.core.next_checkpoint_index];
+            if self.core.instruction_count < target_icount {
+                break;
+            }
+            self.dump_observation_checkpoint(target_icount)?;
+            self.core.next_checkpoint_index += 1;
+        }
+        Ok(())
+    }
+
+    fn dump_observation_checkpoint(&mut self, target_icount: u64) -> Result<(), VmError> {
+        let memory = self.core.modules.memory();
+        let dump_regions: &[(&str, u64, usize)] = &[
+            ("oep_header_32b", 0x402316, 32),
+            ("kernel32_base_slot", 0x402738, 4),
+            ("load_library_slot", 0x402750, 4),
+            ("get_proc_addr_slot", 0x402763, 4),
+            ("close_handle_slot", 0x402773, 4),
+            ("state_block_12b", 0x40269C, 12),
+        ];
+        let mut fields = Map::new();
+        fields.insert(
+            "target_icount".to_string(),
+            serde_json::json!(target_icount),
+        );
+        fields.insert(
+            "actual_icount".to_string(),
+            serde_json::json!(self.core.instruction_count),
+        );
+        for &(label, address, size) in dump_regions {
+            let hex = memory
+                .read(address, size)
+                .map(|bytes| Self::format_runtime_bytes(&bytes))
+                .unwrap_or_else(|_| "<unreadable>".to_string());
+            fields.insert(label.to_string(), serde_json::json!(hex));
+        }
+        self.log_runtime_event_immediate("OBSERVATION_CHECKPOINT", fields)
+    }
+
+    fn maybe_emit_debug_pc_probe(
+        &mut self,
+        api: &UnicornApi,
+        uc: *mut UcEngine,
+        address: u64,
+    ) -> Result<(), VmError> {
+        if !self.core.debug_pc_probes.contains(&address) {
+            return Ok(());
+        }
+
+        let registers = self.capture_unicorn_thread_registers(api, uc)?;
+        let stack_words = self.capture_unicorn_stack_words(api, uc, &registers)?;
+        let unicorn = unsafe { api.bind(uc) };
+        let mut fields = Map::new();
+        fields.insert("pc".to_string(), json!(address));
+        self.add_address_ref_fields(&mut fields, "pc", address);
+        if let Ok(bytes) = unicorn.mem_read(address, 16) {
+            fields.insert(
+                "pc_bytes".to_string(),
+                json!(Self::format_runtime_bytes(&bytes)),
+            );
+        }
+        fields.insert(
+            "registers".to_string(),
+            Self::register_map_value(&registers),
+        );
+        fields.insert(
+            "register_refs".to_string(),
+            self.register_ref_map_value(&registers),
+        );
+        fields.insert(
+            "stack_words".to_string(),
+            Self::word_map_value(&stack_words),
+        );
+
+        let register_points = if self.core.arch.is_x86() {
+            [
+                ("eax", registers.eax),
+                ("ebx", registers.ebx),
+                ("ecx", registers.ecx),
+                ("edx", registers.edx),
+                ("esi", registers.esi),
+                ("edi", registers.edi),
+                ("ebp", registers.ebp),
+                ("esp", registers.esp),
+            ]
+            .to_vec()
+        } else {
+            [
+                ("rax", registers.rax),
+                ("rbx", registers.rbx),
+                ("rcx", registers.rcx),
+                ("rdx", registers.rdx),
+                ("r8", registers.r8),
+                ("r9", registers.r9),
+                ("rsi", registers.rsi),
+                ("rdi", registers.rdi),
+                ("rbp", registers.rbp),
+                ("rsp", registers.rsp),
+            ]
+            .to_vec()
+        };
+        for (name, value) in register_points {
+            if value == 0 {
+                continue;
+            }
+            self.add_address_ref_fields(&mut fields, name, value);
+            match unicorn.mem_read(value, 16) {
+                Ok(bytes) => {
+                    fields.insert(
+                        format!("{name}_bytes"),
+                        json!(Self::format_runtime_bytes(&bytes)),
+                    );
+                }
+                Err(_) => {
+                    fields.insert(format!("{name}_bytes"), json!("<unreadable>"));
+                }
+            }
+            if self.core.arch.is_x64() {
+                for offset in [0x0u64, 0x8, 0x10, 0x18, 0x28, 0x38, 0x40, 0x58] {
+                    let field_name = format!("{name}_qword_0x{offset:X}");
+                    if let Ok(bytes) = unicorn.mem_read(value.saturating_add(offset), 8) {
+                        let field_value = u64::from_le_bytes(bytes.try_into().unwrap_or([0; 8]));
+                        fields.insert(field_name.clone(), json!(field_value));
+                        if field_value != 0 {
+                            self.add_address_ref_fields(&mut fields, &field_name, field_value);
+                        }
+                    }
+                }
+                for offset in [0x38u64, 0x3C, 0x40, 0x58] {
+                    let field_name = format!("{name}_dword_0x{offset:X}");
+                    if let Ok(bytes) = unicorn.mem_read(value.saturating_add(offset), 4) {
+                        let field_value = u32::from_le_bytes(bytes.try_into().unwrap_or([0; 4]));
+                        fields.insert(field_name, json!(field_value));
+                    }
+                }
+            }
+        }
+
+        self.log_runtime_event_immediate("EXEC_PROBE", fields)
     }
 
     fn preload_startup_baseline_modules(&mut self) -> Result<(), VmError> {
         for module_name in STARTUP_BASELINE_MODULES {
-            let existing = self.modules.get_loaded(module_name).cloned();
-            let module =
-                self.modules
-                    .load_runtime_dependency(module_name, &self.config, &mut self.hooks)?;
-            self.startup_pinned_modules.insert(module.base);
+            let existing = self.core.modules.get_loaded(module_name).cloned();
+            let module = self.core.modules.load_runtime_dependency(
+                module_name,
+                &self.core.config,
+                &mut self.core.hooks,
+            )?;
+            self.objects.startup_pinned_modules.insert(module.base);
             if existing.is_none() {
                 self.log_module_event("MODULE_LOAD", &module, "startup_baseline")?;
             }
@@ -1399,452 +1236,102 @@ impl VirtualExecutionEngine {
         Ok(())
     }
 
-    fn request_thread_yield(&mut self, _reason: &str, preserve_api_frame: bool) {
-        self.thread_yield_requested = true;
-        if preserve_api_frame {
-            self.defer_api_return = true;
+    /// Overwrites synthetic hook stub bytes with real function prologues read from
+    /// on-disk DLLs.  This makes prologue-based integrity checks pass without having
+    /// to load real DLLs into the emulated address space (which would trigger import
+    /// resolution cascades and memory exhaustion).
+    fn patch_synthetic_stubs_with_real_prologues(&mut self) -> Result<(), VmError> {
+        if self.core.config.prologue_source_paths.is_empty() {
+            return Ok(());
         }
+        let bound_addresses = self.core.hooks.bound_addresses();
+        let mut patches: Vec<(u64, Vec<u8>)> = Vec::new();
+        for address in bound_addresses {
+            let Some((module, function)) = self.core.hooks.binding_for_address(address) else {
+                continue;
+            };
+            let real_bytes = read_real_prologue(
+                module,
+                function,
+                &self.core.config.prologue_source_paths,
+                16,
+            );
+            if let Some(bytes) = real_bytes {
+                patches.push((address, bytes));
+            }
+        }
+        for (address, bytes) in patches {
+            let _ = self.core.modules.memory_mut().write(address, &bytes);
+        }
+        Ok(())
+    }
+
+    fn request_thread_yield(&mut self, _reason: &str, preserve_api_frame: bool) {
+        self.dispatch.request_thread_yield(preserve_api_frame);
     }
 
     fn handle_requested_thread_yield(&mut self) {
-        let _profile = self.runtime_profiler.start_scope("yield.handle_requested");
-        let current_tick = self.time.current().tick_ms;
-        if let Some(next_tick) = self.scheduler.next_wake_tick() {
-            if next_tick > current_tick {
-                self.time.advance(next_tick - current_tick);
+        let _profile = self
+            .core
+            .runtime_profiler
+            .start_scope("yield.handle_requested");
+        let current_tick = self.dispatch.time.current().tick_ms;
+        if !self.core.scheduler.has_ready_threads() {
+            if let Some(next_tick) = self.core.scheduler.next_wake_tick() {
+                if next_tick > current_tick {
+                    self.dispatch.time.advance(next_tick - current_tick);
+                }
             }
         }
         {
             let _profile = self
+                .core
                 .runtime_profiler
                 .start_scope("scheduler.poll_blocked_threads");
-            self.scheduler
-                .poll_blocked_threads(self.time.current().tick_ms);
+            self.core
+                .scheduler
+                .poll_blocked_threads(self.dispatch.time.current().tick_ms);
         }
-        if let Some(tid) = self.scheduler.current_tid() {
-            let _profile = self.runtime_profiler.start_scope("scheduler.switch_to");
-            let _ = self.scheduler.switch_to(tid, &mut self.process_env);
+        if let Some(tid) = self.core.scheduler.current_tid() {
+            let _profile = self
+                .core
+                .runtime_profiler
+                .start_scope("scheduler.switch_to");
+            let _ = self
+                .core
+                .scheduler
+                .switch_to(tid, &mut self.core.process_env);
         }
     }
+}
 
-    /// Dispatches one already-bound synthetic export stub through the live runtime state.
-    pub fn dispatch_bound_stub(&mut self, address: u64, args: &[u64]) -> Result<u64, VmError> {
-        let Some(definition) = self.hooks.definition_for_address(address).cloned() else {
-            if let Some((module, function)) = self.hooks.binding_for_address(address) {
-                let module = module.to_string();
-                let function = function.to_string();
-                let _ = self.log_unsupported_bound_stub(
-                    address,
-                    &module,
-                    &function,
-                    "missing hook definition",
-                );
-                if self.strict_unknown_api_policy() {
-                    return Err(VmError::NativeExecution {
-                        op: "dispatch",
-                        detail: format!(
-                            "unknown_api_policy={} rejected undefined hook {}!{} at 0x{address:X}",
-                            self.config.unknown_api_policy, module, function
-                        ),
-                    });
-                }
-                return Ok(0);
-            }
-            return Err(VmError::NativeExecution {
-                op: "dispatch",
-                detail: format!("address 0x{address:X} is not a bound hook stub"),
-            });
-        };
+mod dispatch;
 
-        self.dispatch_bound_stub_with_definition(&definition, address, None, args)
-    }
+mod scheduler_methods;
 
-    /// Advances the scaffold scheduler until no runnable work remains or the instruction cap is spent.
-    fn run_scheduler_loop(&mut self) -> Result<(), VmError> {
-        let mut remaining = self.remaining_run_budget();
-        if remaining == 0 {
-            self.stop_reason = Some(RunStopReason::InstructionBudgetExhausted);
-            return Ok(());
+fn parse_debug_pc_probes_from_env() -> BTreeSet<u64> {
+    let mut probes = BTreeSet::new();
+    let Ok(raw) = std::env::var("HVM_DEBUG_PC_PROBES") else {
+        return probes;
+    };
+    for token in raw.split(|ch: char| matches!(ch, ',' | ';' | ' ' | '\n' | '\t')) {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
         }
-        while remaining > 0 {
-            {
-                let _profile = self
-                    .runtime_profiler
-                    .start_scope("scheduler.poll_blocked_threads");
-                self.scheduler
-                    .poll_blocked_threads(self.time.current().tick_ms);
-            }
-            let Some(thread) = self.scheduler.next_ready_thread() else {
-                if !self.scheduler.has_live_threads() {
-                    break;
-                }
-                if let Some(next_tick) = self.scheduler.next_wake_tick() {
-                    let current_tick = self.time.current().tick_ms;
-                    if next_tick > current_tick {
-                        self.time.advance(next_tick - current_tick);
-                        continue;
-                    }
-                }
-                break;
-            };
-            self.prepare_remote_shellcode_thread_if_needed(thread.tid)?;
-            if self.scheduler.thread_state(thread.tid) != Some("running") {
-                continue;
-            }
-            {
-                let _profile = self.runtime_profiler.start_scope("scheduler.switch_to");
-                let _ = self.scheduler.switch_to(thread.tid, &mut self.process_env);
-            }
-            let budget = remaining.min(self.scheduler.time_slice_instructions());
-            let before = self.instruction_count;
-            {
-                let _profile = self
-                    .runtime_profiler
-                    .start_scope("interpreter.thread_slice_total");
-                self.run_interpreter_thread_slice(thread.tid, budget)?;
-            }
-            let consumed = self.instruction_count.saturating_sub(before).max(1);
-            if self.scheduler.thread_state(thread.tid) == Some("terminated")
-                && self.started_threads.remove(&thread.tid)
-            {
-                let _ = self.dispatch_thread_notification(thread.tid, DLL_THREAD_DETACH);
-            }
-            remaining = remaining.saturating_sub(consumed);
-            if Some(thread.tid) == self.main_thread_tid
-                && self.scheduler.thread_state(thread.tid) == Some("terminated")
-            {
-                self.exit_code = self
-                    .scheduler
-                    .thread_exit_code(thread.tid)
-                    .flatten()
-                    .or(self.exit_code);
-                if self.process_exit_requested || !self.scheduler.has_live_threads() {
-                    break;
-                }
-            }
-            self.time.advance(self.scheduler.time_slice_ms());
-        }
-        self.stop_reason = Some(if remaining == 0 {
-            RunStopReason::InstructionBudgetExhausted
-        } else if self.process_exit_requested {
-            RunStopReason::ProcessExit
-        } else if !self.scheduler.has_live_threads() {
-            RunStopReason::AllThreadsTerminated
-        } else if self
-            .main_thread_tid
-            .and_then(|tid| self.scheduler.thread_state(tid))
-            == Some("terminated")
+        let parsed = if let Some(hex) = token
+            .strip_prefix("0x")
+            .or_else(|| token.strip_prefix("0X"))
         {
-            RunStopReason::MainThreadTerminated
+            u64::from_str_radix(hex, 16).ok()
         } else {
-            RunStopReason::SchedulerIdle
-        });
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn run_native_scheduler_main(&mut self) -> Result<(), VmError> {
-        let main_module = self.load()?.clone();
-        let entry_module = self
-            .entry_module
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| main_module.clone());
-        let entry_address = self.entry_address.unwrap_or(entry_module.entrypoint);
-        let entry_arguments = self.entry_arguments.clone();
-        let mut skipped_bases = vec![main_module.base];
-        if entry_module.base != main_module.base {
-            skipped_bases.push(entry_module.base);
-        }
-        self.run_loaded_module_initializers(&skipped_bases)?;
-        self.run_tls_callbacks(&entry_module, DLL_PROCESS_ATTACH, "entry")?;
-        self.prepare_scheduler_main_thread(entry_address, &entry_arguments)?;
-        self.complete_process_startup_sequence()?;
-        self.log_entry_invoke(&entry_module, entry_address, &entry_arguments)?;
-        self.run_unicorn_scheduler_loop()
-    }
-
-    fn run_interpreter_scheduler_main(&mut self) -> Result<(), VmError> {
-        let main_module = self.load()?.clone();
-        let entry_module = self
-            .entry_module
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| main_module.clone());
-        let entry_address = self.entry_address.unwrap_or(entry_module.entrypoint);
-        let entry_arguments = self.entry_arguments.clone();
-        let mut skipped_bases = vec![main_module.base];
-        if entry_module.base != main_module.base {
-            skipped_bases.push(entry_module.base);
-        }
-        self.run_loaded_module_initializers(&skipped_bases)?;
-        match self.entry_invocation {
-            EntryInvocation::NativeEntrypoint => {
-                self.run_tls_callbacks(&entry_module, DLL_PROCESS_ATTACH, "entry")?;
-            }
-            EntryInvocation::Export => {
-                if self.entry_module_requires_attach {
-                    self.run_module_initializers(&entry_module, "entry")?;
-                } else {
-                    self.run_tls_callbacks(&entry_module, DLL_PROCESS_ATTACH, "entry")?;
-                }
-            }
-        }
-        self.prepare_scheduler_main_thread(entry_address, &entry_arguments)?;
-        self.complete_process_startup_sequence()?;
-        self.log_entry_invoke(&entry_module, entry_address, &entry_arguments)?;
-        self.run_scheduler_loop()
-    }
-
-    #[allow(dead_code)]
-    fn prepare_scheduler_main_thread(
-        &mut self,
-        start_address: u64,
-        arguments: &[u64],
-    ) -> Result<(), VmError> {
-        let main_tid = self
-            .main_thread_tid
-            .ok_or(VmError::RuntimeInvariant("main thread not initialized"))?;
-        let thread = self
-            .scheduler
-            .thread_snapshot(main_tid)
-            .ok_or(VmError::RuntimeInvariant("main thread snapshot missing"))?;
-        self.scheduler
-            .set_thread_start_address(main_tid, start_address)
-            .ok_or(VmError::RuntimeInvariant(
-                "failed to set main thread entrypoint",
-            ))?;
-        self.scheduler
-            .set_thread_parameter(main_tid, arguments.first().copied().unwrap_or(0))
-            .ok_or(VmError::RuntimeInvariant(
-                "failed to set main thread parameter",
-            ))?;
-        self.scheduler
-            .set_thread_exit_address(main_tid, self.native_return_sentinel)
-            .ok_or(VmError::RuntimeInvariant(
-                "failed to set main thread exit address",
-            ))?;
-        let stack_top = thread.stack_top;
-        let thread_context = crate::runtime::thread_context::ThreadContext {
-            teb_base: thread.teb_base,
-            stack_base: thread.stack_base,
-            stack_limit: thread.stack_limit,
+            token.parse::<u64>().ok()
         };
-        self.initialize_scheduler_thread_context(main_tid, thread_context, stack_top)?;
-        let mut registers = self
-            .scheduler
-            .thread_snapshot(main_tid)
-            .ok_or(VmError::RuntimeInvariant("main thread snapshot missing"))?
-            .registers;
-        if self.arch.is_x86() {
-            let saved_esp = registers
-                .get("esp")
-                .copied()
-                .ok_or(VmError::RuntimeInvariant("main thread ESP missing"))?;
-            let mut frame = Vec::with_capacity((arguments.len() + 1) * 4);
-            frame.extend_from_slice(&(self.native_return_sentinel as u32).to_le_bytes());
-            for value in arguments {
-                frame.extend_from_slice(&(*value as u32).to_le_bytes());
-            }
-            let new_esp = saved_esp
-                .checked_sub(frame.len() as u64)
-                .ok_or(VmError::RuntimeInvariant("native call stack underflow"))?;
-            self.modules.memory_mut().write(new_esp, &frame)?;
-            registers.insert("esp".to_string(), new_esp);
-            registers.insert("eip".to_string(), start_address);
-        } else {
-            let saved_rsp = registers
-                .get("rsp")
-                .copied()
-                .ok_or(VmError::RuntimeInvariant("main thread RSP missing"))?;
-            let stack_arg_count = arguments.len().saturating_sub(4);
-            let frame_size = 0x28 + stack_arg_count * 8;
-            let new_rsp = saved_rsp
-                .checked_sub(frame_size as u64)
-                .ok_or(VmError::RuntimeInvariant("native call stack underflow"))?;
-            let mut frame = vec![0u8; frame_size];
-            frame[0..8].copy_from_slice(&self.native_return_sentinel.to_le_bytes());
-            for (index, value) in arguments.iter().skip(4).enumerate() {
-                let offset = 0x28 + index * 8;
-                frame[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
-            }
-            self.modules.memory_mut().write(new_rsp, &frame)?;
-            registers.insert("rcx".to_string(), arguments.first().copied().unwrap_or(0));
-            registers.insert("rdx".to_string(), arguments.get(1).copied().unwrap_or(0));
-            registers.insert("r8".to_string(), arguments.get(2).copied().unwrap_or(0));
-            registers.insert("r9".to_string(), arguments.get(3).copied().unwrap_or(0));
-            registers.insert("rsp".to_string(), new_rsp);
-            registers.insert("rip".to_string(), start_address);
+        if let Some(address) = parsed {
+            probes.insert(address);
         }
-        self.scheduler
-            .set_thread_registers(main_tid, registers)
-            .ok_or(VmError::RuntimeInvariant(
-                "failed to seed main thread entry frame",
-            ))?;
-        self.scheduler
-            .mark_thread_ready(main_tid)
-            .ok_or(VmError::RuntimeInvariant("failed to ready main thread"))?;
-        self.scheduler
-            .switch_to(main_tid, &mut self.process_env)
-            .ok_or(VmError::RuntimeInvariant("failed to bind main thread"))?;
-        self.sync_native_support_state()?;
-        Ok(())
     }
-
-    #[allow(dead_code)]
-    fn run_unicorn_scheduler_loop(&mut self) -> Result<(), VmError> {
-        let mut remaining = self.remaining_run_budget();
-        if remaining == 0 {
-            self.stop_reason = Some(RunStopReason::InstructionBudgetExhausted);
-            return Ok(());
-        }
-        while remaining > 0 {
-            {
-                let _profile = self
-                    .runtime_profiler
-                    .start_scope("scheduler.poll_blocked_threads");
-                self.scheduler
-                    .poll_blocked_threads(self.time.current().tick_ms);
-            }
-            let Some(thread) = self.scheduler.next_ready_thread() else {
-                if !self.scheduler.has_live_threads() {
-                    break;
-                }
-                if let Some(next_tick) = self.scheduler.next_wake_tick() {
-                    let current_tick = self.time.current().tick_ms;
-                    if next_tick > current_tick {
-                        self.time.advance(next_tick - current_tick);
-                        continue;
-                    }
-                }
-                break;
-            };
-            self.prepare_remote_shellcode_thread_if_needed(thread.tid)?;
-            if self.scheduler.thread_state(thread.tid) != Some("running") {
-                continue;
-            }
-            {
-                let _profile = self.runtime_profiler.start_scope("scheduler.switch_to");
-                self.scheduler
-                    .switch_to(thread.tid, &mut self.process_env)
-                    .ok_or(VmError::RuntimeInvariant(
-                        "failed to switch scheduler thread",
-                    ))?;
-            }
-            self.sync_native_support_state()?;
-            let budget = remaining.min(self.scheduler.time_slice_instructions());
-            let before = self.instruction_count;
-            {
-                let _profile = self
-                    .runtime_profiler
-                    .start_scope("unicorn.thread_slice_total");
-                self.run_unicorn_thread_slice(thread.tid, budget)?;
-            }
-            let consumed = self.instruction_count.saturating_sub(before).max(1);
-            remaining = remaining.saturating_sub(consumed);
-
-            if self.scheduler.thread_state(thread.tid) == Some("terminated")
-                && self.started_threads.remove(&thread.tid)
-            {
-                let _ = self.dispatch_thread_notification(thread.tid, DLL_THREAD_DETACH);
-            }
-            if Some(thread.tid) == self.main_thread_tid
-                && self.scheduler.thread_state(thread.tid) == Some("terminated")
-            {
-                self.exit_code = self
-                    .scheduler
-                    .thread_exit_code(thread.tid)
-                    .flatten()
-                    .or(self.exit_code);
-                if self.process_exit_requested || !self.scheduler.has_live_threads() {
-                    break;
-                }
-            }
-
-            self.time.advance(self.scheduler.time_slice_ms());
-        }
-        self.stop_reason = Some(if remaining == 0 {
-            RunStopReason::InstructionBudgetExhausted
-        } else if self.process_exit_requested {
-            RunStopReason::ProcessExit
-        } else if !self.scheduler.has_live_threads() {
-            RunStopReason::AllThreadsTerminated
-        } else if self
-            .main_thread_tid
-            .and_then(|tid| self.scheduler.thread_state(tid))
-            == Some("terminated")
-        {
-            RunStopReason::MainThreadTerminated
-        } else {
-            RunStopReason::SchedulerIdle
-        });
-        Ok(())
-    }
-
-    fn run_native_main(&mut self) -> Result<(), VmError> {
-        let main_module = self.load()?.clone();
-        let entry_module = self
-            .entry_module
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| main_module.clone());
-        let entry_address = self.entry_address.unwrap_or(entry_module.entrypoint);
-        let entry_arguments = self.entry_arguments.clone();
-        let mut skipped_bases = vec![main_module.base];
-        if entry_module.base != main_module.base {
-            skipped_bases.push(entry_module.base);
-        }
-        self.run_loaded_module_initializers(&skipped_bases)?;
-        match self.entry_invocation {
-            EntryInvocation::NativeEntrypoint => {
-                self.run_tls_callbacks(&entry_module, DLL_PROCESS_ATTACH, "entry")?;
-            }
-            EntryInvocation::Export => {
-                if self.entry_module_requires_attach {
-                    self.run_module_initializers(&entry_module, "entry")?;
-                } else {
-                    self.run_tls_callbacks(&entry_module, DLL_PROCESS_ATTACH, "entry")?;
-                }
-            }
-        }
-        self.prepare_scheduler_main_thread(entry_address, &entry_arguments)?;
-        self.complete_process_startup_sequence()?;
-        self.log_entry_invoke(&entry_module, entry_address, &entry_arguments)?;
-        self.force_native_return = false;
-        if self.arch.is_x64() {
-            return self.run_unicorn_scheduler_loop();
-        }
-        let retval = self.call_native_with_entry_frame(entry_address, &entry_arguments)? as u32;
-        if self.stop_reason == Some(RunStopReason::InstructionBudgetExhausted) {
-            return Ok(());
-        }
-        let main_thread_state = self
-            .main_thread_tid
-            .and_then(|tid| self.scheduler.thread_state(tid));
-        if matches!(main_thread_state, Some("waiting" | "sleeping" | "ready")) {
-            return if self.unicorn.is_some() {
-                self.run_unicorn_scheduler_loop()
-            } else {
-                self.run_scheduler_loop()
-            };
-        }
-        if self.exit_code.is_none() {
-            self.exit_code = Some(retval);
-        }
-        if let Some(main_tid) = self.main_thread_tid {
-            let _ = self.scheduler.switch_to(main_tid, &mut self.process_env);
-            let _ = self.terminate_current_thread(self.exit_code.unwrap_or(retval));
-        }
-        if self.process_exit_requested || !self.scheduler.has_live_threads() {
-            self.stop_reason = Some(if self.process_exit_requested {
-                RunStopReason::ProcessExit
-            } else {
-                RunStopReason::AllThreadsTerminated
-            });
-            return Ok(());
-        }
-        self.run_unicorn_scheduler_loop()
-    }
+    probes
 }
 
 impl Drop for VirtualExecutionEngine {
@@ -1854,953 +1341,28 @@ impl Drop for VirtualExecutionEngine {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use super::{
-        format_writeback_error_detail, writeback_range_chunks, RunStopReason,
-        VirtualExecutionEngine,
-    };
-    use crate::config::load_config;
-    use crate::memory::manager::PAGE_SIZE;
-    use crate::runtime::scheduler::{WAIT_ABANDONED_0, WAIT_OBJECT_0, WAIT_TIMEOUT};
-
-    #[test]
-    fn writeback_range_chunks_split_on_page_boundaries() {
-        assert_eq!(
-            writeback_range_chunks(PAGE_SIZE - 0x10, 0x40),
-            vec![(PAGE_SIZE - 0x10, 0x10), (PAGE_SIZE, 0x30),]
-        );
-    }
-
-    #[test]
-    fn writeback_error_detail_includes_requested_range_failed_chunk_and_pc() {
-        let detail = format_writeback_error_detail(
-            "uc_mem_read: Invalid memory read (UC_ERR_READ_UNMAPPED)",
-            0x1234,
-            0x2200,
-            0x2000,
-            0x1000,
-            Some(0x40269D),
-        );
-        assert!(detail.contains("write_range=0x1234+0x2200"));
-        assert!(detail.contains("failed_chunk=0x2000+0x1000"));
-        assert!(detail.contains("flush_pc=0x40269D"));
-    }
-
-    #[test]
-    fn unicorn_scheduler_continues_ready_worker_after_main_thread_terminates() {
-        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../configs/sample_42c4b1eaeba9de5a873970687b4abc34_trace.json");
-        let config = load_config(config_path).unwrap();
-        let mut engine = VirtualExecutionEngine::new(config).unwrap();
-        engine.load().unwrap();
-
-        let worker_code = engine.allocate_executable_test_page(0x6F00_0000).unwrap();
-        engine
-            .write_test_bytes(worker_code, &[0xB8, 0x2A, 0x00, 0x00, 0x00, 0xC3])
-            .unwrap();
-        let worker_handle = engine.create_runtime_thread(worker_code, 0, 0, 0).unwrap() as u32;
-        let worker_tid = engine
-            .scheduler()
-            .thread_tid_for_handle(worker_handle)
-            .unwrap();
-        let main_tid = engine.main_thread_tid.unwrap();
-
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-        assert!(engine.terminate_current_thread(1));
-        engine.exit_code = Some(1);
-        engine.stop_reason = None;
-        engine.process_exit_requested = false;
-
-        engine.run_unicorn_scheduler_loop().unwrap();
-
-        assert_eq!(
-            engine.scheduler().thread_state(worker_tid),
-            Some("terminated")
-        );
-        assert_eq!(
-            engine.scheduler().thread_exit_code(worker_tid),
-            Some(Some(0x2A))
-        );
-        assert_eq!(
-            engine.stop_reason,
-            Some(RunStopReason::AllThreadsTerminated)
-        );
-    }
-
-    #[test]
-    fn wait_for_single_object_on_thread_handle_resumes_after_worker_exit() {
-        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
-        let config = load_config(config_path).unwrap();
-        let mut engine = VirtualExecutionEngine::new(config).unwrap();
-        engine.load().unwrap();
-
-        let worker_code = engine.allocate_executable_test_page(0x6F10_0000).unwrap();
-        engine.write_test_bytes(worker_code, &[0xC3]).unwrap();
-        let worker_handle = engine.create_runtime_thread(worker_code, 0, 0, 0).unwrap() as u32;
-        let worker_tid = engine
-            .scheduler()
-            .thread_tid_for_handle(worker_handle)
-            .unwrap();
-        let main_tid = engine.main_thread_tid.unwrap();
-        let wait = engine.bind_hook_for_test("kernel32.dll", "WaitForSingleObject");
-
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-        assert_eq!(
-            engine
-                .dispatch_bound_stub(wait, &[worker_handle as u64, u32::MAX as u64])
-                .unwrap(),
-            WAIT_TIMEOUT as u64
-        );
-        assert_eq!(engine.scheduler().thread_state(main_tid), Some("waiting"));
-
-        engine
-            .scheduler
-            .switch_to(worker_tid, &mut engine.process_env)
-            .unwrap();
-        assert!(engine.terminate_current_thread(7));
-
-        let main_thread = engine.scheduler().thread_snapshot(main_tid).unwrap();
-        assert_eq!(main_thread.state, "ready");
-        assert_eq!(main_thread.wait_result, Some(WAIT_OBJECT_0));
-
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-        assert_eq!(
-            engine
-                .dispatch_bound_stub(wait, &[worker_handle as u64, u32::MAX as u64])
-                .unwrap(),
-            WAIT_OBJECT_0 as u64
-        );
-    }
-
-    #[test]
-    fn wait_for_single_object_on_abandoned_mutex_returns_wait_abandoned() {
-        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
-        let config = load_config(config_path).unwrap();
-        let mut engine = VirtualExecutionEngine::new(config).unwrap();
-        engine.load().unwrap();
-
-        let worker_code = engine.allocate_executable_test_page(0x6F20_0000).unwrap();
-        engine.write_test_bytes(worker_code, &[0xC3]).unwrap();
-        let worker_handle = engine.create_runtime_thread(worker_code, 0, 0, 0).unwrap() as u32;
-        let worker_tid = engine
-            .scheduler()
-            .thread_tid_for_handle(worker_handle)
-            .unwrap();
-        let main_tid = engine.main_thread_tid.unwrap();
-        let create_mutex = engine.bind_hook_for_test("kernel32.dll", "CreateMutexW");
-        let wait = engine.bind_hook_for_test("kernel32.dll", "WaitForSingleObject");
-
-        engine
-            .scheduler
-            .switch_to(worker_tid, &mut engine.process_env)
-            .unwrap();
-        let mutex = engine
-            .dispatch_bound_stub(create_mutex, &[0, 1, 0])
-            .unwrap() as u32;
-        assert_eq!(
-            engine
-                .dispatch_bound_stub(wait, &[mutex as u64, u32::MAX as u64])
-                .unwrap(),
-            WAIT_OBJECT_0 as u64
-        );
-        assert!(engine.terminate_current_thread(9));
-
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-        assert_eq!(
-            engine
-                .dispatch_bound_stub(wait, &[mutex as u64, 0])
-                .unwrap(),
-            WAIT_ABANDONED_0 as u64
-        );
-    }
-
-    #[test]
-    fn get_message_waits_for_timer_due_before_returning_wm_timer() {
-        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
-        let config = load_config(config_path).unwrap();
-        let mut engine = VirtualExecutionEngine::new(config).unwrap();
-        engine.load().unwrap();
-
-        let main_tid = engine.main_thread_tid.unwrap();
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-        let msg = engine
-            .modules
-            .memory_mut()
-            .reserve(0x1000, Some(0x6F30_0000), "user32:test_msg", true)
-            .unwrap();
-
-        assert_eq!(
-            engine.user32_register_timer(0x1234, 0x81, 5, 0).unwrap(),
-            0x81
-        );
-        assert_eq!(engine.user32_state.synthetic_timer_messages, 0);
-
-        assert_eq!(engine.user32_get_message(msg, 0, 0, 0).unwrap(), 0);
-        let sleeping_thread = engine.scheduler().thread_snapshot(main_tid).unwrap();
-        assert_eq!(sleeping_thread.state, "sleeping");
-        assert!(sleeping_thread.wake_tick >= engine.time.current().tick_ms + 5);
-        assert_eq!(engine.user32_state.synthetic_timer_messages, 0);
-
-        engine.handle_requested_thread_yield();
-        engine.thread_yield_requested = false;
-        engine.defer_api_return = false;
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-
-        assert_eq!(engine.user32_get_message(msg, 0, 0, 0).unwrap(), 1);
-        let hwnd = engine.read_pointer_value(msg).unwrap();
-        let message = if engine.arch.is_x86() {
-            engine.read_u32(msg + 4).unwrap()
-        } else {
-            engine.read_u32(msg + 8).unwrap()
-        };
-        let w_param = if engine.arch.is_x86() {
-            engine.read_u32(msg + 8).unwrap() as u64
-        } else {
-            engine.read_pointer_value(msg + 16).unwrap()
-        };
-        let l_param = if engine.arch.is_x86() {
-            engine.read_u32(msg + 12).unwrap() as u64
-        } else {
-            engine.read_pointer_value(msg + 24).unwrap()
-        };
-        assert_eq!(hwnd, 0x1234);
-        assert_eq!(message, 0x0113);
-        assert_eq!(w_param, 0x81);
-        assert_eq!(l_param, 0);
-        assert_eq!(engine.user32_state.synthetic_timer_messages, 1);
-    }
-
-    #[test]
-    fn dispatch_message_invokes_x86_timerproc_callback() {
-        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
-        let config = load_config(config_path).unwrap();
-        let mut engine = VirtualExecutionEngine::new(config).unwrap();
-        engine.load().unwrap();
-
-        assert!(engine.arch.is_x86());
-
-        let main_tid = engine.main_thread_tid.unwrap();
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-        let msg = engine
-            .modules
-            .memory_mut()
-            .reserve(0x1000, Some(0x6F31_0000), "user32:test_msg", true)
-            .unwrap();
-        let timerproc = engine.allocate_executable_test_page(0x6F40_0000).unwrap();
-        engine
-            .write_test_bytes(timerproc, &[0xB8, 0x44, 0x33, 0x22, 0x11, 0xC2, 0x10, 0x00])
-            .unwrap();
-
-        assert_eq!(
-            engine
-                .user32_register_timer(0x4321, 0x99, 5, timerproc)
-                .unwrap(),
-            0x99
-        );
-        assert_eq!(engine.user32_get_message(msg, 0, 0, 0).unwrap(), 0);
-
-        engine.handle_requested_thread_yield();
-        engine.thread_yield_requested = false;
-        engine.defer_api_return = false;
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-
-        assert_eq!(engine.user32_get_message(msg, 0, 0, 0).unwrap(), 1);
-        let message = engine.read_u32(msg + 4).unwrap();
-        let w_param = engine.read_u32(msg + 8).unwrap() as u64;
-        let l_param = engine.read_u32(msg + 12).unwrap() as u64;
-        assert_eq!(message, 0x0113);
-        assert_eq!(w_param, 0x99);
-        assert_eq!(l_param, timerproc);
-        assert_eq!(engine.user32_dispatch_message(msg).unwrap(), 0x1122_3344);
-    }
-
-    #[test]
-    fn send_message_invokes_registered_wndproc_x86() {
-        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../configs/sample_567dbfa9f7d29702a70feb934ec08e54_trace.json");
-        let config = load_config(config_path).unwrap();
-        let mut engine = VirtualExecutionEngine::new(config).unwrap();
-        engine.load().unwrap();
-
-        assert!(engine.arch.is_x86());
-
-        let main_tid = engine.main_thread_tid.unwrap();
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-
-        let class_name = engine
-            .modules
-            .memory_mut()
-            .reserve(0x1000, Some(0x6F50_0000), "user32:test_class_name", true)
-            .unwrap();
-        let window_title = engine
-            .modules
-            .memory_mut()
-            .reserve(0x1000, Some(0x6F51_0000), "user32:test_window_title", true)
-            .unwrap();
-        let class_def = engine
-            .modules
-            .memory_mut()
-            .reserve(0x1000, Some(0x6F52_0000), "user32:test_class_def", true)
-            .unwrap();
-        engine
-            .modules
-            .memory_mut()
-            .write(class_def, &vec![0u8; 0x100])
-            .unwrap();
-        engine
-            .write_wide_string_to_memory(class_name, 64, "UnitTestWindow")
-            .unwrap();
-        engine
-            .write_wide_string_to_memory(window_title, 64, "UnitTestWindow")
-            .unwrap();
-
-        let wnd_proc = engine.allocate_executable_test_page(0x6F60_0000).unwrap();
-        engine
-            .write_test_bytes(wnd_proc, &[0xB8, 0x78, 0x56, 0x34, 0x12, 0xC2, 0x10, 0x00])
-            .unwrap();
-
-        engine.write_u32(class_def, 48).unwrap();
-        engine.write_pointer_value(class_def + 8, wnd_proc).unwrap();
-        engine
-            .write_pointer_value(class_def + 40, class_name)
-            .unwrap();
-
-        let register_class = engine.bind_hook_for_test("user32.dll", "RegisterClassExW");
-        let create_window = engine.bind_hook_for_test("user32.dll", "CreateWindowExW");
-        let send_message = engine.bind_hook_for_test("user32.dll", "SendMessageW");
-
-        let atom = engine
-            .dispatch_bound_stub(register_class, &[class_def])
-            .unwrap();
-        assert_ne!(atom, 0);
-
-        let hwnd = engine
-            .dispatch_bound_stub(
-                create_window,
-                &[0, class_name, window_title, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            )
-            .unwrap();
-        assert_ne!(hwnd, 0);
-        assert_eq!(engine.user32_window_proc(hwnd as u32), wnd_proc);
-
-        assert_eq!(
-            engine
-                .dispatch_bound_stub(send_message, &[hwnd, 0x4242, 1, 2])
-                .unwrap(),
-            0x1234_5678
-        );
-    }
-
-    #[test]
-    fn send_message_invokes_registered_wndproc_x64_from_native_context() {
-        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../configs/sample_42c4b1eaeba9de5a873970687b4abc34_trace.json");
-        let config = load_config(config_path).unwrap();
-        let mut engine = VirtualExecutionEngine::new(config).unwrap();
-        engine.load().unwrap();
-
-        assert!(engine.arch.is_x64());
-
-        let main_tid = engine.main_thread_tid.unwrap();
-        engine
-            .scheduler
-            .switch_to(main_tid, &mut engine.process_env)
-            .unwrap();
-
-        let class_name = engine
-            .modules
-            .memory_mut()
-            .reserve(0x1000, Some(0x6F70_0000), "user32:test_class_name64", true)
-            .unwrap();
-        let window_title = engine
-            .modules
-            .memory_mut()
-            .reserve(
-                0x1000,
-                Some(0x6F71_0000),
-                "user32:test_window_title64",
-                true,
-            )
-            .unwrap();
-        let class_def = engine
-            .modules
-            .memory_mut()
-            .reserve(0x1000, Some(0x6F72_0000), "user32:test_class_def64", true)
-            .unwrap();
-        engine
-            .modules
-            .memory_mut()
-            .write(class_def, &vec![0u8; 0x100])
-            .unwrap();
-        engine
-            .write_wide_string_to_memory(class_name, 64, "UnitTestWindow64")
-            .unwrap();
-        engine
-            .write_wide_string_to_memory(window_title, 64, "UnitTestWindow64")
-            .unwrap();
-
-        let wnd_proc = engine.allocate_executable_test_page(0x6F80_0000).unwrap();
-        let wnd_proc_result = 0x1122_3344_5566_7788u64;
-        let mut wnd_proc_bytes = vec![0x48, 0xB8];
-        wnd_proc_bytes.extend_from_slice(&wnd_proc_result.to_le_bytes());
-        wnd_proc_bytes.push(0xC3);
-        engine.write_test_bytes(wnd_proc, &wnd_proc_bytes).unwrap();
-
-        engine.write_u32(class_def, 80).unwrap();
-        engine.write_pointer_value(class_def + 8, wnd_proc).unwrap();
-        engine
-            .write_pointer_value(class_def + 64, class_name)
-            .unwrap();
-
-        let register_class = engine.bind_hook_for_test("user32.dll", "RegisterClassExW");
-        let create_window = engine.bind_hook_for_test("user32.dll", "CreateWindowExW");
-        let send_message = engine.bind_hook_for_test("user32.dll", "SendMessageW");
-
-        let atom = engine
-            .dispatch_bound_stub(register_class, &[class_def])
-            .unwrap();
-        assert_ne!(atom, 0);
-
-        let hwnd = engine
-            .dispatch_bound_stub(
-                create_window,
-                &[0, class_name, window_title, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            )
-            .unwrap();
-        assert_ne!(hwnd, 0);
-        assert_eq!(engine.user32_window_proc(hwnd as u32), wnd_proc);
-
-        let caller = engine.allocate_executable_test_page(0x6F81_0000).unwrap();
-        let mut caller_bytes = Vec::new();
-        caller_bytes.extend_from_slice(&[0x48, 0xB9]);
-        caller_bytes.extend_from_slice(&hwnd.to_le_bytes());
-        caller_bytes.extend_from_slice(&[0x48, 0xBA]);
-        caller_bytes.extend_from_slice(&(0x2B11u64).to_le_bytes());
-        caller_bytes.extend_from_slice(&[0x49, 0xB8]);
-        caller_bytes.extend_from_slice(&(0xAA55u64).to_le_bytes());
-        caller_bytes.extend_from_slice(&[0x49, 0xB9]);
-        caller_bytes.extend_from_slice(&(0x55AA_1234u64).to_le_bytes());
-        caller_bytes.extend_from_slice(&[0x48, 0xB8]);
-        caller_bytes.extend_from_slice(&send_message.to_le_bytes());
-        caller_bytes.extend_from_slice(&[0x48, 0x83, 0xEC, 0x28, 0xFF, 0xD0]);
-        caller_bytes.extend_from_slice(&[0x48, 0x83, 0xC4, 0x28, 0xC3]);
-        engine.write_test_bytes(caller, &caller_bytes).unwrap();
-
-        assert_eq!(
-            engine.call_native_for_test(caller, &[]).unwrap(),
-            wnd_proc_result
-        );
-        assert!(engine.pending_user32_sendmessage_callbacks.is_empty());
-    }
-}
+mod tests;
 
 thread_local! {
     static ACTIVE_UNICORN_CONTEXT: Cell<*mut UnicornRunContext> = const { Cell::new(std::ptr::null_mut()) };
+    // Bound API hooks run after the current emu_start slice exits, so they need
+    // a second thread-local handle to the live Unicorn session.
+    static ACTIVE_HOOK_UNICORN_CONTEXT: Cell<Option<HookUnicornContext>> = const { Cell::new(None) };
 }
 
 fn unicorn_context_active() -> bool {
     ACTIVE_UNICORN_CONTEXT.with(|slot| !slot.get().is_null())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UnicornFaultAccess {
-    Read,
-    Write,
-    Execute,
-}
-
-impl UnicornFaultAccess {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Read => "read",
-            Self::Write => "write",
-            Self::Execute => "execute",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct UnicornFault {
-    access: UnicornFaultAccess,
-    address: u64,
-    size: usize,
-    pc: u64,
-}
-
-struct UnicornRunContext {
+#[derive(Clone, Copy)]
+struct HookUnicornContext {
     engine: *mut VirtualExecutionEngine,
     api: *const UnicornApi,
     uc: *mut UcEngine,
-    callback_error: Option<VmError>,
-    pending_fault: Option<UnicornFault>,
-    pending_writes: Vec<(u64, usize)>,
-    suppress_mem_write_hook: bool,
-    last_native_block: Option<(u64, u32)>,
-    recent_blocks: VecDeque<NativeBlockSnapshot>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NativeCallRunMode {
-    Standalone,
-    EntryFrame,
-}
-
-#[derive(Debug, Clone)]
-struct NativeBlockSnapshot {
-    pc: u64,
-    size: u32,
-    registers: BTreeMap<String, u64>,
-    stack_words: BTreeMap<String, u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct LoopValueDelta {
-    before: u64,
-    after: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct LoopStateDelta {
-    registers: BTreeMap<String, LoopValueDelta>,
-    stack_words: BTreeMap<String, LoopValueDelta>,
-}
-
-impl LoopStateDelta {
-    fn is_empty(&self) -> bool {
-        self.registers.is_empty() && self.stack_words.is_empty()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct LoopPhaseDelta {
-    phase: usize,
-    pc: u64,
-    size: u32,
-    state_delta: LoopStateDelta,
-}
-
-impl LoopPhaseDelta {
-    fn change_count(&self) -> usize {
-        self.state_delta.registers.len() + self.state_delta.stack_words.len()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct LoopPhaseSummary {
-    phase: usize,
-    pc: u64,
-    size: u32,
-    changed_registers: Vec<String>,
-    changed_stack_words: Vec<String>,
-}
-
-impl LoopPhaseSummary {
-    fn change_count(&self) -> usize {
-        self.changed_registers.len() + self.changed_stack_words.len()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NativeLoopSnapshot {
-    blocks: Vec<(u64, u32)>,
-    observed_blocks: Vec<(u64, u32)>,
-    period: usize,
-    repeats: u64,
-    state_delta: Option<LoopStateDelta>,
-    phase_summaries: Vec<LoopPhaseSummary>,
-    phase_deltas: Vec<LoopPhaseDelta>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ActiveNativeLoop {
-    blocks: Vec<(u64, u32)>,
-    observed_blocks: Vec<(u64, u32)>,
-    period: usize,
-    repeats: u64,
-    state_delta: Option<LoopStateDelta>,
-    phase_summaries: Vec<LoopPhaseSummary>,
-    phase_deltas: Vec<LoopPhaseDelta>,
-    next_emit_repeats: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct NativeTraceUpdate {
-    should_log_progress: bool,
-    loop_snapshot: Option<NativeLoopSnapshot>,
-}
-
-#[derive(Debug)]
-struct NativeTraceState {
-    total_blocks: u64,
-    block_hits: BTreeMap<(u64, u32), u64>,
-    recent_sequence: VecDeque<(u64, u32)>,
-    recent_snapshots: VecDeque<NativeBlockSnapshot>,
-    active_loop: Option<ActiveNativeLoop>,
-    next_progress_instruction: u64,
-}
-
-impl NativeTraceState {
-    fn reset(&mut self) {
-        self.total_blocks = 0;
-        self.block_hits.clear();
-        self.recent_sequence.clear();
-        self.recent_snapshots.clear();
-        self.active_loop = None;
-        self.next_progress_instruction = NATIVE_PROGRESS_INTERVAL_INSTRUCTIONS;
-    }
-
-    fn record_block(
-        &mut self,
-        instruction_count: u64,
-        pc: u64,
-        size: u32,
-        snapshot: Option<&NativeBlockSnapshot>,
-    ) -> NativeTraceUpdate {
-        self.total_blocks = self.total_blocks.saturating_add(1);
-        *self.block_hits.entry((pc, size)).or_insert(0) += 1;
-        self.recent_sequence.push_back((pc, size));
-        if self.recent_sequence.len() > NATIVE_LOOP_HISTORY_BLOCKS {
-            self.recent_sequence.pop_front();
-        }
-        if let Some(snapshot) = snapshot {
-            self.recent_snapshots.push_back(snapshot.clone());
-            if self.recent_snapshots.len() > NATIVE_LOOP_HISTORY_BLOCKS {
-                self.recent_snapshots.pop_front();
-            }
-        }
-        let loop_snapshot = self.update_loop_detection();
-        let should_log_progress = if instruction_count < self.next_progress_instruction {
-            false
-        } else {
-            self.next_progress_instruction =
-                instruction_count.saturating_add(NATIVE_PROGRESS_INTERVAL_INSTRUCTIONS);
-            true
-        };
-        NativeTraceUpdate {
-            should_log_progress,
-            loop_snapshot,
-        }
-    }
-
-    fn total_blocks(&self) -> u64 {
-        self.total_blocks
-    }
-
-    fn unique_blocks(&self) -> usize {
-        self.block_hits.len()
-    }
-
-    fn active_loop(&self) -> Option<NativeLoopSnapshot> {
-        self.active_loop.as_ref().map(|active| NativeLoopSnapshot {
-            blocks: active.blocks.clone(),
-            observed_blocks: active.observed_blocks.clone(),
-            period: active.period,
-            repeats: active.repeats,
-            state_delta: active.state_delta.clone(),
-            phase_summaries: active.phase_summaries.clone(),
-            phase_deltas: active.phase_deltas.clone(),
-        })
-    }
-
-    fn top_blocks(&self, limit: usize) -> Vec<((u64, u32), u64)> {
-        let mut blocks = self
-            .block_hits
-            .iter()
-            .map(|(&(pc, size), &hits)| ((pc, size), hits))
-            .collect::<Vec<_>>();
-        blocks.sort_by(|left, right| {
-            right
-                .1
-                .cmp(&left.1)
-                .then_with(|| left.0 .0.cmp(&right.0 .0))
-                .then_with(|| left.0 .1.cmp(&right.0 .1))
-        });
-        blocks.truncate(limit);
-        blocks
-    }
-
-    fn update_loop_detection(&mut self) -> Option<NativeLoopSnapshot> {
-        let Some(detected) = self.detect_repeating_loop() else {
-            self.active_loop = None;
-            return None;
-        };
-
-        match &mut self.active_loop {
-            Some(active)
-                if active.period == detected.period && active.blocks == detected.blocks =>
-            {
-                active.repeats = detected.repeats;
-                active.observed_blocks = detected.observed_blocks.clone();
-                active.state_delta = detected.state_delta.clone();
-                active.phase_summaries = detected.phase_summaries.clone();
-                active.phase_deltas = detected.phase_deltas.clone();
-                if active.repeats < active.next_emit_repeats {
-                    return None;
-                }
-                while active.next_emit_repeats <= active.repeats {
-                    active.next_emit_repeats = active.next_emit_repeats.saturating_mul(2);
-                }
-                Some(NativeLoopSnapshot {
-                    blocks: active.blocks.clone(),
-                    observed_blocks: active.observed_blocks.clone(),
-                    period: active.period,
-                    repeats: active.repeats,
-                    state_delta: active.state_delta.clone(),
-                    phase_summaries: active.phase_summaries.clone(),
-                    phase_deltas: active.phase_deltas.clone(),
-                })
-            }
-            _ => {
-                self.active_loop = Some(ActiveNativeLoop {
-                    blocks: detected.blocks.clone(),
-                    observed_blocks: detected.observed_blocks.clone(),
-                    period: detected.period,
-                    repeats: detected.repeats,
-                    state_delta: detected.state_delta.clone(),
-                    phase_summaries: detected.phase_summaries.clone(),
-                    phase_deltas: detected.phase_deltas.clone(),
-                    next_emit_repeats: detected.repeats.saturating_mul(2),
-                });
-                Some(detected)
-            }
-        }
-    }
-
-    fn detect_repeating_loop(&mut self) -> Option<NativeLoopSnapshot> {
-        let sequence = self.recent_sequence.make_contiguous();
-        if sequence.len() < NATIVE_LOOP_MIN_PERIOD_BLOCKS * NATIVE_LOOP_MIN_REPEATS as usize {
-            return None;
-        }
-        let max_period =
-            NATIVE_LOOP_MAX_PERIOD_BLOCKS.min(sequence.len() / NATIVE_LOOP_MIN_REPEATS as usize);
-        for period in NATIVE_LOOP_MIN_PERIOD_BLOCKS..=max_period {
-            let pattern_start = sequence.len().saturating_sub(period);
-            let pattern = &sequence[pattern_start..];
-            let mut repeats = 1u64;
-            while sequence.len() >= (repeats as usize + 1) * period {
-                let start = sequence.len() - (repeats as usize + 1) * period;
-                let end = start + period;
-                if &sequence[start..end] != pattern {
-                    break;
-                }
-                repeats = repeats.saturating_add(1);
-            }
-            if repeats >= NATIVE_LOOP_MIN_REPEATS {
-                let observed_blocks = pattern.to_vec();
-                return Some(NativeLoopSnapshot {
-                    blocks: Self::canonicalize_loop_blocks(pattern),
-                    observed_blocks: observed_blocks.clone(),
-                    period,
-                    repeats,
-                    state_delta: self.current_loop_state_delta(&observed_blocks),
-                    phase_summaries: self.current_loop_phase_summaries(&observed_blocks),
-                    phase_deltas: self.current_loop_phase_deltas(&observed_blocks),
-                });
-            }
-        }
-        None
-    }
-
-    fn current_loop_state_delta(&self, observed_blocks: &[(u64, u32)]) -> Option<LoopStateDelta> {
-        let pairs = self.current_loop_phase_pairs(observed_blocks)?;
-        let (before, after) = pairs.first().copied()?;
-        let state_delta = LoopStateDelta {
-            registers: Self::diff_named_values(&before.registers, &after.registers),
-            stack_words: Self::diff_named_values(&before.stack_words, &after.stack_words),
-        };
-        if state_delta.is_empty() {
-            None
-        } else {
-            Some(state_delta)
-        }
-    }
-
-    fn diff_named_values(
-        before: &BTreeMap<String, u64>,
-        after: &BTreeMap<String, u64>,
-    ) -> BTreeMap<String, LoopValueDelta> {
-        let mut deltas = BTreeMap::new();
-        for key in before.keys().chain(after.keys()) {
-            let Some(before_value) = before.get(key).copied() else {
-                continue;
-            };
-            let Some(after_value) = after.get(key).copied() else {
-                continue;
-            };
-            if before_value == after_value {
-                continue;
-            }
-            deltas.insert(
-                key.clone(),
-                LoopValueDelta {
-                    before: before_value,
-                    after: after_value,
-                },
-            );
-        }
-        deltas
-    }
-
-    fn current_loop_phase_pairs<'a>(
-        &'a self,
-        observed_blocks: &[(u64, u32)],
-    ) -> Option<Vec<(&'a NativeBlockSnapshot, &'a NativeBlockSnapshot)>> {
-        let period = observed_blocks.len();
-        if period == 0 || self.recent_snapshots.len() < period * 2 {
-            return None;
-        }
-        let snapshots = self.recent_snapshots.iter().collect::<Vec<_>>();
-        let previous = &snapshots[snapshots.len() - period * 2..snapshots.len() - period];
-        let current = &snapshots[snapshots.len() - period..];
-        if previous
-            .iter()
-            .map(|snapshot| (snapshot.pc, snapshot.size))
-            .ne(observed_blocks.iter().copied())
-        {
-            return None;
-        }
-        if current
-            .iter()
-            .map(|snapshot| (snapshot.pc, snapshot.size))
-            .ne(observed_blocks.iter().copied())
-        {
-            return None;
-        }
-        Some(
-            previous
-                .iter()
-                .zip(current.iter())
-                .map(|(before, after)| (*before, *after))
-                .collect(),
-        )
-    }
-
-    fn current_loop_phase_summaries(
-        &self,
-        observed_blocks: &[(u64, u32)],
-    ) -> Vec<LoopPhaseSummary> {
-        let Some(pairs) = self.current_loop_phase_pairs(observed_blocks) else {
-            return Vec::new();
-        };
-        pairs
-            .into_iter()
-            .enumerate()
-            .map(|(phase, (before, after))| {
-                let changed_registers =
-                    Self::diff_named_values(&before.registers, &after.registers)
-                        .into_keys()
-                        .collect();
-                let changed_stack_words =
-                    Self::diff_named_values(&before.stack_words, &after.stack_words)
-                        .into_keys()
-                        .collect();
-                LoopPhaseSummary {
-                    phase,
-                    pc: after.pc,
-                    size: after.size,
-                    changed_registers,
-                    changed_stack_words,
-                }
-            })
-            .collect()
-    }
-
-    fn current_loop_phase_deltas(&self, observed_blocks: &[(u64, u32)]) -> Vec<LoopPhaseDelta> {
-        let Some(pairs) = self.current_loop_phase_pairs(observed_blocks) else {
-            return Vec::new();
-        };
-        let mut phase_deltas = pairs
-            .into_iter()
-            .enumerate()
-            .filter_map(|(phase, (before, after))| {
-                let state_delta = LoopStateDelta {
-                    registers: Self::diff_named_values(&before.registers, &after.registers),
-                    stack_words: Self::diff_named_values(&before.stack_words, &after.stack_words),
-                };
-                if state_delta.is_empty() {
-                    return None;
-                }
-                Some(LoopPhaseDelta {
-                    phase,
-                    pc: after.pc,
-                    size: after.size,
-                    state_delta,
-                })
-            })
-            .collect::<Vec<_>>();
-
-        phase_deltas.sort_by(|left, right| {
-            right
-                .change_count()
-                .cmp(&left.change_count())
-                .then_with(|| left.phase.cmp(&right.phase))
-        });
-        phase_deltas.truncate(NATIVE_LOOP_PHASE_DELTA_LIMIT);
-        phase_deltas
-    }
-
-    fn canonicalize_loop_blocks(blocks: &[(u64, u32)]) -> Vec<(u64, u32)> {
-        if blocks.len() <= 1 {
-            return blocks.to_vec();
-        }
-        let mut best = blocks.to_vec();
-        for rotation in 1..blocks.len() {
-            let mut candidate = Vec::with_capacity(blocks.len());
-            candidate.extend_from_slice(&blocks[rotation..]);
-            candidate.extend_from_slice(&blocks[..rotation]);
-            if candidate < best {
-                best = candidate;
-            }
-        }
-        best
-    }
-}
-
-impl Default for NativeTraceState {
-    fn default() -> Self {
-        Self {
-            total_blocks: 0,
-            block_hits: BTreeMap::new(),
-            recent_sequence: VecDeque::new(),
-            recent_snapshots: VecDeque::new(),
-            active_loop: None,
-            next_progress_instruction: NATIVE_PROGRESS_INTERVAL_INSTRUCTIONS,
-        }
-    }
-}
+mod native_trace_types;
+use native_trace_types::*;
 
 fn flush_unicorn_pending_writes(
     state: &mut UnicornRunContext,
@@ -2810,22 +1372,85 @@ fn flush_unicorn_pending_writes(
         return Ok(());
     }
     let api = unsafe { &*state.api };
+    let unicorn = unsafe { api.bind(uc) };
     let engine = unsafe { &mut *state.engine };
+    let pending_ranges = state.pending_writes.len() as u64;
+    let pending_bytes = state.pending_write_bytes;
+    let profiler_enabled = engine.core.runtime_profiler.enabled();
+    if profiler_enabled {
+        engine
+            .core
+            .runtime_profiler
+            .add_counter("unicorn.flush_pending_writes.calls", 1);
+        engine.core.runtime_profiler.add_counter(
+            "unicorn.flush_pending_writes.pending_ranges",
+            pending_ranges,
+        );
+        engine
+            .core
+            .runtime_profiler
+            .add_counter("unicorn.flush_pending_writes.pending_bytes", pending_bytes);
+        engine.core.runtime_profiler.set_counter_max(
+            "unicorn.flush_pending_writes.max_pending_ranges",
+            pending_ranges,
+        );
+        engine.core.runtime_profiler.set_counter_max(
+            "unicorn.flush_pending_writes.max_pending_bytes",
+            pending_bytes,
+        );
+    }
     let _profile = engine
+        .core
         .runtime_profiler
         .start_scope("unicorn.flush_pending_writes");
     let pending = std::mem::take(&mut state.pending_writes);
+    state.pending_write_bytes = 0;
     state.suppress_mem_write_hook = true;
-    let flush_pc = if engine.arch.is_x86() {
-        unsafe { api.reg_read_raw(uc, UC_X86_REG_EIP) }.ok()
+    let flush_pc = if engine.core.arch.is_x86() {
+        unicorn.reg_read(UC_X86_REG_EIP).ok()
     } else {
-        unsafe { api.reg_read_raw(uc, UC_X86_REG_RIP) }.ok()
+        unicorn.reg_read(UC_X86_REG_RIP).ok()
     };
+    let log_native_code_write = engine.core.api_logger.writes_marker("NATIVE_CODE_WRITE");
     let result = (|| -> Result<(), VmError> {
         for (address, size) in pending {
-            for (chunk_address, chunk_size) in writeback_range_chunks(address, size) {
-                let bytes = unsafe { api.mem_read_raw(uc, chunk_address, chunk_size) }.map_err(
-                    |detail| VmError::NativeExecution {
+            if profiler_enabled {
+                engine
+                    .core
+                    .runtime_profiler
+                    .add_counter("unicorn.flush_pending_writes.ranges", 1);
+                engine
+                    .core
+                    .runtime_profiler
+                    .add_counter("unicorn.flush_pending_writes.range_bytes", size as u64);
+                if size == 1 {
+                    engine
+                        .core
+                        .runtime_profiler
+                        .add_counter("unicorn.flush_pending_writes.single_byte_ranges", 1);
+                }
+            }
+            let end = address.saturating_add(size as u64);
+            let mut chunk_address = address;
+            while chunk_address < end {
+                let next_page =
+                    ((chunk_address & !(PAGE_SIZE - 1)).saturating_add(PAGE_SIZE)).min(end);
+                let chunk_size = next_page.saturating_sub(chunk_address) as usize;
+                if profiler_enabled {
+                    engine
+                        .core
+                        .runtime_profiler
+                        .add_counter("unicorn.flush_pending_writes.page_chunks", 1);
+                    engine.core.runtime_profiler.add_counter(
+                        "unicorn.flush_pending_writes.page_chunk_bytes",
+                        chunk_size as u64,
+                    );
+                }
+                let mut bytes = SmallVec::<[u8; 16]>::with_capacity(chunk_size);
+                bytes.resize(chunk_size, 0);
+                unicorn
+                    .mem_read_into(chunk_address, bytes.as_mut_slice())
+                    .map_err(|detail| VmError::NativeExecution {
                         op: "uc_mem_read(writeback)",
                         detail: format_writeback_error_detail(
                             &detail,
@@ -2835,31 +1460,100 @@ fn flush_unicorn_pending_writes(
                             chunk_size,
                             flush_pc,
                         ),
-                    },
-                )?;
-                if engine
-                    .modules
-                    .memory()
-                    .find_region(chunk_address, 1)
-                    .map(|region| region.perms & PROT_EXEC != 0)
-                    .unwrap_or(false)
-                {
+                    })?;
+                let exec_chunk = if log_native_code_write {
+                    let perms = {
+                        let _profile = engine
+                            .core
+                            .runtime_profiler
+                            .start_scope("unicorn.flush_pending_writes.find_region");
+                        engine
+                            .core
+                            .modules
+                            .memory()
+                            .find_region(chunk_address, chunk_size as u64)
+                            .map(|region| region.perms)
+                    };
+                    let Some(perms) = perms else {
+                        engine
+                            .core
+                            .runtime_profiler
+                            .add_counter("unicorn.flush_pending_writes.unmapped_chunks", 1);
+                        chunk_address = next_page;
+                        continue;
+                    };
+                    perms & PROT_EXEC != 0
+                } else {
+                    false
+                };
+                if exec_chunk {
+                    engine
+                        .core
+                        .runtime_profiler
+                        .add_counter("unicorn.flush_pending_writes.exec_chunks", 1);
+                    engine.core.runtime_profiler.add_counter(
+                        "unicorn.flush_pending_writes.exec_chunk_bytes",
+                        chunk_size as u64,
+                    );
                     let preview_len = bytes.len().min(16);
-                    engine.log_native_code_write(
+                    {
+                        let _profile = engine
+                            .core
+                            .runtime_profiler
+                            .start_scope("unicorn.flush_pending_writes.log_native_code_write");
+                        engine.log_native_code_write(
+                            chunk_address,
+                            chunk_size,
+                            &bytes[..preview_len],
+                        )?;
+                    }
+                }
+                {
+                    let _profile = engine
+                        .core
+                        .runtime_profiler
+                        .start_scope("unicorn.flush_pending_writes.write_mirror");
+                    match engine
+                        .core
+                        .modules
+                        .memory_mut()
+                        .write_mirror_contiguous(chunk_address, &bytes)
+                    {
+                        Ok(()) => {}
+                        Err(crate::error::MemoryError::MissingRegion { .. }) => {
+                            engine
+                                .core
+                                .runtime_profiler
+                                .add_counter("unicorn.flush_pending_writes.unmapped_chunks", 1);
+                            chunk_address = next_page;
+                            continue;
+                        }
+                        Err(error) => return Err(VmError::from(error)),
+                    }
+                }
+                {
+                    let _profile = engine
+                        .core
+                        .runtime_profiler
+                        .start_scope("unicorn.flush_pending_writes.visible_alias_writeback");
+                    engine
+                        .core
+                        .modules
+                        .mirror_write_into_visible_alias(chunk_address, &bytes)
+                        .map_err(VmError::from)?;
+                }
+                {
+                    let _profile = engine
+                        .core
+                        .runtime_profiler
+                        .start_scope("unicorn.flush_pending_writes.propagate_file_mapping_write");
+                    engine.propagate_file_mapping_write(
+                        engine.current_process_space_key(),
                         chunk_address,
-                        chunk_size,
-                        &bytes[..preview_len],
+                        &bytes,
                     )?;
                 }
-                engine
-                    .modules
-                    .memory_mut()
-                    .write_mirror(chunk_address, &bytes)?;
-                engine.propagate_file_mapping_write(
-                    engine.current_process_space_key(),
-                    chunk_address,
-                    &bytes,
-                )?;
+                chunk_address = next_page;
             }
         }
         Ok(())
@@ -2868,6 +1562,7 @@ fn flush_unicorn_pending_writes(
     result
 }
 
+#[cfg(test)]
 fn writeback_range_chunks(address: u64, size: usize) -> Vec<(u64, usize)> {
     if size == 0 {
         return Vec::new();
@@ -2901,6 +1596,7 @@ fn format_writeback_error_detail(
     rendered
 }
 
+#[allow(dead_code)]
 unsafe extern "C" fn unicorn_code_hook(
     uc: *mut UcEngine,
     address: u64,
@@ -2915,278 +1611,160 @@ unsafe extern "C" fn unicorn_code_hook(
     if state.callback_error.is_some() {
         return;
     }
-    if let Err(error) = flush_unicorn_pending_writes(state, uc) {
-        state.callback_error = Some(error);
-        let api = &*state.api;
-        let _ = unsafe { api.emu_stop_raw(uc) };
-        return;
+    // Only flush when writes are actually pending — avoids 9M+ no-op calls
+    if !state.pending_writes.is_empty() {
+        if let Err(error) = flush_unicorn_pending_writes(state, uc) {
+            state.callback_error = Some(error);
+            let api = &*state.api;
+            let unicorn = unsafe { api.bind(uc) };
+            let _ = unicorn.emu_stop();
+            return;
+        }
     }
     let engine = &mut *state.engine;
     let api = &*state.api;
+    let unicorn = unsafe { api.bind(uc) };
     engine.record_instruction_retired();
-    if address == engine.native_return_sentinel {
-        let _ = unsafe { api.emu_stop_raw(uc) };
+    if std::env::var_os("HVM_DEBUG_LOAD_STAGE").is_some() {
+        if let Some(module) = engine.entry_module().or_else(|| engine.main_module()) {
+            if module
+                .name
+                .eq_ignore_ascii_case("d2727b626d299d4839fbaf2034949948")
+            {
+                let rva = address.saturating_sub(module.base);
+                if (0xEC99..=0xECE5).contains(&rva)
+                    || (0x114F0..=0x11570).contains(&rva)
+                    || (0x16D3C..=0x16DD5).contains(&rva)
+                {
+                    eprintln!("[TRACE_IP] pc=0x{address:X} rva=0x{rva:X}");
+                }
+            }
+        }
+    }
+    if address == engine.core.native_return_sentinel {
+        let _ = unicorn.emu_stop();
         return;
+    }
+    if let Err(error) = engine.maybe_recover_mfc42u_cabinet_module_base(api, uc, address) {
+        state.callback_error = Some(error);
+        let _ = unicorn.emu_stop();
+        return;
+    }
+    if let Err(error) = engine.maybe_recover_mfc42u_native_resolver_argument(api, uc, address) {
+        state.callback_error = Some(error);
+        let _ = unicorn.emu_stop();
+        return;
+    }
+    if let Err(error) = engine.maybe_emit_debug_pc_probe(api, uc, address) {
+        state.callback_error = Some(error);
+        let _ = unicorn.emu_stop();
+        return;
+    }
+    match engine.dispatch_unicorn_non_executable_module_address(
+        api,
+        uc,
+        address,
+        &mut state.pending_protected_fetch,
+    ) {
+        Ok(true) => {
+            let _ = unicorn.emu_stop();
+            return;
+        }
+        Ok(false) => {}
+        Err(error) => {
+            state.callback_error = Some(error);
+            let _ = unicorn.emu_stop();
+            return;
+        }
+    }
+    match engine.maybe_log_observed_real_export_call(api, uc, address) {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(error) => {
+            state.callback_error = Some(error);
+            let _ = unicorn.emu_stop();
+            return;
+        }
     }
     if address & 0xF != 0 {
         return;
     }
 
-    if let Some(bound) = engine.hooks.bound_lookup(address) {
-        if let Some(definition) = bound.definition.cloned() {
-            let result =
-                (|| -> Result<(), VmError> {
-                    let (return_address, args, stack_pointer, saved_x86_nonvolatile) =
-                        if engine.arch.is_x86() {
-                            let esp = unsafe { api.reg_read_raw(uc, UC_X86_REG_ESP) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_read(esp)",
-                                    detail,
-                                },
-                            )?;
-                            let frame_size = 4 + definition.argc * 4;
-                            let stack = unsafe { api.mem_read_raw(uc, esp, frame_size) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_mem_read(stack)",
-                                    detail,
-                                },
-                            )?;
-                            let return_address =
-                                u32::from_le_bytes(stack[0..4].try_into().unwrap()) as u64;
-                            let mut args = Vec::with_capacity(definition.argc);
-                            for chunk in stack[4..].chunks_exact(4) {
-                                args.push(u32::from_le_bytes(chunk.try_into().unwrap()) as u64);
-                            }
-                            let ebx = unsafe { api.reg_read_raw(uc, UC_X86_REG_EBX) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_read(ebx)",
-                                    detail,
-                                },
-                            )?;
-                            let ebp = unsafe { api.reg_read_raw(uc, UC_X86_REG_EBP) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_read(ebp)",
-                                    detail,
-                                },
-                            )?;
-                            let esi = unsafe { api.reg_read_raw(uc, UC_X86_REG_ESI) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_read(esi)",
-                                    detail,
-                                },
-                            )?;
-                            let edi = unsafe { api.reg_read_raw(uc, UC_X86_REG_EDI) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_read(edi)",
-                                    detail,
-                                },
-                            )?;
-                            (return_address, args, esp, Some((ebx, ebp, esi, edi)))
-                        } else {
-                            let rsp = unsafe { api.reg_read_raw(uc, UC_X86_REG_RSP) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_read(rsp)",
-                                    detail,
-                                },
-                            )?;
-                            let return_address = unsafe { api.mem_read_raw(uc, rsp, 8) }
-                                .map_err(|detail| VmError::NativeExecution {
-                                    op: "uc_mem_read(stack)",
-                                    detail,
-                                })
-                                .map(|bytes| u64::from_le_bytes(bytes.try_into().unwrap()))?;
-                            let mut args = Vec::with_capacity(definition.argc);
-                            for (regid, op) in [
-                                (UC_X86_REG_RCX, "uc_reg_read(rcx)"),
-                                (UC_X86_REG_RDX, "uc_reg_read(rdx)"),
-                                (UC_X86_REG_R8, "uc_reg_read(r8)"),
-                                (UC_X86_REG_R9, "uc_reg_read(r9)"),
-                            ]
-                            .into_iter()
-                            .take(definition.argc.min(4))
-                            {
-                                args.push(
-                                    unsafe { api.reg_read_raw(uc, regid) }.map_err(|detail| {
-                                        VmError::NativeExecution { op, detail }
-                                    })?,
-                                );
-                            }
-                            if definition.argc > 4 {
-                                let stack_args = unsafe {
-                                    api.mem_read_raw(uc, rsp + 0x28, (definition.argc - 4) * 8)
-                                }
-                                .map_err(|detail| VmError::NativeExecution {
-                                    op: "uc_mem_read(stack_args)",
-                                    detail,
-                                })?;
-                                for chunk in stack_args.chunks_exact(8) {
-                                    args.push(u64::from_le_bytes(chunk.try_into().unwrap()));
-                                }
-                            }
-                            (return_address, args, rsp, None)
-                        };
-                    let retval = engine.dispatch_bound_stub_with_definition(
-                        &definition,
-                        address,
-                        Some(return_address),
-                        &args,
-                    )?;
-                    if let Some(restore) = engine.pending_context_restore.take() {
-                        engine.defer_api_return = false;
-                        engine.restore_unicorn_thread_registers(api, uc, &restore.registers)?;
-                        if engine.arch.is_x86() {
-                            engine.restore_unicorn_x86_segments_from_context(
-                                api,
-                                uc,
-                                restore.context_address,
-                            )?;
-                        }
-                    } else if !engine.defer_api_return {
-                        if engine.arch.is_x86() {
-                            unsafe { api.reg_write_raw(uc, UC_X86_REG_EAX, retval) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_write(eax)",
-                                    detail,
-                                },
-                            )?;
-                            if definition.function == "VerSetConditionMask" {
-                                unsafe { api.reg_write_raw(uc, UC_X86_REG_EDX, retval >> 32) }
-                                    .map_err(|detail| VmError::NativeExecution {
-                                        op: "uc_reg_write(edx)",
-                                        detail,
-                                    })?;
-                            }
-                            let next_esp = match definition.call_conv {
-                                CallConv::Stdcall => stack_pointer + 4 + definition.argc as u64 * 4,
-                                CallConv::Cdecl => stack_pointer + 4,
-                                CallConv::Win64 => {
-                                    return Err(VmError::NativeExecution {
-                                        op: "dispatch",
-                                        detail: format!(
-                                            "win64 hook dispatch is not supported for {}!{}",
-                                            definition.module, definition.function
-                                        ),
-                                    });
-                                }
-                            };
-                            if let Some((saved_ebx, saved_ebp, saved_esi, saved_edi)) =
-                                saved_x86_nonvolatile
-                            {
-                                unsafe { api.reg_write_raw(uc, UC_X86_REG_EBX, saved_ebx) }
-                                    .map_err(|detail| VmError::NativeExecution {
-                                        op: "uc_reg_write(ebx)",
-                                        detail,
-                                    })?;
-                                unsafe { api.reg_write_raw(uc, UC_X86_REG_EBP, saved_ebp) }
-                                    .map_err(|detail| VmError::NativeExecution {
-                                        op: "uc_reg_write(ebp)",
-                                        detail,
-                                    })?;
-                                unsafe { api.reg_write_raw(uc, UC_X86_REG_ESI, saved_esi) }
-                                    .map_err(|detail| VmError::NativeExecution {
-                                        op: "uc_reg_write(esi)",
-                                        detail,
-                                    })?;
-                                unsafe { api.reg_write_raw(uc, UC_X86_REG_EDI, saved_edi) }
-                                    .map_err(|detail| VmError::NativeExecution {
-                                        op: "uc_reg_write(edi)",
-                                        detail,
-                                    })?;
-                            }
-                            unsafe { api.reg_write_raw(uc, UC_X86_REG_ESP, next_esp) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_write(esp)",
-                                    detail,
-                                },
-                            )?;
-                            let next_eip = if engine.force_native_return {
-                                engine.force_native_return = false;
-                                engine.native_return_sentinel
-                            } else {
-                                return_address
-                            };
-                            unsafe { api.reg_write_raw(uc, UC_X86_REG_EIP, next_eip) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_write(eip)",
-                                    detail,
-                                },
-                            )?;
-                        } else {
-                            unsafe { api.reg_write_raw(uc, UC_X86_REG_RAX, retval) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_write(rax)",
-                                    detail,
-                                },
-                            )?;
-                            unsafe { api.reg_write_raw(uc, UC_X86_REG_RSP, stack_pointer + 8) }
-                                .map_err(|detail| VmError::NativeExecution {
-                                    op: "uc_reg_write(rsp)",
-                                    detail,
-                                })?;
-                            let next_rip = if engine.force_native_return {
-                                engine.force_native_return = false;
-                                engine.native_return_sentinel
-                            } else {
-                                return_address
-                            };
-                            unsafe { api.reg_write_raw(uc, UC_X86_REG_RIP, next_rip) }.map_err(
-                                |detail| VmError::NativeExecution {
-                                    op: "uc_reg_write(rip)",
-                                    detail,
-                                },
-                            )?;
-                        }
-                    }
-                    if engine.thread_yield_requested {
-                        let _ = unsafe { api.emu_stop_raw(uc) };
-                    }
-                    Ok(())
-                })();
+    match engine.dispatch_unicorn_bound_stub(api, uc, address) {
+        Ok(true) => {
+            let _ = unicorn.emu_stop();
+        }
+        Ok(false) => {}
+        Err(error) => {
+            state.callback_error = Some(error);
+            let _ = unicorn.reg_write(
+                if engine.core.arch.is_x86() {
+                    UC_X86_REG_EIP
+                } else {
+                    UC_X86_REG_RIP
+                },
+                engine.core.native_return_sentinel,
+            );
+            let _ = unicorn.emu_stop();
+        }
+    }
+}
 
-            if let Err(error) = result {
-                state.callback_error = Some(error);
-                let _ = unsafe {
-                    api.reg_write_raw(
-                        uc,
-                        if engine.arch.is_x86() {
-                            UC_X86_REG_EIP
-                        } else {
-                            UC_X86_REG_RIP
-                        },
-                        engine.native_return_sentinel,
-                    )
-                };
-                let _ = unsafe { api.emu_stop_raw(uc) };
-            }
-        } else {
-            let bound_module = bound.module.to_string();
-            let bound_function = bound.function.to_string();
-            let _ = engine.log_unsupported_bound_stub(
-                address,
-                &bound_module,
-                &bound_function,
-                "missing hook definition",
-            );
-            let detail = format!(
-                "missing runtime definition for bound stub 0x{address:X}: {}!{}",
-                bound_module, bound_function
-            );
+unsafe extern "C" fn unicorn_intr_hook(uc: *mut UcEngine, intno: u32, _user_data: *mut c_void) {
+    let state_ptr = ACTIVE_UNICORN_CONTEXT.with(|slot| slot.get());
+    if state_ptr.is_null() {
+        return;
+    }
+    let state = &mut *state_ptr;
+    if state.callback_error.is_some() || state.pending_fault.is_some() {
+        return;
+    }
+    if let Err(error) = flush_unicorn_pending_writes(state, uc) {
+        state.callback_error = Some(error);
+        let api = &*state.api;
+        let unicorn = unsafe { api.bind(uc) };
+        let _ = unicorn.emu_stop();
+        return;
+    }
+
+    let engine = &mut *state.engine;
+    let api = &*state.api;
+    let unicorn = unsafe { api.bind(uc) };
+    let pc_reg = if engine.core.arch.is_x86() {
+        UC_X86_REG_EIP
+    } else {
+        UC_X86_REG_RIP
+    };
+    let pc = match unicorn.reg_read(pc_reg) {
+        Ok(value) => value,
+        Err(detail) => {
             state.callback_error = Some(VmError::NativeExecution {
-                op: "dispatch",
+                op: "uc_reg_read(pc)",
                 detail,
             });
-            let _ = unsafe {
-                api.reg_write_raw(
-                    uc,
-                    if engine.arch.is_x86() {
-                        UC_X86_REG_EIP
-                    } else {
-                        UC_X86_REG_RIP
-                    },
-                    engine.native_return_sentinel,
-                )
-            };
-            let _ = unsafe { api.emu_stop_raw(uc) };
+            let _ = unicorn.emu_stop();
+            return;
+        }
+    };
+
+    match intno {
+        X86_BREAKPOINT_VECTOR | UNICORN_EXCP_DEBUG => {
+            state.pending_fault = Some(UnicornFault::cpu_exception(STATUS_BREAKPOINT, pc));
+            let _ = unicorn.emu_stop();
+        }
+        0x29 => {
+            // __fastfail (int 0x29) — Windows security check failure.
+            // Terminate the thread gracefully rather than propagating an error.
+            state.pending_fault =
+                Some(UnicornFault::cpu_exception(STATUS_STACK_BUFFER_OVERRUN, pc));
+            let _ = unicorn.emu_stop();
+        }
+        _ => {
+            state.callback_error = Some(VmError::NativeExecution {
+                op: "interrupt",
+                detail: format!("unsupported Unicorn interrupt 0x{intno:X} at pc=0x{pc:X}"),
+            });
+            let _ = unicorn.emu_stop();
         }
     }
 }
@@ -3212,7 +1790,86 @@ unsafe extern "C" fn unicorn_block_hook(
 
     let engine = &mut *state.engine;
     let api = &*state.api;
-    if engine.api_logger.native_trace_sampling_enabled() {
+    let unicorn = unsafe { api.bind(uc) };
+
+    // Flush accumulated writes before any engine-memory reads in dispatch paths
+    if !state.pending_writes.is_empty() {
+        if let Err(error) = flush_unicorn_pending_writes(state, uc) {
+            state.callback_error = Some(error);
+            let _ = unicorn.emu_stop();
+            return;
+        }
+    }
+
+    // Estimate instruction count from block byte size. Dedup ensures
+    // each unique (address, size) block is counted exactly once per time slice.
+    let estimated_instructions = if size > 0 {
+        let avg_insn_size: u64 = if engine.core.arch.is_x64() { 4 } else { 3 };
+        let s = (size as u64).max(1);
+        (s + avg_insn_size - 1) / avg_insn_size
+    } else {
+        1u64
+    };
+    engine.record_instructions_retired(estimated_instructions);
+
+    if address == engine.core.native_return_sentinel {
+        let _ = unicorn.emu_stop();
+        return;
+    }
+
+    if let Err(error) = engine.maybe_recover_mfc42u_cabinet_module_base(api, uc, address) {
+        state.callback_error = Some(error);
+        let _ = unicorn.emu_stop();
+        return;
+    }
+    if let Err(error) = engine.maybe_recover_mfc42u_native_resolver_argument(api, uc, address) {
+        state.callback_error = Some(error);
+        let _ = unicorn.emu_stop();
+        return;
+    }
+    if !engine.core.debug_pc_probes.is_empty() {
+        if let Err(error) = engine.maybe_emit_debug_pc_probe(api, uc, address) {
+            state.callback_error = Some(error);
+            let _ = unicorn.emu_stop();
+            return;
+        }
+    }
+    match engine.maybe_log_observed_real_export_call(api, uc, address) {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(error) => {
+            state.callback_error = Some(error);
+            let _ = unicorn.emu_stop();
+            return;
+        }
+    }
+    // Bound stubs (synthetic API hook addresses) are always at block starts
+    // since they are CALL/JMP targets. Alignment check is a cheap pre-filter.
+    if address & 0xF == 0 {
+        match engine.dispatch_unicorn_bound_stub(api, uc, address) {
+            Ok(true) => {
+                let _ = unicorn.emu_stop();
+                return;
+            }
+            Ok(false) => {}
+            Err(error) => {
+                state.callback_error = Some(error);
+                let _ = unicorn.reg_write(
+                    if engine.core.arch.is_x86() {
+                        crate::runtime::unicorn::UC_X86_REG_EIP
+                    } else {
+                        crate::runtime::unicorn::UC_X86_REG_RIP
+                    },
+                    engine.core.native_return_sentinel,
+                );
+                let _ = unicorn.emu_stop();
+                return;
+            }
+        }
+    }
+    // Only capture registers + stack words if native trace sampling is enabled
+    let sampling_enabled = engine.core.api_logger.native_trace_sampling_enabled();
+    if sampling_enabled {
         match engine.capture_unicorn_thread_registers(api, uc) {
             Ok(registers) => {
                 const NATIVE_BLOCK_WINDOW: usize = 32;
@@ -3231,15 +1888,18 @@ unsafe extern "C" fn unicorn_block_hook(
             }
             Err(error) => {
                 state.callback_error = Some(error);
-                let _ = unsafe { api.emu_stop_raw(uc) };
+                let _ = unicorn.emu_stop();
                 return;
             }
         }
     }
-    let latest_snapshot = state.recent_blocks.back().cloned();
-    if let Err(error) = engine.log_native_block(address, size, latest_snapshot.as_ref()) {
-        state.callback_error = Some(error);
-        let _ = unsafe { api.emu_stop_raw(uc) };
+    if sampling_enabled {
+        let latest_snapshot = state.recent_blocks.back().cloned();
+        if let Err(error) = engine.log_native_block(address, size, latest_snapshot.as_ref()) {
+            state.callback_error = Some(error);
+            let _ = unicorn.emu_stop();
+            return;
+        }
     }
 }
 
@@ -3259,7 +1919,22 @@ unsafe extern "C" fn unicorn_mem_write_hook(
     if state.callback_error.is_some() || state.suppress_mem_write_hook || size <= 0 {
         return;
     }
+    let engine = &mut *state.engine;
     let size = size as usize;
+    // Batch profiler updates — only update counters when profiler is enabled
+    let profiler_enabled = engine.core.runtime_profiler.enabled();
+    if profiler_enabled {
+        engine
+            .core
+            .runtime_profiler
+            .add_counter("unicorn.mem_write_hook.calls", 1);
+        engine
+            .core
+            .runtime_profiler
+            .add_counter("unicorn.mem_write_hook.bytes", size as u64);
+    }
+    state.pending_write_bytes = state.pending_write_bytes.saturating_add(size as u64);
+    // Fast path: coalesce with the last pending write if contiguous
     if let Some((previous_address, previous_size)) = state.pending_writes.last_mut() {
         let previous_end = previous_address.saturating_add(*previous_size as u64);
         if previous_end == address {
@@ -3268,7 +1943,31 @@ unsafe extern "C" fn unicorn_mem_write_hook(
         }
     }
     state.pending_writes.push((address, size));
+    if profiler_enabled {
+        engine
+            .core
+            .runtime_profiler
+            .add_counter("unicorn.mem_write_hook.ranges_pushed", 1);
+        engine.core.runtime_profiler.set_counter_max(
+            "unicorn.mem_write_hook.max_pending_ranges",
+            state.pending_writes.len() as u64,
+        );
+        engine.core.runtime_profiler.set_counter_max(
+            "unicorn.mem_write_hook.max_pending_bytes",
+            state.pending_write_bytes,
+        );
+    }
     let _ = uc;
+}
+
+unsafe extern "C" fn unicorn_mem_read_hook(
+    _uc: *mut UcEngine,
+    _mem_type: i32,
+    _address: u64,
+    _size: i32,
+    _value: i64,
+    _user_data: *mut c_void,
+) {
 }
 
 unsafe extern "C" fn unicorn_mem_prot_hook(
@@ -3294,6 +1993,98 @@ unsafe extern "C" fn unicorn_mem_prot_hook(
 
     let engine = &mut *state.engine;
     let api = &*state.api;
+    let unicorn = unsafe { api.bind(uc) };
+    if mem_type == crate::runtime::unicorn::UC_MEM_FETCH_PROT
+        && state.pending_protected_fetch.is_some()
+    {
+        let _ = unicorn.emu_stop();
+        return true;
+    }
+    if std::env::var_os("HVM_DEBUG_LOAD_STAGE").is_some()
+        && mem_type == crate::runtime::unicorn::UC_MEM_FETCH_PROT
+    {
+        if let Some(module) = engine.entry_module().or_else(|| engine.main_module()) {
+            if module
+                .name
+                .eq_ignore_ascii_case("d2727b626d299d4839fbaf2034949948")
+            {
+                let current_pc = unicorn
+                    .reg_read(if engine.core.arch.is_x86() {
+                        UC_X86_REG_EIP
+                    } else {
+                        UC_X86_REG_RIP
+                    })
+                    .unwrap_or(0);
+                let current_owner = engine
+                    .core
+                    .modules
+                    .get_by_address(current_pc)
+                    .map(|record| {
+                        format!(
+                            "{}@0x{:X}+0x{:X}",
+                            record.name,
+                            record.base,
+                            current_pc.saturating_sub(record.base)
+                        )
+                    })
+                    .unwrap_or_else(|| "none".to_string());
+                let target_owner = engine
+                    .core
+                    .modules
+                    .get_by_address(address)
+                    .map(|record| {
+                        format!(
+                            "{}@0x{:X}+0x{:X} exec={} synthetic={}",
+                            record.name,
+                            record.base,
+                            address.saturating_sub(record.base),
+                            record.allow_execution,
+                            record.synthetic
+                        )
+                    })
+                    .unwrap_or_else(|| "none".to_string());
+                let binding = engine
+                    .core
+                    .hooks
+                    .binding_for_address(address)
+                    .map(|(module_name, function_name)| format!("{module_name}!{function_name}"))
+                    .unwrap_or_else(|| "none".to_string());
+                let has_definition = engine.core.hooks.signature_for_address(address).is_some();
+                eprintln!(
+                    "[D2727_FETCH_PROT] pc=0x{current_pc:X} current_owner={current_owner} address=0x{address:X} target_owner={target_owner} binding={binding} has_def={has_definition}"
+                );
+            }
+        }
+    }
+
+    // --- Intercept execution faults in real DLL memory (memory-only mode) ---
+    // Non-whitelisted real DLLs (system DLLs) are mapped into memory with
+    // execute permission stripped so malware can still read their bytes for
+    // anti-hook detection. When execution attempts to run code in these
+    // regions, UC_MEM_FETCH_PROT fires.
+    if mem_type == crate::runtime::unicorn::UC_MEM_FETCH_PROT {
+        match engine.classify_protected_fetch(api, uc, address) {
+            ProtectedFetchDecision::DispatchBound { address } => {
+                // Defer the actual hook dispatch until emu_start returns.
+                state.pending_protected_fetch =
+                    Some(PendingProtectedFetchAction::DispatchBound { address });
+                let _ = unicorn.emu_stop();
+                return true;
+            }
+            ProtectedFetchDecision::SimulateReturn { address, binding } => {
+                state.pending_protected_fetch =
+                    Some(PendingProtectedFetchAction::SimulateReturn { address, binding });
+                let _ = unicorn.emu_stop();
+                return true;
+            }
+            ProtectedFetchDecision::StaleFetchIgnore => {
+                let _ = unicorn.emu_stop();
+                return true;
+            }
+            ProtectedFetchDecision::RaiseFault => {}
+        }
+    }
+
     let cleared = engine.consume_guard_pages_on_access(
         engine.current_process_space_key(),
         address,
@@ -3302,7 +2093,7 @@ unsafe extern "C" fn unicorn_mem_prot_hook(
     let had_guard_pages = !cleared.is_empty();
     for &(base, size, protect) in &cleared {
         let perms = VirtualExecutionEngine::perms_from_page_protect(protect).unwrap_or(0);
-        if let Err(detail) = unsafe { api.mem_protect_raw(uc, base, size, unicorn_prot(perms)) } {
+        if let Err(detail) = unicorn.mem_protect(base, size, unicorn_prot(perms)) {
             state.callback_error = Some(VmError::NativeExecution {
                 op: "uc_mem_protect(guard)",
                 detail,
@@ -3313,8 +2104,13 @@ unsafe extern "C" fn unicorn_mem_prot_hook(
     let registers = engine.capture_unicorn_thread_registers(api, uc).ok();
     let pc = registers
         .as_ref()
-        .and_then(|snapshot| snapshot.get(if engine.arch.is_x86() { "eip" } else { "rip" }))
-        .copied()
+        .map(|snapshot| {
+            if engine.core.arch.is_x86() {
+                snapshot.eip
+            } else {
+                snapshot.rip
+            }
+        })
         .unwrap_or(0);
     let access = match mem_type {
         crate::runtime::unicorn::UC_MEM_FETCH_PROT => UnicornFaultAccess::Execute,
@@ -3338,13 +2134,13 @@ unsafe extern "C" fn unicorn_mem_prot_hook(
             state.callback_error = Some(error);
             return false;
         }
-        state.pending_fault = Some(UnicornFault {
+        state.pending_fault = Some(UnicornFault::memory_access(
             access,
             address,
-            size: size as usize,
+            size as usize,
             pc,
-        });
-        let _ = unsafe { api.emu_stop_raw(uc) };
+        ));
+        let _ = unicorn.emu_stop();
         return false;
     }
     if let Err(error) = engine.log_native_fault(
@@ -3361,6 +2157,25 @@ unsafe extern "C" fn unicorn_mem_prot_hook(
     }
     if let Err(error) = engine.log_native_fault_window(&state.recent_blocks) {
         state.callback_error = Some(error);
+        return false;
+    }
+    let stack_guard_access = access != UnicornFaultAccess::Execute
+        && engine
+            .current_thread_snapshot()
+            .map(|thread| {
+                let guard_base = thread.stack_limit.saturating_sub(PAGE_SIZE);
+                let access_end = address.saturating_add((size as usize).max(1) as u64);
+                thread.stack_limit != 0 && address < thread.stack_limit && guard_base < access_end
+            })
+            .unwrap_or(false);
+    if stack_guard_access {
+        state.pending_fault = Some(UnicornFault::memory_access(
+            access,
+            address,
+            size as usize,
+            pc,
+        ));
+        let _ = unicorn.emu_stop();
         return false;
     }
     state.callback_error = Some(VmError::NativeExecution {
@@ -3393,12 +2208,13 @@ unsafe extern "C" fn unicorn_mem_unmapped_hook(
 
     let engine = &mut *state.engine;
     let api = &*state.api;
-    let pc_reg = if engine.arch.is_x86() {
+    let unicorn = unsafe { api.bind(uc) };
+    let pc_reg = if engine.core.arch.is_x86() {
         UC_X86_REG_EIP
     } else {
         UC_X86_REG_RIP
     };
-    let pc = match unsafe { api.reg_read_raw(uc, pc_reg) } {
+    let pc = match unicorn.reg_read(pc_reg) {
         Ok(value) => value,
         Err(detail) => {
             state.callback_error = Some(VmError::NativeExecution {
@@ -3414,6 +2230,193 @@ unsafe extern "C" fn unicorn_mem_unmapped_hook(
         _ => UnicornFaultAccess::Read,
     };
     let registers = engine.capture_unicorn_thread_registers(api, uc).ok();
+    // Log NULL_CALL to human-readable API log before the eprintln diagnostics
+    {
+        let is_null_call =
+            address == 0 || (access == UnicornFaultAccess::Execute && address < 0x10000);
+        if is_null_call {
+            if let Some(ref regs) = registers {
+                let _ = engine.log_null_call_fault(pc, address, regs);
+            }
+        }
+    }
+
+    // Handle null-pointer execution faults: diagnose and simulate return
+    if address == 0 || (access == UnicornFaultAccess::Execute && address < 0x10000) {
+        if let Some(ref regs) = registers {
+            let is_x86 = engine.core.arch.is_x86();
+            // Read architecture-appropriate registers for diagnostics
+            let (sp, ret_reg, cx, dx) = if is_x86 {
+                (regs.esp, regs.eax, regs.ecx, regs.edx)
+            } else {
+                (regs.rsp, regs.rax, regs.rcx, regs.rdx)
+            };
+            let (si, _di) = if is_x86 {
+                (regs.esi, regs.edi)
+            } else {
+                (regs.rsi, regs.rdi)
+            };
+            let (r8, r9) = if is_x86 {
+                (regs.ebp, regs.ebx) // x86: reuse ebp/ebx for diagnostic slots
+            } else {
+                (regs.r8, regs.r9)
+            };
+            eprintln!(
+                "[NULL_CALL] pc=0x{pc:X} addr=0x{address:X} ret_reg=0x{ret_reg:X} sp=0x{sp:X}"
+            );
+            eprintln!("[NULL_CALL] cx=0x{cx:X} dx=0x{dx:X} r8=0x{r8:X} r9=0x{r9:X}");
+            // Dump cx as UNICODE_STRING (cx=arg0 at call site)
+            if cx > 0x10000 {
+                if let Ok(us_bytes) = engine.core.modules.memory().read(cx, 16) {
+                    let length = u16::from_le_bytes([us_bytes[0], us_bytes[1]]);
+                    let max_length = u16::from_le_bytes([us_bytes[2], us_bytes[3]]);
+                    let buffer = if is_x86 {
+                        u32::from_le_bytes([us_bytes[4], us_bytes[5], us_bytes[6], us_bytes[7]])
+                            as u64
+                    } else {
+                        u64::from_le_bytes([
+                            us_bytes[8],
+                            us_bytes[9],
+                            us_bytes[10],
+                            us_bytes[11],
+                            us_bytes[12],
+                            us_bytes[13],
+                            us_bytes[14],
+                            us_bytes[15],
+                        ])
+                    };
+                    eprintln!("[NULL_CALL] cx as UNICODE_STRING: Length={length} MaxLength={max_length} Buffer=0x{buffer:X}");
+                    // Read the string content
+                    if buffer > 0x10000 && length > 0 && (length as usize) < 512 {
+                        if let Ok(str_bytes) =
+                            engine.core.modules.memory().read(buffer, length as usize)
+                        {
+                            let wide: Vec<u16> = str_bytes
+                                .chunks(2)
+                                .map(|c| u16::from_le_bytes([c[0], *c.get(1).unwrap_or(&0)]))
+                                .collect();
+                            let s = String::from_utf16_lossy(&wide);
+                            eprintln!("[NULL_CALL] cx UNICODE_STRING value: \"{s}\"");
+                        }
+                    }
+                }
+                // Also dump wider memory at cx to see structure
+                if let Ok(wide_mem) = engine.core.modules.memory().read(cx, 0x80) {
+                    let hex_dump: Vec<String> = wide_mem
+                        .chunks(8)
+                        .enumerate()
+                        .map(|(i, c)| {
+                            let v = u64::from_le_bytes(c.try_into().unwrap_or([0; 8]));
+                            // Try to decode as UTF-16 if it looks like text
+                            let text = if v > 0x20 && v < 0x800000000000u64 {
+                                let chars: Vec<u16> = c
+                                    .chunks(2)
+                                    .map(|b| u16::from_le_bytes([b[0], *b.get(1).unwrap_or(&0)]))
+                                    .collect();
+                                let s = String::from_utf16_lossy(&chars);
+                                if s.chars().all(|c| c.is_ascii_graphic() || c == ' ')
+                                    && !s.is_empty()
+                                {
+                                    format!(" \"{s}\"")
+                                } else {
+                                    String::new()
+                                }
+                            } else {
+                                String::new()
+                            };
+                            format!("  +0x{:02X}: 0x{:X}{}", i * 8, v, text)
+                        })
+                        .collect();
+                    eprintln!("[NULL_CALL] memory at cx (0x{cx:X}):");
+                    for line in hex_dump {
+                        eprintln!("{line}");
+                    }
+                }
+            }
+            // Dump r8/dx as UNICODE_STRING too (stack address often used for UNICODE_STRING)
+            for (name, addr) in [("r8", r8), ("dx", dx)] {
+                if addr > 0x10000 {
+                    if let Ok(us_bytes) = engine.core.modules.memory().read(addr, 16) {
+                        let length = u16::from_le_bytes([us_bytes[0], us_bytes[1]]);
+                        let _max_length = u16::from_le_bytes([us_bytes[2], us_bytes[3]]);
+                        let buffer = if is_x86 {
+                            u32::from_le_bytes([us_bytes[4], us_bytes[5], us_bytes[6], us_bytes[7]])
+                                as u64
+                        } else {
+                            u64::from_le_bytes([
+                                us_bytes[8],
+                                us_bytes[9],
+                                us_bytes[10],
+                                us_bytes[11],
+                                us_bytes[12],
+                                us_bytes[13],
+                                us_bytes[14],
+                                us_bytes[15],
+                            ])
+                        };
+                        if length > 0 && buffer > 0x10000 && (length as usize) < 512 {
+                            if let Ok(str_bytes) =
+                                engine.core.modules.memory().read(buffer, length as usize)
+                            {
+                                let wide: Vec<u16> = str_bytes
+                                    .chunks(2)
+                                    .map(|c| u16::from_le_bytes([c[0], *c.get(1).unwrap_or(&0)]))
+                                    .collect();
+                                let s = String::from_utf16_lossy(&wide);
+                                eprintln!("[NULL_CALL] {name} UNICODE_STRING: Length={length} Buffer=0x{buffer:X} value=\"{s}\"");
+                            }
+                        }
+                    }
+                }
+            }
+            // Dump si dispatch table (wider: 0x100 bytes = 32 entries)
+            if si > 0x10000 {
+                if let Ok(bytes) = engine.core.modules.memory().read(si, 0x100) {
+                    let pointer_size: usize = if is_x86 { 4 } else { 8 };
+                    let slots: Vec<String> = bytes
+                        .chunks(pointer_size)
+                        .enumerate()
+                        .map(|(i, c)| {
+                            let v = if is_x86 {
+                                u32::from_le_bytes(c.try_into().unwrap_or([0; 4])) as u64
+                            } else {
+                                u64::from_le_bytes(c.try_into().unwrap_or([0; 8]))
+                            };
+                            let hook_info = engine
+                                .core
+                                .hooks
+                                .binding_for_address(v)
+                                .map(|(m, f)| format!("→ {}!{}", m, f))
+                                .unwrap_or_default();
+                            if v != 0 || !hook_info.is_empty() {
+                                format!("[si+0x{:X}]=0x{:X}{}", i * pointer_size, v, hook_info)
+                            } else {
+                                String::new()
+                            }
+                        })
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if !slots.is_empty() {
+                        eprintln!("[NULL_CALL] si dispatch table (non-zero):");
+                        for s in slots {
+                            eprintln!("  {s}");
+                        }
+                    }
+                }
+            }
+
+            // For genuine NULL_CALLs (not synthetic-return faults), redirect
+            // to the sentinel so the thread terminates cleanly.  This avoids
+            // the pending_fault path where the x64-shared-epilogue handler
+            // can incorrectly match pc=0 / address=0 and cause an infinite
+            // log-and-retry loop.
+            if engine.trace.active_x64_synthetic_call.is_none() {
+                let _ = unicorn.reg_write(pc_reg, engine.core.native_return_sentinel);
+                let _ = unicorn.emu_stop();
+                return false;
+            }
+        }
+    }
     if let Err(error) = engine.log_native_fault(
         "unmapped",
         access.as_str(),
@@ -3430,17 +2433,17 @@ unsafe extern "C" fn unicorn_mem_unmapped_hook(
         state.callback_error = Some(error);
         return false;
     }
-    state.pending_fault = Some(UnicornFault {
+    state.pending_fault = Some(UnicornFault::memory_access(
         access,
         address,
-        size: size as usize,
+        size as usize,
         pc,
-    });
-    let _ = unsafe { api.emu_stop_raw(uc) };
+    ));
+    let _ = unicorn.emu_stop();
     false
 }
 
-/// Renders the Python-compatible `run` summary fields emitted by the Rust CLI.
+/// Renders the `run` summary.
 pub fn render_run_summary(result: &RunResult) -> String {
     format!(
         "entrypoint=0x{:X}\ninstructions={}\nstopped={}\nexit_code={}\nstop_reason={}\n",
@@ -3453,4 +2456,114 @@ pub fn render_run_summary(result: &RunResult) -> String {
             .unwrap_or_else(|| "None".to_string()),
         result.stop_reason.as_str(),
     )
+}
+
+/// Reads the first `len` bytes of a named export from a real DLL file on disk.
+/// Returns `None` if the DLL or export cannot be found.
+fn read_real_prologue(
+    module: &str,
+    function: &str,
+    search_paths: &[std::path::PathBuf],
+    len: usize,
+) -> Option<Vec<u8>> {
+    let dll_path = resolve_real_dll_path(module, search_paths)?;
+    let bytes = fs::read(&dll_path).ok()?;
+    let pe = PE::parse(&bytes).ok()?;
+    let export = pe.exports.iter().find(|e| {
+        e.name
+            .map(|n| n.eq_ignore_ascii_case(function))
+            .unwrap_or(false)
+    })?;
+    let rva = export.rva as usize;
+    if rva == 0 {
+        return None;
+    }
+    let file_offset = rva_to_file_offset(&pe, rva)?;
+    if file_offset.saturating_add(len) > bytes.len() {
+        return None;
+    }
+    Some(bytes[file_offset..file_offset + len].to_vec())
+}
+
+/// Resolves a module name to a real DLL file path in the search paths.
+fn resolve_real_dll_path(
+    module: &str,
+    search_paths: &[std::path::PathBuf],
+) -> Option<std::path::PathBuf> {
+    let module_lower = module.to_ascii_lowercase();
+    let candidates = if module_lower.ends_with(".dll") {
+        vec![module_lower.clone()]
+    } else {
+        vec![format!("{module_lower}.dll"), module_lower]
+    };
+    for root in search_paths {
+        for root in module_snapshot_search_roots_static(root) {
+            for candidate in &candidates {
+                let path = root.join(candidate);
+                if path.exists() {
+                    return Some(path);
+                }
+                // Case-insensitive fallback
+                if let Ok(entries) = fs::read_dir(&root) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+                        if name == *candidate {
+                            return Some(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn module_snapshot_search_roots_static(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let suffixes: &[&str] = &[
+        "",
+        "System32",
+        "SysWOW64",
+        "Windows",
+        "Windows/System32",
+        "Windows/SysWOW64",
+        "dlls",
+        "dlls/System32",
+        "dlls/SysWOW64",
+    ];
+    let mut roots = Vec::new();
+    for suffix in suffixes {
+        let candidate = if suffix.is_empty() {
+            root.to_path_buf()
+        } else {
+            root.join(suffix)
+        };
+        if candidate.is_dir()
+            && !roots
+                .iter()
+                .any(|existing: &std::path::PathBuf| existing == &candidate)
+        {
+            roots.push(candidate);
+        }
+    }
+    roots
+}
+
+fn rva_to_file_offset(pe: &PE, rva: usize) -> Option<usize> {
+    for section in &pe.sections {
+        let section_start = section.virtual_address as usize;
+        let section_size = std::cmp::max(section.virtual_size, section.size_of_raw_data) as usize;
+        let section_end = section_start.checked_add(section_size)?;
+        if (section_start..section_end).contains(&rva) {
+            let offset_in_section = rva.checked_sub(section_start)?;
+            let raw_offset = section.pointer_to_raw_data as usize;
+            return raw_offset.checked_add(offset_in_section);
+        }
+    }
+    let header_size = pe
+        .header
+        .optional_header
+        .as_ref()
+        .map(|header| header.windows_fields.size_of_headers as usize)
+        .unwrap_or_default();
+    (rva < header_size).then_some(rva)
 }

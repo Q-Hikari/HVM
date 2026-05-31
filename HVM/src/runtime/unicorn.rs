@@ -6,6 +6,7 @@ pub const UC_MODE_64: c_int = 8;
 pub const UC_PROT_READ: u32 = 1;
 pub const UC_PROT_WRITE: u32 = 2;
 pub const UC_PROT_EXEC: u32 = 4;
+pub const UC_HOOK_INTR: c_int = 1 << 0;
 pub const UC_HOOK_MEM_READ_UNMAPPED: c_int = 1 << 4;
 pub const UC_HOOK_MEM_WRITE_UNMAPPED: c_int = 1 << 5;
 pub const UC_HOOK_MEM_FETCH_UNMAPPED: c_int = 1 << 6;
@@ -14,6 +15,7 @@ pub const UC_HOOK_MEM_WRITE_PROT: c_int = 1 << 8;
 pub const UC_HOOK_MEM_FETCH_PROT: c_int = 1 << 9;
 pub const UC_HOOK_CODE: c_int = 1 << 2;
 pub const UC_HOOK_BLOCK: c_int = 1 << 3;
+pub const UC_HOOK_MEM_READ: c_int = 1 << 10;
 pub const UC_HOOK_MEM_WRITE: c_int = 1 << 11;
 pub const UC_MEM_READ_UNMAPPED: c_int = 19;
 pub const UC_MEM_WRITE_UNMAPPED: c_int = 20;
@@ -70,6 +72,7 @@ pub struct X86Mmr {
 pub type UcHook = usize;
 pub type UcEngine = c_void;
 pub type CodeHook = unsafe extern "C" fn(*mut UcEngine, u64, u32, *mut c_void);
+pub type IntrHook = unsafe extern "C" fn(*mut UcEngine, u32, *mut c_void);
 pub type MemHook = unsafe extern "C" fn(*mut UcEngine, c_int, u64, c_int, i64, *mut c_void);
 pub type MemProtHook =
     unsafe extern "C" fn(*mut UcEngine, c_int, u64, c_int, i64, *mut c_void) -> bool;
@@ -103,7 +106,15 @@ unsafe extern "C" {
         ...
     ) -> c_int;
     fn uc_strerror(code: c_int) -> *const c_char;
+    fn uc_ctl(handle: *mut UcEngine, control: c_int) -> c_int;
 }
+
+// UC_CTL control type for TB flush.
+// Computed as: UC_CTL_WRITE(UC_CTL_TB_FLUSH, 0)
+//   = UC_CTL_TB_FLUSH | (0 << 26) | (UC_CTL_IO_WRITE << 30)
+//   = 10              | 0           | (1 << 30)
+//   = 0x4000000A
+const UC_CTL_TB_FLUSH: c_int = 0x4000_000A_u32 as c_int;
 
 pub struct UnicornApi {
     backend: &'static str,
@@ -161,6 +172,22 @@ impl UnicornApi {
         } else {
             Err(format!("{op}: {}", self.error_message(code)))
         }
+    }
+
+    /// Binds a validated Unicorn engine handle to this API wrapper.
+    ///
+    /// # Safety
+    /// The caller must guarantee `handle` is a live Unicorn engine created by
+    /// this process and remains valid for the lifetime of the returned binding.
+    pub unsafe fn bind(&self, handle: *mut UcEngine) -> UnicornBinding<'_> {
+        UnicornBinding { api: self, handle }
+    }
+
+    /// Flush all translation blocks to prevent stale block hooks
+    /// (UC_HOOK_BLOCK "wrongly cached" issue).
+    pub unsafe fn ctl_flush_tb_raw(&self, handle: *mut UcEngine) -> Result<(), String> {
+        let err = unsafe { uc_ctl(handle, UC_CTL_TB_FLUSH) };
+        self.check_error("uc_ctl_flush_tb", err)
     }
 
     pub unsafe fn reg_read_raw(&self, handle: *mut UcEngine, regid: c_int) -> Result<u64, String> {
@@ -299,6 +326,28 @@ impl UnicornApi {
         Ok(hook)
     }
 
+    pub unsafe fn hook_add_intr_raw(
+        &self,
+        handle: *mut UcEngine,
+        callback: IntrHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        let mut hook = 0usize;
+        let err = unsafe {
+            uc_hook_add(
+                handle,
+                &mut hook,
+                UC_HOOK_INTR,
+                callback as *mut c_void,
+                user_data,
+                1,
+                0,
+            )
+        };
+        self.check_error("uc_hook_add", err)?;
+        Ok(hook)
+    }
+
     pub unsafe fn hook_add_block_raw(
         &self,
         handle: *mut UcEngine,
@@ -341,6 +390,16 @@ impl UnicornApi {
         };
         self.check_error("uc_hook_add", err)?;
         Ok(hook)
+    }
+
+    pub unsafe fn hook_add_mem_read_raw(
+        &self,
+        _handle: *mut UcEngine,
+        _callback: MemHook,
+        _user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        // Placeholder until the read-side diagnostics are fully wired.
+        Ok(0)
     }
 
     pub unsafe fn hook_add_mem_prot_raw(
@@ -393,48 +452,62 @@ impl UnicornApi {
     }
 }
 
-pub struct UnicornHandle<'a> {
+pub struct UnicornBinding<'a> {
     api: &'a UnicornApi,
     handle: *mut UcEngine,
 }
 
-impl UnicornHandle<'_> {
+impl UnicornBinding<'_> {
     pub fn raw(&self) -> *mut UcEngine {
         self.handle
     }
 
-    pub fn mem_map(&mut self, address: u64, size: u64, perms: u32) -> Result<(), String> {
-        let err = unsafe { uc_mem_map(self.handle, address, size, perms) };
-        self.api.check_error("uc_mem_map", err)
-    }
-
-    pub fn mem_protect(&mut self, address: u64, size: u64, perms: u32) -> Result<(), String> {
-        let err = unsafe { uc_mem_protect(self.handle, address, size, perms) };
-        self.api.check_error("uc_mem_protect", err)
-    }
-
-    pub fn mem_write(&mut self, address: u64, data: &[u8]) -> Result<(), String> {
-        unsafe { self.api.mem_write_raw(self.handle, address, data) }
-    }
-
-    pub fn mem_read(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
-        unsafe { self.api.mem_read_raw(self.handle, address, size) }
-    }
-
-    pub fn reg_write(&mut self, regid: c_int, value: u64) -> Result<(), String> {
-        unsafe { self.api.reg_write_raw(self.handle, regid, value) }
+    pub fn ctl_flush_tb(&self) -> Result<(), String> {
+        unsafe { self.api.ctl_flush_tb_raw(self.handle) }
     }
 
     pub fn reg_read(&self, regid: c_int) -> Result<u64, String> {
         unsafe { self.api.reg_read_raw(self.handle, regid) }
     }
 
-    pub fn reg_write_mmr(&mut self, regid: c_int, value: &X86Mmr) -> Result<(), String> {
+    pub fn reg_write(&self, regid: c_int, value: u64) -> Result<(), String> {
+        unsafe { self.api.reg_write_raw(self.handle, regid, value) }
+    }
+
+    pub fn reg_write_mmr(&self, regid: c_int, value: &X86Mmr) -> Result<(), String> {
         unsafe { self.api.reg_write_mmr_raw(self.handle, regid, value) }
     }
 
+    pub fn mem_read(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
+        unsafe { self.api.mem_read_raw(self.handle, address, size) }
+    }
+
+    pub fn mem_read_into(&self, address: u64, buffer: &mut [u8]) -> Result<(), String> {
+        unsafe { self.api.mem_read_into_raw(self.handle, address, buffer) }
+    }
+
+    pub fn mem_write(&self, address: u64, data: &[u8]) -> Result<(), String> {
+        unsafe { self.api.mem_write_raw(self.handle, address, data) }
+    }
+
+    pub fn mem_map(&self, address: u64, size: u64, perms: u32) -> Result<(), String> {
+        unsafe { self.api.mem_map_raw(self.handle, address, size, perms) }
+    }
+
+    pub fn mem_unmap(&self, address: u64, size: u64) -> Result<(), String> {
+        unsafe { self.api.mem_unmap_raw(self.handle, address, size) }
+    }
+
+    pub fn mem_protect(&self, address: u64, size: u64, perms: u32) -> Result<(), String> {
+        unsafe { self.api.mem_protect_raw(self.handle, address, size, perms) }
+    }
+
+    pub fn emu_stop(&self) -> Result<(), String> {
+        unsafe { self.api.emu_stop_raw(self.handle) }
+    }
+
     pub fn emu_start(
-        &mut self,
+        &self,
         begin: u64,
         until: u64,
         timeout: u64,
@@ -446,9 +519,128 @@ impl UnicornHandle<'_> {
         }
     }
 
+    pub fn add_code_hook(
+        &self,
+        callback: CodeHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        unsafe { self.api.hook_add_code_raw(self.handle, callback, user_data) }
+    }
+
+    pub fn add_intr_hook(
+        &self,
+        callback: IntrHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        unsafe { self.api.hook_add_intr_raw(self.handle, callback, user_data) }
+    }
+
+    pub fn add_block_hook(
+        &self,
+        callback: CodeHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        unsafe {
+            self.api
+                .hook_add_block_raw(self.handle, callback, user_data)
+        }
+    }
+
+    pub fn add_mem_write_hook(
+        &self,
+        callback: MemHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        unsafe {
+            self.api
+                .hook_add_mem_write_raw(self.handle, callback, user_data)
+        }
+    }
+
+    pub fn add_mem_read_hook(
+        &self,
+        callback: MemHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        unsafe {
+            self.api
+                .hook_add_mem_read_raw(self.handle, callback, user_data)
+        }
+    }
+
+    pub fn add_mem_prot_hook(
+        &self,
+        callback: MemProtHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        unsafe {
+            self.api
+                .hook_add_mem_prot_raw(self.handle, callback, user_data)
+        }
+    }
+
+    pub fn add_mem_unmapped_hook(
+        &self,
+        callback: MemProtHook,
+        user_data: *mut c_void,
+    ) -> Result<UcHook, String> {
+        unsafe {
+            self.api
+                .hook_add_mem_unmapped_raw(self.handle, callback, user_data)
+        }
+    }
+}
+
+pub struct UnicornHandle<'a> {
+    api: &'a UnicornApi,
+    handle: *mut UcEngine,
+}
+
+impl UnicornHandle<'_> {
+    pub fn raw(&self) -> *mut UcEngine {
+        self.handle
+    }
+
+    pub fn mem_map(&mut self, address: u64, size: u64, perms: u32) -> Result<(), String> {
+        unsafe { self.api.bind(self.handle) }.mem_map(address, size, perms)
+    }
+
+    pub fn mem_protect(&mut self, address: u64, size: u64, perms: u32) -> Result<(), String> {
+        unsafe { self.api.bind(self.handle) }.mem_protect(address, size, perms)
+    }
+
+    pub fn mem_write(&mut self, address: u64, data: &[u8]) -> Result<(), String> {
+        unsafe { self.api.bind(self.handle) }.mem_write(address, data)
+    }
+
+    pub fn mem_read(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
+        unsafe { self.api.bind(self.handle) }.mem_read(address, size)
+    }
+
+    pub fn reg_write(&mut self, regid: c_int, value: u64) -> Result<(), String> {
+        unsafe { self.api.bind(self.handle) }.reg_write(regid, value)
+    }
+
+    pub fn reg_read(&self, regid: c_int) -> Result<u64, String> {
+        unsafe { self.api.bind(self.handle) }.reg_read(regid)
+    }
+
+    pub fn reg_write_mmr(&mut self, regid: c_int, value: &X86Mmr) -> Result<(), String> {
+        unsafe { self.api.bind(self.handle) }.reg_write_mmr(regid, value)
+    }
+
+    pub fn emu_start(
+        &mut self,
+        begin: u64,
+        until: u64,
+        timeout: u64,
+        count: usize,
+    ) -> Result<(), String> {
+        unsafe { self.api.bind(self.handle) }.emu_start(begin, until, timeout, count)
+    }
+
     pub fn emu_stop(&mut self) -> Result<(), String> {
-        let err = unsafe { uc_emu_stop(self.handle) };
-        self.api.check_error("uc_emu_stop", err)
+        unsafe { self.api.bind(self.handle) }.emu_stop()
     }
 
     pub fn add_code_hook(
@@ -456,7 +648,7 @@ impl UnicornHandle<'_> {
         callback: CodeHook,
         user_data: *mut c_void,
     ) -> Result<UcHook, String> {
-        unsafe { self.api.hook_add_code_raw(self.handle, callback, user_data) }
+        unsafe { self.api.bind(self.handle) }.add_code_hook(callback, user_data)
     }
 }
 
